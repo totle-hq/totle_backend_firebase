@@ -1,8 +1,8 @@
 import passport from "passport";
-import "../config/passportConfig.js"; // Ensure the file extension is .js
-import { prisma } from "../index.js";
+// import "../config/passportConfig.js"; // Ensure the file extension is .js
+// import { prisma } from "../index.js";
 import { hashPassword, comparePassword } from "../utils/hashUtils.js";
-import { sendOtp, verifyOtp } from "../utils/otpService.js";
+import {  verifyOtp } from "../utils/otpService.js";
 import { generateToken } from "../utils/jwtUtils.js";
 // import prisma from "../config/prismaClient.js"; // ✅ Prisma DB Client
 import { userDb, catalogDb } from "../config/prismaClient.js"
@@ -61,7 +61,7 @@ const verifyToken = async (req, res) => {
 export const signupUserAndSendOtp = async (req, res) => {
   const { email, mobile } = req.body;
 
-  if (!email || !mobile) return res.status(400).json({ error: true, message: "Email/Mobile number is required" });
+  if (!email && !mobile) return res.status(400).json({ error: true, message: "Email/Mobile number is required" });
 //   if (!password) return res.status(400).json({ error: true, message: "Password is required" });
 
   try {

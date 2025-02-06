@@ -31,8 +31,8 @@ router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
 
 
-router.put("/updateUser/:userId", upload.single('image'), upduser)
-router.get("/:userId", getUserById);
-router.put("/:userId", updateUser);
+// router.put("/updateUser/:userId", upload.single('image'), upduser)
+// router.get("/:userId", getUserById);
+// router.put("/:userId", updateUser);
 
 export default router;

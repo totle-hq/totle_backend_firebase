@@ -1,8 +1,8 @@
-import { prisma } from "../index.js"; // Import Prisma Client
+import { userDb } from "../config/prismaClient.js";
 
 export const getLanguages = async (req, res) => {
   try {
-    const languages = await prisma.language.findMany({
+    const languages = await userDb.language.findMany({
       select: {
         language_id: true,
         language_name: true,
@@ -20,10 +20,13 @@ export const getLanguages = async (req, res) => {
 
 export const insertLanguages = async (req, res) => {
   try {
-    await prisma.language.createMany({ data: req.body });
-    res.status(200).json({ message: "Languages inserted successfully." });
+    await userDb.language.createMany({
+      data: req.body,
+      skipDuplicates: true,
+    });
+    res.status(200).json({ message: "✅ Languages inserted successfully." });
   } catch (error) {
-    console.error("Error inserting languages:", error);
+    console.error("❌ Error inserting languages:", error);
     res.status(500).json({ error: true, message: "Error inserting languages." });
   }
 };

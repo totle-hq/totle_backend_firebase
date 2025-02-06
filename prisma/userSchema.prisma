@@ -21,7 +21,7 @@ model User {
   bio                    String?
   preferred_language_id  Int?
   preferredLanguage      Language? @relation("PreferredLanguage", fields: [preferred_language_id], references: [language_id])
-  known_language_ids     Json
+  known_language_ids     Int[]
   image                  Bytes?
   concept_mastery        Int     @default(0)
   accuracy               Int     @default(0)
@@ -58,7 +58,14 @@ model User {
   time_management        Int     @default(0)
   resource_utilization   Int     @default(0)
   resilience             Int     @default(0)
-  sessions     Session[]
+  gender String?
+  location String?
+  educational_qualifications String[]
+  skills String[]
+  job_role String?
+  years_of_experience Int? @default(0)
+  dob DateTime?
+  session Session[]
 }
 
 
@@ -79,9 +86,9 @@ model Language {
 model Otp {
   id         Int      @id @default(autoincrement())
   email      String   @unique
-  otp        Int
-  expiry     DateTime
-  isVerified Boolean  @default(false)
+  otp        Int?
+  expiry     DateTime?
+  isVerified Boolean?  @default(false)
 }
 
 
