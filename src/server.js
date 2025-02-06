@@ -4,7 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
-import pool from "./config/db.js"; // Import database connection
+import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
 
@@ -24,6 +24,7 @@ app.use(compression());
 app.use(morgan("dev"));
 app.use("/auth", authRoutes); // Add authentication routes
 app.use("/users", userRoutes);
+app.use("/language")
 
 
 // Test route
@@ -32,14 +33,36 @@ app.get("/", (req, res) => {
 });
 
 // Test database connection
-app.get("/db-test", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-    res.json({ message: "✅ PostgreSQL Connected!", time: result.rows[0] });
-  } catch (error) {
-    res.status(500).json({ message: "❌ Database connection error", error });
-  }
+// app.get("/db-test", async (req, res) => {
+//   try {
+//     const result = await userPool.query("SELECT NOW()");
+//     res.json({ message: "✅ PostgreSQL Connected!", time: result.rows[0] });
+//     const result2 = await catalogPool.query("SELECT NOW()");
+//     res.json({ message: "✅ PostgreSQL Connected!", time: result2.rows[0] })
+//   } catch (error) {
+//     res.status(500).json({ message: "❌ Database connection error", error });
+//   }
+// });
+
+const closePrismaConnections = async () => {
+  await userDb.$disconnect();
+  await catalogDb.$disconnect();
+  console.log("✅ Prisma connections closed on server shutdown.");
+};
+
+// Handle process exit signals
+process.on('SIGINT', async () => {
+  console.log("\n🛑 Server shutting down...");
+  await closePrismaConnections();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log("\n🛑 Server shutting down...");
+  await closePrismaConnections();
+  process.exit(0);
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+

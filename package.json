@@ -6,8 +6,18 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    
+    "generate:user": "prisma generate --schema=prisma/userSchema.prisma",
+    "generate:catalog": "prisma generate --schema=prisma/catalogSchema.prisma",
+    
+    "migrate:user": "prisma migrate dev --schema=prisma/userSchema.prisma  --name",
+    "migrate:catalog": "prisma migrate dev --schema=prisma/catalogSchema.prisma --name",
+    
+    "studio:user": "prisma studio --schema=prisma/userSchema.prisma",
+    "studio:catalog": "prisma studio --schema=prisma/catalogSchema.prisma"
   },
+
   "keywords": [],
   "author": "",
   "license": "ISC",
