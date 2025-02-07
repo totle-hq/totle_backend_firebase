@@ -7,6 +7,12 @@ import { generateToken } from "../utils/jwtUtils.js";
 // import prisma from "../config/prismaClient.js"; // ✅ Prisma DB Client
 import { sendOtp } from "../utils/otpService.js"; // ✅ Utility for OTP sending
 import { userDb } from "../config/prismaClient.js";
+import admin from 'firebase-admin';
+// import {serviceAccount} from '../../firebaseAdmin.json'
+
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccount)
+// })
 
 const googleAuth = (req, res, next) => {
   const isNewUser = req.query.isNew === "true";

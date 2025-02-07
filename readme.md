@@ -62,3 +62,5 @@ npm run studio:catalog
     "password": "123"
 }
 
+5. localhost:5000/auth/verifyToken
+
