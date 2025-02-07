@@ -29,6 +29,7 @@ router.post("/login", loginLimiter, loginUser);
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
+router.post('/verifyToken', verifyToken);
 
 
 // router.put("/updateUser/:userId", upload.single('image'), upduser)

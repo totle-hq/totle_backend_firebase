@@ -5,8 +5,8 @@ import { hashPassword, comparePassword } from "../utils/hashUtils.js";
 import {  verifyOtp } from "../utils/otpService.js";
 import { generateToken } from "../utils/jwtUtils.js";
 // import prisma from "../config/prismaClient.js"; // ✅ Prisma DB Client
-import { userDb, catalogDb } from "../config/prismaClient.js"
 import { sendOtp } from "../utils/otpService.js"; // ✅ Utility for OTP sending
+import { userDb } from "../config/prismaClient.js";
 
 const googleAuth = (req, res, next) => {
   const isNewUser = req.query.isNew === "true";
@@ -86,7 +86,7 @@ export const otpVerification = async (req, res) => {
     const { email, otp, password, firstName } = req.body;
   
     if (!firstName) {
-      return res.status(400).json({ error: true, message: "Username is required" });
+      return res.status(400).json({ error: true, message: "Firstname is required" });
     }
     if (!email || !otp) {
       return res.status(400).json({ error: true, message: "Email and OTP are required" });
@@ -263,6 +263,6 @@ export const resetPassword = async (req, res) => {
       console.error("Error resetting password:", error);
       return res.status(500).json({ error: true, message: "Internal Server Error" });
     }
-  };
+};
 
 export { googleAuth, googleCallback, logout, verifyToken };

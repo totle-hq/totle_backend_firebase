@@ -23,6 +23,7 @@ const transporter = nodemailer.createTransport({
  */
 export const sendEmailOtp = async (email, otp) => {
   if (!email) throw new Error("❌ Email is required for OTP.");
+  console.log('email', email, 'otp', otp)
 
   try {
     const mailOptions = {
@@ -74,7 +75,7 @@ export const sendSmsOtp = async (mobile, otp) => {
  * @param {string} otp - OTP Code
  */
 export const sendOtp = async (email, mobile) => {
-  console.log(typeof email)
+  console.log('email send otp', email)
   if (!email && !mobile) {
     throw new Error("❌ No Email or Mobile provided for OTP.");
   }
@@ -84,6 +85,7 @@ export const sendOtp = async (email, mobile) => {
   if (email) {
     try {
       const existingOtp = await userDb.otp.findUnique({ where: { email } });
+      console.log('existing otp', existingOtp)
       if (existingOtp) {
         if (new Date() < existingOtp.expiry) {
           const timeRemaining = Math.round((existingOtp.expiry - new Date()) / 1000); // Time remaining in seconds
@@ -109,8 +111,12 @@ export const sendOtp = async (email, mobile) => {
           // Existing OTP has expired; generate a new one
           const professionalSentMessage = "A new OTP has been generated and sent to ${email}. Please use it before it expires.";
 
-          await existingOtp.update({ otp, expiry, isVerified: false });
-          await sendOtpEmail(email, otp);
+          await userDb.otp.update(
+            { where: { email: existingOtp.email, },
+              data: { otp, expiry, isVerified: false },
+          });
+          
+          await sendEmailOtp(email, otp);
 
           return { 
             error: false, 
@@ -121,9 +127,17 @@ export const sendOtp = async (email, mobile) => {
       } else {
         // Create a new OTP if none exists
         
-        await userDb.otp.create({ email, otp, expiry, isVerified: false });
+        await userDb.otp.create({
+          data: {
+            email: email,
+            otp: otp,
+            expiry: expiry,
+            isVerified: false,
+          },
+        });
+        
         // console.log('entered send otp email')
-        await sendOtpEmail(email, otp);
+        await sendEmailOtp(email, otp);
         return { error: false, message: sentMessage };
       }
     } catch (error) {
@@ -141,7 +155,7 @@ export const sendOtp = async (email, mobile) => {
   }
 };
 
-export const verifyOtp = async ({ db, model, email, otp }) => {
+export const verifyOtp = async ( email, otp ) => {
   try {
     // Randomized messages for responses
     const failureMessages = [
@@ -163,7 +177,7 @@ export const verifyOtp = async ({ db, model, email, otp }) => {
     const otpSuccessMessage = otpSuccess[Math.floor(Math.random() * otpSuccess.length)];
 
     // Fetch OTP record from the specified database model
-    const otpRecord = await db[model].findUnique({
+    const otpRecord = await userDb.otp.findUnique({
       where: { email, otp, isVerified: false },
     });
 
@@ -175,8 +189,8 @@ export const verifyOtp = async ({ db, model, email, otp }) => {
     }
 
     // Verify OTP and update status
-    await db[model].update({
-      where: { id: otpRecord.id },
+    await userDb.otp.update({
+      where: { email: otpRecord.email },
       data: { isVerified: true },
     });
 

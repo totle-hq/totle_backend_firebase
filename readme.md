@@ -26,3 +26,39 @@ npm run studio:user
 npm run studio:catalog
 
 # delete all data => npm run prisma:reset
+
+
+## API - Local
+===============
+
+1.   localhost:5000/auth/signup
+
+{
+    "email":"2493saicharan@gmail.com"
+}
+
+2. localhost:5000/auth/signup/verifyOtp
+
+{
+    "email":"2493saicharan@gmail.com",
+    "otp":311644,
+    "password": "123",
+    "firstName":"sai"
+}
+
+3.   localhost:5000/auth/signup/complete
+
+{
+  "preferredLanguage": "Telugu",
+  "knownLanguages": ["English", "Hindi"],
+  "email": "2493saicharan@gmail.com"
+}
+
+
+4. localhost:5000/auth/login
+
+{
+    "email": "2493saicharan@gmail.com",
+    "password": "123"
+}
+
