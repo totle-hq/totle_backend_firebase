@@ -62,10 +62,11 @@ model User {
   location               String?
   educational_qualifications String[]
   skills                 String[]
-  job_role               String?
+  currentOccupation      String?
   years_of_experience    Int?   @default(0)
   dob                    DateTime?
   mobile                 String?
+  status                 String?
   session Session[]
 }
 
