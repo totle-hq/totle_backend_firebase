@@ -19,7 +19,7 @@ router.post("/signup", signupLimiter, signupUserAndSendOtp);
  */
 router.post("/signup/verifyOtp",signupLimiter, otpVerification);
 
-router.post("/signup/complete", completeSignup);
+// router.post("/signup/complete", completeSignup);
 
 /**
  * ✅ Secure Login with Email/Mobile & Password

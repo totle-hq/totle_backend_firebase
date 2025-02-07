@@ -17,7 +17,7 @@ const app = express();
 
 app.use(express.json());
 app.use(cors({
-  origin: "http://localhost:3000", // Allow frontend
+  origin: ['https://www.totle.co', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"]
 }));
