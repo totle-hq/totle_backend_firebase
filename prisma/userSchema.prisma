@@ -1,0 +1,94 @@
+// ✅ Define the database connection
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ✅ Define Prisma Client generator
+generator client {
+  provider = "prisma-client-js"
+  output = "./generated/userClient"
+}
+
+model User {
+  id                     Int     @id @default(autoincrement())
+  email                  String  @unique
+  isVerified             Boolean @default(false)
+  googleId               String? @unique
+  firstName              String
+  lastName               String?
+  password               String?
+  bio                    String?
+  preferred_language_id  Int?
+  preferredLanguage      Language? @relation("PreferredLanguage", fields: [preferred_language_id], references: [language_id])
+  known_language_ids     Int[]
+  image                  Bytes?
+  concept_mastery        Int     @default(0)
+  accuracy               Int     @default(0)
+  skill_application      Int     @default(0)
+  creativity_expression  Int     @default(0)
+  application_of_knowledge Int  @default(0)
+  speed                  Int     @default(0)
+  problem_solving        Int     @default(0)
+  technical_mastery      Int     @default(0)
+  critical_thinking      Int     @default(0)
+  question_type_proficiency Int @default(0)
+  project_completion     Int     @default(0)
+  artistic_process       Int     @default(0)
+  retention              Int     @default(0)
+  exam_strategy          Int     @default(0)
+  adaptability           Int     @default(0)
+  performance_presentation Int  @default(0)
+  written_verbal_expression Int @default(0)
+  syllabus_coverage      Int     @default(0)
+  creativity_innovation  Int     @default(0)
+  feedback_incorporation Int     @default(0)
+  progress_in_curriculum Int     @default(0)
+  mock_test_performance  Int     @default(0)
+  certification          Int     @default(0)
+  portfolio_development  Int     @default(0)
+  communication_skills   Int     @default(0)
+  stress_management      Int     @default(0)
+  practical_application  Int     @default(0)
+  growth_mindset         Int     @default(0)
+  collaboration          Int     @default(0)
+  innovation             Int     @default(0)
+  consistency            Int     @default(0)
+  self_reflection        Int     @default(0)
+  time_management        Int     @default(0)
+  resource_utilization   Int     @default(0)
+  resilience             Int     @default(0)
+  gender String?
+  location String?
+  educational_qualifications String[]
+  skills String[]
+  job_role String?
+  years_of_experience Int? @default(0)
+  dob DateTime?
+  session Session[]
+}
+
+
+model Session {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id])
+  userId Int
+}
+
+
+model Language {
+  language_id   Int    @id @default(autoincrement())
+  language_name String @unique
+  users         User[] @relation("PreferredLanguage")
+}
+
+
+model Otp {
+  id         Int      @id @default(autoincrement())
+  email      String   @unique
+  otp        Int?
+  expiry     DateTime?
+  isVerified Boolean?  @default(false)
+}
+
+
