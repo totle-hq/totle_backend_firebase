@@ -155,7 +155,7 @@ export const sendOtp = async (email, mobile) => {
   }
 };
 
-export const verifyOtp = async ( email, otp ) => {
+export const verifyOtp = async ( identifier, otp ) => {
   try {
     // Randomized messages for responses
     const failureMessages = [
@@ -176,10 +176,24 @@ export const verifyOtp = async ( email, otp ) => {
     const randomExpiredMessage = expiredMessages[Math.floor(Math.random() * expiredMessages.length)];
     const otpSuccessMessage = otpSuccess[Math.floor(Math.random() * otpSuccess.length)];
 
+    if (!identifier) {
+      return { error: true, message: "Email or Mobile is required." };
+    }
+
+
     // Fetch OTP record from the specified database model
-    const otpRecord = await userDb.otp.findUnique({
-      where: { email, otp, isVerified: false },
+    // const otpRecord = await userDb.otp.findUnique({
+    //   where: { email, otp, isVerified: false },
+    // });
+    const otpRecord = await userDb.otp.findFirst({
+      where: {
+        OR: [
+          { email: identifier, otp: otp, isVerified: false },
+          { mobile: identifier, otp: otp, isVerified: false },
+        ],
+      },
     });
+    
 
     if (!otpRecord) return { error: true, message: randomFailureMessage };
 
@@ -189,10 +203,13 @@ export const verifyOtp = async ( email, otp ) => {
     }
 
     // Verify OTP and update status
-    await userDb.otp.update({
-      where: { email: otpRecord.email },
+    await userDb.otp.updateMany({
+      where: {
+        OR: [{ email: otpRecord.email }, { mobile: otpRecord.mobile }], // ✅ Works for either email or mobile
+      },
       data: { isVerified: true },
     });
+    
 
     return { error: false, message: otpSuccessMessage };
   } catch (error) {

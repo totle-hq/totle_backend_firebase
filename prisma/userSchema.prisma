@@ -58,13 +58,14 @@ model User {
   time_management        Int     @default(0)
   resource_utilization   Int     @default(0)
   resilience             Int     @default(0)
-  gender String?
-  location String?
+  gender                 String?
+  location               String?
   educational_qualifications String[]
-  skills String[]
-  job_role String?
-  years_of_experience Int? @default(0)
-  dob DateTime?
+  skills                 String[]
+  job_role               String?
+  years_of_experience    Int?   @default(0)
+  dob                    DateTime?
+  mobile                 String?
   session Session[]
 }
 
@@ -86,9 +87,11 @@ model Language {
 model Otp {
   id         Int      @id @default(autoincrement())
   email      String   @unique
+  mobile     String?  @unique
   otp        Int?
   expiry     DateTime?
   isVerified Boolean?  @default(false)
+  createdAt  DateTime @default(now())
 }
 
 

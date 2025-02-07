@@ -83,34 +83,42 @@ export const signupUserAndSendOtp = async (req, res) => {
 };
 
 export const otpVerification = async (req, res) => {
-    const { email, otp, password, firstName } = req.body;
+    const { email, mobile, otp, password, firstName } = req.body;
   
     if (!firstName) {
       return res.status(400).json({ error: true, message: "Firstname is required" });
     }
-    if (!email || !otp) {
-      return res.status(400).json({ error: true, message: "Email and OTP are required" });
+    if ((!email && !mobile) || !otp) {
+      return res.status(400).json({ error: true, message: "Email/Mobile and OTP are required" });
     }
   
     try {
-      const result = await verifyOtp(email, otp);
+      const result = await verifyOtp(email || mobile, otp);
       if (result.error) {
         return res.status(400).json({ error: true, message: result.message });
       }
+
+      if (email && !password) {
+        return res.status(400).json({ error: true, message: "Password is required for email signup" });
+      }
   
-      const hashedPassword = await hashPassword(password);
+      const hashedPassword = password ? await hashPassword(password) : null;
   
       // Save the verified user to the database
-      await userDb.user.create({
-        data: {
-          email,
-          password: hashedPassword,
+      await userDb.user.upsert({
+        where: email ? { email } : { mobile },  // ✅ Use a single unique field
+        update: { isVerified: true },  // ✅ If user exists, mark as verified
+        create: {
+          email: email || null,  // ✅ Store email only if provided
+          mobile: mobile || null,  // ✅ Store mobile only if provided
+          password: email ? hashedPassword : null,  // ✅ Password only for email signup
           isVerified: true,
-          firstName: firstName,
+          firstName,
         },
       });
+      
   
-      return res.status(200).json({ error: false, message: "OTP verified and user registered successfully!" });
+      return res.status(200).json({ error: false, message: "OTP verified successfully ✅" });
     } catch (error) {
       console.error("Error during OTP verification:", error);
       return res.status(500).json({ error: true, message: "Internal server error." });
@@ -174,7 +182,7 @@ export const loginUser = async (req, res) => {
 
     const match = await comparePassword(password, user.password);
     if (!match) {
-      return res.status(401).json({ error: true, message: "Invalid login credentials" });
+      return res.status(401).json({ error: true, message: "Invalid Password" });
     }
 
     const token = generateToken(user);
