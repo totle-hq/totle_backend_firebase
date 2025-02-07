@@ -83,7 +83,11 @@ export const signupUserAndSendOtp = async (req, res) => {
 };
 
 export const otpVerification = async (req, res) => {
-    const { email, mobile, otp, password, firstName } = req.body;
+    const { email, mobile, password, firstName } = req.body;
+    let otp = parseInt(req.body.otp, 10);
+    if (isNaN(otp)) {
+      return { error: true, message: "Invalid OTP format." };
+    }
   
     if (!firstName) {
       return res.status(400).json({ error: true, message: "Firstname is required" });
@@ -187,13 +191,13 @@ export const loginUser = async (req, res) => {
 
     const token = generateToken(user);
 
-    const preferredLanguage = await userDb.language.findUnique({
-      where: { language_id: user.preferred_language_id },
-    });
+    // const preferredLanguage = await userDb.language.findUnique({
+    //   where: { language_id: user.preferred_language_id },
+    // });
 
-    const knownLanguages = await userDb.language.findMany({
-      where: { language_id: { in: user.known_language_ids } },
-    });
+    // const knownLanguages = await userDb.language.findMany({
+    //   where: { language_id: { in: user.known_language_ids } },
+    // });
 
     return res.status(200).json({
       error: false,
@@ -202,10 +206,10 @@ export const loginUser = async (req, res) => {
       user: {
         id: user.id,
         firstName: user.firstName,
-        lastName: user.lastName,
+        lastName: user.lastName || null,
         email: user.email,
-        preferredLanguage,
-        knownLanguages,
+        // preferredLanguage,
+        // knownLanguages,
       },
     });
   } catch (error) {
