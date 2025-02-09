@@ -138,7 +138,7 @@ export const sendOtp = async (email, mobile) => {
         
         // console.log('entered send otp email')
         await sendEmailOtp(email, otp);
-        return { error: false, message: sentMessage };
+        return { error: false, message: `An OTP is sent for registration, Please check your ${email} inbox` };
       }
     } catch (error) {
       console.error("Error sending OTP:", error);
