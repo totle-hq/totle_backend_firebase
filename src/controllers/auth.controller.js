@@ -3,11 +3,13 @@ import passport from "passport";
 // import { prisma } from "../index.js";
 import { hashPassword, comparePassword } from "../utils/hashUtils.js";
 import {  verifyOtp } from "../utils/otpService.js";
-import { generateToken } from "../utils/jwtUtils.js";
 // import prisma from "../config/prismaClient.js"; // ✅ Prisma DB Client
 import { sendOtp } from "../utils/otpService.js"; // ✅ Utility for OTP sending
 import { userDb } from "../config/prismaClient.js";
 import admin from 'firebase-admin';
+import jwt from "jsonwebtoken";
+import { generateToken } from "../generateToken.js";
+
 // import {serviceAccount} from '../../firebaseAdmin.json'
 
 // admin.initializeApp({
@@ -67,26 +69,32 @@ const verifyToken = async (req, res) => {
 export const signupUserAndSendOtp = async (req, res) => {
   const { email, mobile } = req.body;
 
-  if (!email && !mobile) return res.status(400).json({ error: true, message: "Email/Mobile number is required" });
-//   if (!password) return res.status(400).json({ error: true, message: "Password is required" });
+  if (!email && !mobile) {
+    return res.status(400).json({ error: true, message: "Email/Mobile number is required" });
+  }
 
   try {
+    console.log("Checking if user exists...");
     const existingUser = await userDb.user.findUnique({ where: { email } });
+
     if (existingUser) {
       return res.status(403).json({ error: true, message: "User with this email exists" });
     }
 
+    console.log("Sending OTP...");
     const otpResponse = await sendOtp(email);
+
     if (otpResponse.error) {
       return res.status(400).json({ error: true, message: otpResponse.message });
     }
 
     return res.status(200).json({ error: false, message: otpResponse.message });
   } catch (error) {
-    console.error("Error during signup: ", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    console.error("🔥 ERROR during signup: ", error);
+    return res.status(500).json({ error: true, message: "Internal Server Error", details: error.message });
   }
 };
+
 
 export const otpVerification = async (req, res) => {
     const { email, mobile, password, firstName } = req.body;
@@ -195,20 +203,15 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ error: true, message: "Invalid Password" });
     }
 
-    const token = generateToken(user);
-
-    // const preferredLanguage = await userDb.language.findUnique({
-    //   where: { language_id: user.preferred_language_id },
-    // });
-
-    // const knownLanguages = await userDb.language.findMany({
-    //   where: { language_id: { in: user.known_language_ids } },
-    // });
+    const tokenResponse =await generateToken(email);
+    if (tokenResponse.error) {
+      return res.status(500).json({ error: true, message: "Failed to generate token" });
+    }
 
     return res.status(200).json({
       error: false,
       message: "Login successful",
-      token,
+      token: tokenResponse.token,
       user: {
         id: user.id,
         firstName: user.firstName,
@@ -282,5 +285,164 @@ export const resetPassword = async (req, res) => {
       return res.status(500).json({ error: true, message: "Internal Server Error" });
     }
 };
+
+export const getUserProfile = async (req, res) => {
+  try {
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id || decoded.userId || decoded.uid; // Ensure correct field
+    if (!userId) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+    }
+    
+    const user = await userDb.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        dob: true,
+        gender: true,
+        status: true,
+        currentOccupation: true,
+        skills: true,
+        years_of_experience: true,  // ✅ Correct field name
+        location: true,
+        preferredLanguage: {
+          select: {
+            language_name: true,  // ✅ Fetch preferred language name
+          },
+        },
+      },
+    });
+    
+    
+
+    if (!user) {
+      return res.status(404).json({ error: true, message: "User not found" });
+    }
+
+    return res.status(200).json({ success: true, user });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
+  }
+};
+
+export const updateUserProfile = async (req, res) => {
+  try {
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id || decoded.userId || decoded.uid;
+
+    if (!userId) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+    }
+
+    // Extract fields to update (only allowed fields)
+    const {
+      firstName,
+      lastName,
+      dob,
+      gender,
+      knownLanguages,
+      preferredLanguages,
+      qualification,
+      status,
+      currentOccupation,
+      skills,
+      years_of_experience,
+      location,
+    } = req.body;
+
+    // Prepare update data
+    const updateData = {
+      firstName,
+      lastName,
+      dob,
+      gender,
+      qualification,
+      status,
+      currentOccupation,
+      skills,
+      years_of_experience,
+      location,
+    };
+
+    // Handle language updates
+    if (preferredLanguages && preferredLanguages.length > 0) {
+      const prefLanguage = await userDb.language.findUnique({
+        where: { language_name: preferredLanguages[0] },
+        select: { language_id: true },
+      });
+      if (prefLanguage) updateData.preferred_language_id = prefLanguage.language_id;
+    }
+
+    if (knownLanguages && knownLanguages.length > 0) {
+      const knownLanguagesList = await userDb.language.findMany({
+        where: { language_name: { in: knownLanguages } },
+        select: { language_id: true },
+      });
+
+      if (knownLanguagesList.length === knownLanguages.length) {
+        updateData.known_language_ids = knownLanguagesList.map((lang) => lang.language_id);
+      }
+    }
+
+    if (updateData.dob) {
+      updateData.dob = new Date(updateData.dob).toISOString();
+    }
+
+    // Update user in the database
+    const updatedUser = await userDb.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        dob: true,
+        gender: true,
+        qualification: true,
+        status: true,
+        currentOccupation: true,
+        skills: true,
+        years_of_experience: true,
+        location: true,
+        preferredLanguage: { select: { language_name: true } },
+        known_language_ids: true,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully.",
+      user: {
+        ...updatedUser,
+        preferredLanguage: updatedUser.preferredLanguage?.language_name || null,
+        knownLanguages: updatedUser.known_language_ids || [],
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error updating user profile:", error);
+    return res.status(500).json({ error: true, message: "Internal server error" });
+  }
+};
+
+
 
 export { googleAuth, googleCallback, logout, verifyToken };

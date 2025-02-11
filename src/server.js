@@ -7,8 +7,9 @@ import morgan from "morgan";
 // import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
+import languageRoutes from './routes/languages.routes.js'
 import { catalogDb, userDb } from "./config/prismaClient.js";
-import { getLanguages } from "./controllers/language.controller.js";
+// import { getLanguages } from "./controllers/language.controller.js";
 
 
 dotenv.config();
@@ -26,7 +27,8 @@ app.use(compression());
 app.use(morgan("dev"));
 app.use("/auth", authRoutes); // Add authentication routes
 app.use("/users", userRoutes);
-app.use("/language", getLanguages);
+app.use("/language", languageRoutes);
+// app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 
 
 // Test route
