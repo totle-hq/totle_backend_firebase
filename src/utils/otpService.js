@@ -1,7 +1,12 @@
-import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
 import { userDb } from "../config/prismaClient.js";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 // ✅ Configure Twilio Client for SMS OTP
@@ -26,11 +31,15 @@ export const sendEmailOtp = async (email, otp) => {
   console.log('email', email, 'otp', otp)
 
   try {
+
+    const templatePath = path.join(__dirname, "email.html"); // Update the path accordingly
+    let emailTemplate = fs.readFileSync(templatePath, "utf-8");
+    emailTemplate = emailTemplate.replace("{{OTP}}", otp);
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
       subject: "Your OTP Code - TOTLE",
-      text: `Your OTP code is: ${otp}. It will expire in 5 minutes.`,
+      html: emailTemplate,
     };
 
     await transporter.sendMail(mailOptions);
