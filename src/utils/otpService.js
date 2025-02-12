@@ -83,17 +83,17 @@ export const sendSmsOtp = async (mobile, otp) => {
  * @param {string} mobile - User's Mobile Number (Optional)
  * @param {string} otp - OTP Code
  */
-export const sendOtp = async (email, mobile) => {
-  console.log('email send otp', email)
-  if (!email && !mobile) {
+export const sendOtp = async (identifier) => {
+  console.log('email send otp', identifier)
+  if (!identifier) {
     throw new Error("❌ No Email or Mobile provided for OTP.");
   }
   const otp = Math.floor(100000 + Math.random() * 900000);
   const expiry = new Date(Date.now() + 5 * 60 * 1000);
-
-  if (email) {
+  const isEmail = identifier.includes("@");
+  if (isEmail) {
     try {
-      const existingOtp = await userDb.otp.findUnique({ where: { email } });
+      const existingOtp = await userDb.otp.findUnique({ where: { email:identifier } });
       console.log('existing otp', existingOtp)
       if (existingOtp) {
         if (new Date() < existingOtp.expiry) {
@@ -102,13 +102,13 @@ export const sendOtp = async (email, mobile) => {
           const seconds = timeRemaining % 60;
   
           const professionalMessages = [
-            "Your OTP is still valid for ${minutes} minutes and ${seconds} seconds. Please check your email (${email}).",
-            "You have ${minutes} minutes and ${seconds} seconds remaining to use your OTP sent to ${email}.",
-            "The OTP sent to ${email} is valid for another ${minutes} minutes and ${seconds} seconds.",
+            "Your OTP is still valid for ${minutes} minutes and ${seconds} seconds. Please check your email (${identifier}).",
+            "You have ${minutes} minutes and ${seconds} seconds remaining to use your OTP sent to ${identifier}.",
+            "The OTP sent to ${identifier} is valid for another ${minutes} minutes and ${seconds} seconds.",
           ];
           
           const randomIndex = Math.floor(Math.random() * professionalMessages.length);
-          const selectedMessage = professionalMessages[randomIndex].replace("${minutes}", minutes).replace("${seconds}", seconds).replace("${email}", email);
+          const selectedMessage = professionalMessages[randomIndex].replace("${minutes}", minutes).replace("${seconds}", seconds).replace("${identifier}", identifier);
           
           return { 
             error: true,
@@ -118,18 +118,18 @@ export const sendOtp = async (email, mobile) => {
           };
         } else {
           // Existing OTP has expired; generate a new one
-          const professionalSentMessage = "A new OTP has been generated and sent to ${email}. Please use it before it expires.";
+          const professionalSentMessage = "A new OTP has been generated and sent to ${identifier}. Please use it before it expires.";
 
           await userDb.otp.update(
-            { where: { email: existingOtp.email, },
+            { where: { email: identifier, },
               data: { otp, expiry, isVerified: false },
           });
           
-          await sendEmailOtp(email, otp);
+          await sendEmailOtp(identifier, otp);
 
           return { 
             error: false, 
-            message: professionalSentMessage.replace("${email}", email) 
+            message: professionalSentMessage.replace("${identifier}", identifier) 
           };
 
         }
@@ -138,7 +138,7 @@ export const sendOtp = async (email, mobile) => {
         
         await userDb.otp.create({
           data: {
-            email: email,
+            email: identifier,
             otp: otp,
             expiry: expiry,
             isVerified: false,
@@ -146,8 +146,8 @@ export const sendOtp = async (email, mobile) => {
         });
         
         // console.log('entered send otp email')
-        await sendEmailOtp(email, otp);
-        return { error: false, message: `An OTP is sent for registration, Please check your ${email} inbox` };
+        await sendEmailOtp(identifier, otp);
+        return { error: false, message: `An OTP is sent for registration, Please check your ${identifier} inbox` };
       }
     } catch (error) {
       console.error("Error sending OTP:", error);
@@ -155,8 +155,8 @@ export const sendOtp = async (email, mobile) => {
     }
   } else {
     try {
-      await sendSmsOtp(mobile, otp);
-      return { error: false, mesage: `Otp sent to ${mobile}` }
+      await sendSmsOtp(identifier, otp);
+      return { error: false, mesage: `Otp sent to ${identifier}` }
     } catch (error) {
       console.error("Error sending OTP:", error);
       return { error: true, message: "Failed sending otp" };

@@ -73,16 +73,19 @@ export const signupUserAndSendOtp = async (req, res) => {
     return res.status(400).json({ error: true, message: "Email/Mobile number is required" });
   }
 
+  const identifier = email || mobile;
+  const isEmail = !!email;
+
   try {
     console.log("Checking if user exists...");
-    const existingUser = await userDb.user.findUnique({ where: { email } });
+    const existingUser = await userDb.user.findUnique({ where: isEmail? { email }: {mobile} });
 
     if (existingUser) {
-      return res.status(403).json({ error: true, message: "User with this email exists" });
+      return res.status(403).json({ error: true, message: `User with this ${isEmail ? "email" : "mobile"} already exists`  });
     }
 
     console.log("Sending OTP...");
-    const otpResponse = await sendOtp(email);
+    const otpResponse = await sendOtp(identifier);
 
     if (otpResponse.error) {
       return res.status(400).json({ error: true, message: otpResponse.message });
