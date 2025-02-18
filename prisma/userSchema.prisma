@@ -21,7 +21,7 @@ model User {
   bio                    String?
   preferred_language_id  Int?
   preferredLanguage      Language? @relation("PreferredLanguage", fields: [preferred_language_id], references: [language_id])
-  known_language_ids     Int[]
+  known_language_ids     Int[]  @default([])
   image                  Bytes?
   concept_mastery        Int     @default(0)
   accuracy               Int     @default(0)
@@ -65,16 +65,29 @@ model User {
   currentOccupation      String?
   years_of_experience    Int?   @default(0)
   dob                    DateTime?
-  mobile                 String?
+  mobile                 String?  @unique
   status                 String?
   session Session[]
 }
 
 
 model Session {
-  id     String @id @default(uuid())
-  user   User   @relation(fields: [userId], references: [id])
-  userId Int
+  id        String   @id @default(uuid())
+  roomName  String   @unique
+  teacherId String
+  learnerId String
+  teacher   User     @relation(fields: [teacherId], references: [id])
+  learner   User     @relation(fields: [learnerId], references: [id])
+  status    String   @default("scheduled") // scheduled, active, completed
+  createdAt DateTime @default(now())
+}
+
+model Join {
+  id    String  @id @default(uuid())
+  name  String
+  email String  @unique
+  sessionsAsTeacher Session[] @relation("Session_teacherId")
+  sessionsAsLearner Session[] @relation("Session_learnerId")
 }
 
 
@@ -87,7 +100,7 @@ model Language {
 
 model Otp {
   id         Int      @id @default(autoincrement())
-  email      String   @unique
+  email      String?   @unique
   mobile     String?  @unique
   otp        Int?
   expiry     DateTime?

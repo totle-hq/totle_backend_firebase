@@ -7,13 +7,23 @@ import morgan from "morgan";
 // import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
+import sessionRoutes from "./routes/session.routes.js";
+import languageRoutes from './routes/languages.routes.js'
 import { catalogDb, userDb } from "./config/prismaClient.js";
-import { getLanguages } from "./controllers/language.controller.js";
+import authMiddleware from "./middlewares/authMiddleware.js";
+// import { getLanguages } from "./controllers/language.controller.js";
+import { createServer } from "http";
+import { Server } from "socket.io";
 
 
 dotenv.config();
 
 const app = express();
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: "*" },
+});
 
 app.use(express.json());
 app.use(cors({
@@ -22,11 +32,31 @@ app.use(cors({
   allowedHeaders: ["Authorization", "Content-Type"]
 }));
 app.use(helmet());
+
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
+
+  socket.on("joinSession", (sessionId) => {
+    socket.join(sessionId);
+    console.log(`User joined session: ${sessionId}`);
+  });
+
+  socket.on("sessionUpdate", (sessionId, status) => {
+    io.to(sessionId).emit("sessionStatusChanged", status);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
+  });
+});
+
 app.use(compression());
 app.use(morgan("dev"));
 app.use("/auth", authRoutes); // Add authentication routes
 app.use("/users", userRoutes);
-app.use("/language", getLanguages);
+app.use("/language", languageRoutes);
+app.use("/api/languages", languageRoutes); // ✅ Register the languages route
+app.use("/session", authMiddleware, sessionRoutes);
 
 
 // Test route

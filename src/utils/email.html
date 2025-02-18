@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>OTP Email</title>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .container {
+        background: url('https://res.cloudinary.com/dchehpcum/image/upload/v1739296186/pic_wetdzw.jpg') no-repeat center center;
+        background-size: cover;
+        width: 100%;
+        max-width: 550px;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .spacer {
+        height: 15vh;
+      }
+
+      .second {
+        display: flex;
+        justify-content: center;
+        margin: 5px;
+      }
+
+      .content {
+        padding: 10px 5px;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.95); /* White background to start content */
+        border-radius: 8px;
+        max-width: 600px; /* Limits max width */
+        width: 520px;
+      }
+
+      .otp {
+        font-size: 32px;
+        font-weight: bold;
+        color: #1a43bf;
+        margin: 10px 0;
+        letter-spacing: 8px;
+      }
+
+      .footer {
+        padding: 15px;
+        font-size: 12px;
+        text-align: center;
+        color: #777;
+      }
+
+      .highlight {
+        font-weight: bold;
+        color: #1f1f1f;
+      }
+
+      .help {
+        font-size: 14px;
+        margin-top: 10px;
+      }
+
+      .social-icons img {
+        width: 32px;
+        margin: 0 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <table class="container">
+      <!-- Spacer Row (Background Visible) -->
+      <tr class="spacer">
+        <td></td>
+      </tr>
+
+      <!-- Content Section with Reduced Width -->
+      <tr class="second">
+        <td>
+          <div class="content">
+            <h3>Hey, Your OTP is</h3>
+            <p class="otp">{{OTP}}</p>
+            <p>
+              But don't get too attached! It's valid only for <span class="highlight">5 minutes</span>. <br> DO NOT share this OTP
+              with anyone, even if you are feeling extra generous today.
+            </p>
+            <p class="help">
+              Need help? Contact us at 
+              <a href="mailto:totleedtech@gmail.com">totleedtech@gmail.com</a> 
+              <!-- or visit our 
+              <a href="#">Help Center</a>. -->
+            </p>
+            <div class="social-icons">
+              <a href="https://www.facebook.com/profile.php?id=61572098313677" target="_blank"><img src="https://img.icons8.com/color/48/000000/facebook-new.png" alt="Facebook" /></a>
+              <a href="https://www.instagram.com/totle_edu/?next=%2F" target="_blank"><img src="https://img.icons8.com/color/48/000000/instagram-new.png" alt="Instagram" /></a>
+              <a href="https://x.com/TotleEdu" target="_blank"><img src="https://img.icons8.com/color/48/000000/twitter.png" alt="Twitter" /></a>
+              <a href="http://www.linkedin.com/in/totle-edu-3b0792347" target="_blank"><img src="https://img.icons8.com/color/48/000000/linkedin.png" alt="YouTube" /></a>
+            </div>
+            <p>Copyright &copy; 2025 Company. All rights reserved.</p>
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

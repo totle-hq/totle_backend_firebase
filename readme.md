@@ -14,8 +14,8 @@ npm run dev
 
 # migrate => update the database, but renaming causes total data loss
 =================
-npm run migrate:user --name "details of migration"
-npm run migrate:catalog --name "details of migration"
+npm run migrate:user  "details of migration"
+npm run migrate:catalog  "details of migration"
 
 
 # generate => creates prisma client for prisma.user.findMany()
