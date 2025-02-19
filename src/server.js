@@ -8,6 +8,7 @@ import morgan from "morgan";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
 import sessionRoutes from "./routes/session.routes.js";
+import adminRoutes from "./routes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import { catalogDb, userDb } from "./config/prismaClient.js";
 import authMiddleware from "./middlewares/authMiddleware.js";
@@ -57,6 +58,8 @@ app.use("/users", userRoutes);
 app.use("/language", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 app.use("/session", authMiddleware, sessionRoutes);
+app.use("/admin", adminRoutes);
+
 
 
 // Test route
