@@ -55,7 +55,7 @@ app.use(compression());
 app.use(morgan("dev"));
 app.use("/auth", authRoutes); // Add authentication routes
 app.use("/users", userRoutes);
-app.use("/language", languageRoutes);
+app.use("/languages", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 app.use("/session", authMiddleware, sessionRoutes);
 app.use("/admin", adminRoutes);
