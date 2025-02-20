@@ -1,9 +1,9 @@
 import express from "express";
-import { completeSignup, loginUser, otpVerification, resetPassword, resetUser, signupUserAndSendOtp, verifyToken } from "../controllers/auth.controller.js";
+import { completeSignup, getUserProfile, loginUser, otpVerification, resetPassword, resetUser, signupUserAndSendOtp, updateUserProfile, upload, verifyToken } from "../controllers/auth.controller.js";
 import { loginLimiter, signupLimiter } from "../middlewares/rateLimiter.js";
+import authMiddleware from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
-
 /**
  * ✅ Google Login - Verify Firebase Token & Generate Backend JWT
  */
@@ -29,10 +29,10 @@ router.post("/login", loginLimiter, loginUser);
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
-router.post('/verifyToken', verifyToken);
+router.get('/user',authMiddleware, getUserProfile);
 
 
-// router.put("/updateUser/:userId", upload.single('image'), upduser)
+router.put("/updateUser", upload.single('image'), updateUserProfile)
 // router.get("/:userId", getUserById);
 // router.put("/:userId", updateUser);
 

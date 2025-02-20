@@ -1,6 +1,6 @@
 ## Requirements
 
-npm install @prisma/client pg firebase-admin bcryptjs jsonwebtoken passport express-rate-limit
+npm install @prisma/client pg firebase-admin bcryptjs jsonwebtoken passport express-rate-limit multer
 npm install --save-dev nodemon prisma eslint prettier
 npx prisma init
 npm install firebase-admin
@@ -62,5 +62,15 @@ npm run studio:catalog
     "password": "123"
 }
 
-5. localhost:5000/auth/verifyToken
+5. [localhost:5000/auth/verifyToken]
 
+6. [localhost:5000/admin/auth/me]
+
+## Super Admin creation
+1. nodemon .\src\controllers\superAdmin.controller.js
+2. ctrl + c
+
+## Mock Super Admin credentials:
+email: admin@totle.com
+password: Admin@123
+name: Admin mawa

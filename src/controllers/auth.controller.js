@@ -9,7 +9,31 @@ import { userDb } from "../config/prismaClient.js";
 import admin from 'firebase-admin';
 import jwt from "jsonwebtoken";
 import { generateToken } from "../generateToken.js";
+import multer from 'multer';
+import fs from "fs"; // ✅ Import file system to read the image
 
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "src/uploads/"); // ✅ Store files in `src/uploads/`
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // ✅ Unique filename
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Invalid file type. Only JPEG, PNG, JPG, and WEBP are allowed."), false);
+  }
+};
+export const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // ✅ 5MB file size limit
+});
 // import {serviceAccount} from '../../firebaseAdmin.json'
 
 // admin.initializeApp({
@@ -196,6 +220,8 @@ export const loginUser = async (req, res) => {
 
   try {
     const user = await userDb.user.findUnique({ where: { email } });
+    let userToken={id: user.id, email: user.email};
+    // console.log("User Found:", user);
 
     if (!user) {
       return res.status(400).json({ error: true, message: "User doesn't exist, please register" });
@@ -206,7 +232,7 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ error: true, message: "Invalid Password" });
     }
 
-    const tokenResponse =await generateToken(email);
+    const tokenResponse =await generateToken(userToken);
     if (tokenResponse.error) {
       return res.status(500).json({ error: true, message: "Failed to generate token" });
     }
@@ -289,6 +315,56 @@ export const resetPassword = async (req, res) => {
     }
 };
 
+// export const getUserProfile = async (req, res) => {
+//   try {
+//     // Extract token from Authorization header
+//     const authHeader = req.headers.authorization;
+//     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+//       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+//     }
+
+//     const token = authHeader.split(" ")[1];
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     const userId = decoded.id || decoded.userId || decoded.uid; // Ensure correct field
+//     if (!userId) {
+//       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+//     }
+    
+//     const user = await userDb.user.findUnique({
+//       where: { id: userId },
+//       select: {
+//         id: true,
+//         firstName: true,
+//         lastName: true,
+//         email: true,
+//         dob: true,
+//         gender: true,
+//         status: true,
+//         currentOccupation: true,
+//         skills: true,
+//         years_of_experience: true,  // ✅ Correct field name
+//         location: true,
+//         preferredLanguage: {
+//           select: {
+//             language_name: true,  // ✅ Fetch preferred language name
+//           },
+//         },
+//       },
+//     });
+    
+    
+
+//     if (!user) {
+//       return res.status(404).json({ error: true, message: "User not found" });
+//     }
+
+//     return res.status(200).json({ success: true, user });
+//   } catch (error) {
+//     console.error("Error fetching user profile:", error);
+//     return res.status(500).json({ error: true, message: "Internal Server Error" });
+//   }
+// };
+
 export const getUserProfile = async (req, res) => {
   try {
     // Extract token from Authorization header
@@ -298,67 +374,80 @@ export const getUserProfile = async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id || decoded.userId || decoded.uid; // Ensure correct field
-    if (!userId) {
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decoded.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+      }
+
+      // Fetch user from the database
+      const user = await userDb.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          dob: true,
+          gender: true,
+          knownLanguages: true,
+          preferredLanguages: true,
+          qualification: true,
+          status: true,
+          currentOccupation: true,
+          skills: true,
+          experience: true,
+          location: true,
+        },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: true, message: "User not found" });
+      }
+
+      return res.status(200).json({ success: true, user });
+    } catch (error) {
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
     }
-    
-    const user = await userDb.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        dob: true,
-        gender: true,
-        status: true,
-        currentOccupation: true,
-        skills: true,
-        years_of_experience: true,  // ✅ Correct field name
-        location: true,
-        preferredLanguage: {
-          select: {
-            language_name: true,  // ✅ Fetch preferred language name
-          },
-        },
-      },
-    });
-    
-    
-
-    if (!user) {
-      return res.status(404).json({ error: true, message: "User not found" });
-    }
-
-    return res.status(200).json({ success: true, user });
   } catch (error) {
     console.error("Error fetching user profile:", error);
     return res.status(500).json({ error: true, message: "Internal Server Error" });
   }
 };
 
+import path from "path";
+
+
 export const updateUserProfile = async (req, res) => {
   try {
-    // Extract token from Authorization header
+    // ✅ Extract token from Authorization header
     const authHeader = req.headers.authorization;
+    console.log("Received Auth Header:", authHeader);
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
     }
 
     const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id || decoded.userId || decoded.uid;
 
-    if (!userId) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
-    }
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log("Decoded Token:", decoded); 
+      const userId = decoded.id || decoded.userId || decoded.uid;
+      if (!userId) {
+        return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+      }
+      
+    
 
-    // Extract fields to update (only allowed fields)
+
+    // ✅ Extract fields from request body
     const {
       firstName,
       lastName,
+      email,
       dob,
       gender,
       knownLanguages,
@@ -367,25 +456,35 @@ export const updateUserProfile = async (req, res) => {
       status,
       currentOccupation,
       skills,
-      years_of_experience,
+      experience,
       location,
     } = req.body;
+    console.log('requird fields', req.body);
 
-    // Prepare update data
-    const updateData = {
-      firstName,
-      lastName,
-      dob,
-      gender,
-      qualification,
-      status,
-      currentOccupation,
-      skills,
-      years_of_experience,
-      location,
-    };
+    // ✅ Prepare update data
+    const updateData = {};
 
-    // Handle language updates
+    // ✅ Handle Image Upload (Convert Image to Bytes if Prisma Uses `Bytes`)
+    if (req.file) {
+      const imagePath = path.join("src/uploads", req.file.filename);
+      const imageBuffer = fs.readFileSync(imagePath); // ✅ Read image as buffer
+      updateData.image = imageBuffer; // ✅ Store as Bytes in Prisma
+    }
+
+    // ✅ Only update fields if they exist in the request body
+    if (email) updateData.email=email;
+    if (firstName) updateData.firstName = firstName;
+    if (lastName) updateData.lastName = lastName;
+    if (dob) updateData.dob = new Date(dob).toISOString();
+    if (gender) updateData.gender = gender;
+    if (qualification) updateData.educational_qualifications = Array.isArray(qualification) ? qualification : [qualification];
+    if (status) updateData.status = status;
+    if (currentOccupation) updateData.currentOccupation = currentOccupation;
+    if (skills) updateData.skills = Array.isArray(skills) ? skills : [skills]; // ✅ Ensure skills is always an array
+    if (experience !== undefined) updateData.years_of_experience = parseInt(experience, 10); // ✅ Ensure it's an integer
+    if (location) updateData.location = location;
+
+    // ✅ Handle language updates
     if (preferredLanguages && preferredLanguages.length > 0) {
       const prefLanguage = await userDb.language.findUnique({
         where: { language_name: preferredLanguages[0] },
@@ -405,11 +504,12 @@ export const updateUserProfile = async (req, res) => {
       }
     }
 
-    if (updateData.dob) {
-      updateData.dob = new Date(updateData.dob).toISOString();
+    // ✅ Ensure at least one valid field exists before updating
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ error: true, message: "No valid fields provided for update." });
     }
 
-    // Update user in the database
+    // ✅ Update user in the database
     const updatedUser = await userDb.user.update({
       where: { id: userId },
       data: updateData,
@@ -420,7 +520,7 @@ export const updateUserProfile = async (req, res) => {
         email: true,
         dob: true,
         gender: true,
-        qualification: true,
+        educational_qualifications: true,
         status: true,
         currentOccupation: true,
         skills: true,
@@ -428,6 +528,7 @@ export const updateUserProfile = async (req, res) => {
         location: true,
         preferredLanguage: { select: { language_name: true } },
         known_language_ids: true,
+        image: true, // ✅ Image stored as Bytes
       },
     });
 
@@ -440,11 +541,16 @@ export const updateUserProfile = async (req, res) => {
         knownLanguages: updatedUser.known_language_ids || [],
       },
     });
+  } catch (jwtError) {
+    console.error("❌ JWT Verification Error:", jwtError);
+    return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+  }
   } catch (error) {
     console.error("❌ Error updating user profile:", error);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
 
 
 

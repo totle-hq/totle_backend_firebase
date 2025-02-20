@@ -67,27 +67,18 @@ model User {
   dob                    DateTime?
   mobile                 String?  @unique
   status                 String?
-  session Session[]
 }
 
 
-model Session {
+
+model Admin {
   id        String   @id @default(uuid())
-  roomName  String   @unique
-  teacherId String
-  learnerId String
-  teacher   User     @relation(fields: [teacherId], references: [id])
-  learner   User     @relation(fields: [learnerId], references: [id])
-  status    String   @default("scheduled") // scheduled, active, completed
+  name      String
+  email     String   @unique
+  password  String
+  status    String   @default("active") // Can be 'active' or 'inactive'
   createdAt DateTime @default(now())
-}
-
-model Join {
-  id    String  @id @default(uuid())
-  name  String
-  email String  @unique
-  sessionsAsTeacher Session[] @relation("Session_teacherId")
-  sessionsAsLearner Session[] @relation("Session_learnerId")
+  updatedAt DateTime @updatedAt
 }
 
 

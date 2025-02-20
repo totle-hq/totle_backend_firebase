@@ -12,7 +12,8 @@
     "migrate:user": "npx prisma migrate dev --schema=prisma/userSchema.prisma  --name",
     "migrate:catalog": "npx prisma migrate dev --schema=prisma/catalogSchema.prisma --name",
     "studio:user": "prisma studio --schema=prisma/userSchema.prisma",
-    "studio:catalog": "prisma studio --schema=prisma/catalogSchema.prisma"
+    "studio:catalog": "prisma studio --schema=prisma/catalogSchema.prisma",
+    "build": "npx prisma generate --schema=prisma/userSchema.prisma && npx prisma generate --schema=prisma/catalogSchema.prisma"
   },
   "keywords": [],
   "author": "",
@@ -40,6 +41,7 @@
     "eslint": "^9.20.0",
     "nodemon": "^3.1.9",
     "prettier": "^3.4.2",
-    "prisma": "^6.3.1"
+    "prisma": "^6.3.1",
+    "typescript": "^5.7.3"
   }
 }
