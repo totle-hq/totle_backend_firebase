@@ -372,11 +372,13 @@ export const getUserProfile = async (req, res) => {
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
     }
-
+    
     const token = authHeader.split(" ")[1];
+    console.log('token', process.env.JWT_SECRET)
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('decoded', decoded.id)
       const userId = decoded.id;
 
       if (!userId) {
@@ -393,16 +395,17 @@ export const getUserProfile = async (req, res) => {
           email: true,
           dob: true,
           gender: true,
-          knownLanguages: true,
-          preferredLanguages: true,
-          qualification: true,
+          known_language_ids: true,
+          preferred_language_id: true,
+          educational_qualifications: true,
           status: true,
           currentOccupation: true,
           skills: true,
-          experience: true,
+          years_of_experience: true,
           location: true,
         },
       });
+      console.log('user', user)
 
       if (!user) {
         return res.status(404).json({ error: true, message: "User not found" });
@@ -444,22 +447,22 @@ export const updateUserProfile = async (req, res) => {
 
 
     // ✅ Extract fields from request body
-    const {
+    let {
       firstName,
       lastName,
       email,
       dob,
       gender,
       knownLanguages,
-      preferredLanguages,
+      preferredLanguage,
       qualification,
       status,
       currentOccupation,
       skills,
-      experience,
+      years_of_experience,
       location,
     } = req.body;
-    console.log('requird fields', req.body);
+    // console.log('requird fields', req.body);
 
     // ✅ Prepare update data
     const updateData = {};
@@ -481,26 +484,51 @@ export const updateUserProfile = async (req, res) => {
     if (status) updateData.status = status;
     if (currentOccupation) updateData.currentOccupation = currentOccupation;
     if (skills) updateData.skills = Array.isArray(skills) ? skills : [skills]; // ✅ Ensure skills is always an array
-    if (experience !== undefined) updateData.years_of_experience = parseInt(experience, 10); // ✅ Ensure it's an integer
+    if (years_of_experience !== undefined) updateData.years_of_experience = parseInt(years_of_experience, 10); // ✅ Ensure it's an integer
     if (location) updateData.location = location;
 
     // ✅ Handle language updates
-    if (preferredLanguages && preferredLanguages.length > 0) {
-      const prefLanguage = await userDb.language.findUnique({
-        where: { language_name: preferredLanguages[0] },
-        select: { language_id: true },
-      });
-      if (prefLanguage) updateData.preferred_language_id = prefLanguage.language_id;
+    if (preferredLanguage) {
+      preferredLanguage = Number(preferredLanguage);
+      
+      if (!isNaN(preferredLanguage)) {
+        // console.log("🔹 Searching for Preferred Language ID:", preferredLanguage);
+    
+        const prefLanguage = await userDb.language.findUnique({
+          where: { language_id: preferredLanguage },  // ✅ Search by language_id, not language_name
+          select: { language_id: true },
+        });
+    
+        if (prefLanguage) {
+          updateData.preferred_language_id = prefLanguage.language_id;
+          // console.log("✅ Preferred Language Found:", updateData.preferred_language_id);
+        } else {
+          console.log("⚠️ Preferred Language Not Found in DB");
+        }
+      } else {
+        console.log("❌ Invalid Preferred Language ID Received:", preferredLanguage);
+      }
     }
+    
+    
 
-    if (knownLanguages && knownLanguages.length > 0) {
+    if (knownLanguages ) {
+      if(typeof knownLanguages === 'string'){
+        knownLanguages=[knownLanguages]
+      }else if(!Array.isArray(knownLanguages)){
+        knownLanguages=[]
+      }
+      knownLanguages = knownLanguages.map(lang => Number(lang)).filter(lang => !isNaN(lang));
       const knownLanguagesList = await userDb.language.findMany({
-        where: { language_name: { in: knownLanguages } },
+        where: { language_id: { in: knownLanguages } },
         select: { language_id: true },
       });
 
-      if (knownLanguagesList.length === knownLanguages.length) {
+      if (knownLanguagesList.length > 0) {
         updateData.known_language_ids = knownLanguagesList.map((lang) => lang.language_id);
+        // console.log("✅ Known Languages Found:", updateData.known_language_ids);
+      } else {
+        console.log("⚠️ No Known Languages Found");
       }
     }
 
@@ -531,6 +559,7 @@ export const updateUserProfile = async (req, res) => {
         image: true, // ✅ Image stored as Bytes
       },
     });
+    // console.log('updated user details' ,updateData)
 
     return res.status(200).json({
       success: true,
