@@ -64,28 +64,44 @@ const googleCallback = (req, res, next) => {
   })(req, res, next);
 };
 
-const logout = (req, res) => {
-  req.logout(() => {
-    res.redirect("/");
-  });
+const logout = async (req, res) => {
+  try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+    if (!token) {
+      return res.status(401).json({ error: true, message: "Unauthorized: No token provided" });
+    }
+    const decoded =await verifyToken(token);
+    console.log("Decoded in Logout:", decoded); // ✅ Debugging
+
+    if (!decoded) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+    }
+    const userId = Number(decoded.id); // ✅ Ensure `id` is an integer
+    if (!userId) {
+      return res.status(400).json({ error: true, message: "Invalid token: Missing user ID" });
+    }
+    // ✅ Update `isLoggedIn` using `id`
+    await userDb.user.update({
+      where: { id: userId },
+      data: { isLoggedIn: false },
+    });
+    return res.status(200).json({ error: false, message: "Logout successful" });
+  } catch (error) {
+    console.error("Error during logout: ", error);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
+  }
 };
 
-const verifyToken = async (req, res) => {
-  const { token } = req.body;
 
+
+const verifyToken = async (token) => {
   try {
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    const { uid, email } = decodedToken;
-
-    const backendToken = jwt.sign({ uid, email }, process.env.JWT_SECRET, { expiresIn: "7d" });
-
-    res.json({
-      message: "✅ Authentication Successful!",
-      backendToken,
-      user: { uid, email },
-    });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('decoded', decoded)
+    return decoded; // ✅ Ensure it returns the decoded user details
   } catch (error) {
-    res.status(401).json({ message: "❌ Invalid Token", error: error.message });
+    console.error("Error verifying token:", error);
+    return null;
   }
 }
 
@@ -232,6 +248,11 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ error: true, message: "Invalid Password" });
     }
 
+    await userDb.user.update({
+      where: { email },
+      data: { isLoggedIn: true },
+    });
+
     const tokenResponse =await generateToken(userToken);
     if (tokenResponse.error) {
       return res.status(500).json({ error: true, message: "Failed to generate token" });
@@ -314,56 +335,6 @@ export const resetPassword = async (req, res) => {
       return res.status(500).json({ error: true, message: "Internal Server Error" });
     }
 };
-
-// export const getUserProfile = async (req, res) => {
-//   try {
-//     // Extract token from Authorization header
-//     const authHeader = req.headers.authorization;
-//     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-//       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
-//     }
-
-//     const token = authHeader.split(" ")[1];
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-//     const userId = decoded.id || decoded.userId || decoded.uid; // Ensure correct field
-//     if (!userId) {
-//       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
-//     }
-    
-//     const user = await userDb.user.findUnique({
-//       where: { id: userId },
-//       select: {
-//         id: true,
-//         firstName: true,
-//         lastName: true,
-//         email: true,
-//         dob: true,
-//         gender: true,
-//         status: true,
-//         currentOccupation: true,
-//         skills: true,
-//         years_of_experience: true,  // ✅ Correct field name
-//         location: true,
-//         preferredLanguage: {
-//           select: {
-//             language_name: true,  // ✅ Fetch preferred language name
-//           },
-//         },
-//       },
-//     });
-    
-    
-
-//     if (!user) {
-//       return res.status(404).json({ error: true, message: "User not found" });
-//     }
-
-//     return res.status(200).json({ success: true, user });
-//   } catch (error) {
-//     console.error("Error fetching user profile:", error);
-//     return res.status(500).json({ error: true, message: "Internal Server Error" });
-//   }
-// };
 
 export const getUserProfile = async (req, res) => {
   try {
@@ -509,7 +480,6 @@ export const updateUserProfile = async (req, res) => {
         console.log("❌ Invalid Preferred Language ID Received:", preferredLanguage);
       }
     }
-    
     
 
     if (knownLanguages ) {

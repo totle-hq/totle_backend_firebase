@@ -238,4 +238,111 @@ export const uploadImage= (req, res) => {
   res.json({ imagePath: `/uploads/${req.file.filename}` });
 };
 
-// ✅ Serve Static Files
+export const getAllUsers = async (req, res) => {
+  try {
+    const users = await userDb.user.findMany({
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        isVerified: true,
+        status: true,
+        preferredLanguage: { select: { language_name: true } },
+        location: true,
+        mobile: true,
+        currentOccupation: true,
+        skills: true,
+        isLoggedIn: true
+      },
+    });
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const createSurvey = async (req, res) => {
+  try {
+    console.log("Received survey data:", req.body);
+    const { title, questions } = req.body;
+
+    if (!title || !Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ message: "Title and questions are required" });
+    }
+
+    const survey = await userDb.survey.create({
+      data: {
+        title,
+        questions: {
+          create: questions.map(q => ({
+            text: q.text,
+            type: q.type,
+            options: q.options || [],
+          })),
+        },
+      },
+      include: { questions: true },
+    });
+
+    res.status(201).json({ message: "Survey created successfully", survey });
+  } catch (error) {
+    console.error("Error creating survey:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+// ✅ Get All Surveys
+export const getAllSurveys = async (req, res) => {
+  try {
+    const surveys = await userDb.survey.findMany({ select: { id: true, title: true } });
+    res.status(200).json(surveys);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+// ✅ Get Survey Results
+export const getSurveyResults = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+    const survey = await userDb.survey.findUnique({
+      where: { id: surveyId },
+      include: { responses: true },
+    });
+    
+    if (!survey) return res.status(404).json({ message: "Survey not found" });
+    res.status(200).json(survey.responses);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+// ✅ Submit a Survey Response
+export const submitSurveyResponse = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+    const { responses } = req.body;
+    const userId = req.user.id;
+    if (!responses || !responses.length) {
+      return res.status(400).json({ message: "Responses are required" });
+    }
+
+    await Promise.all(responses.map(async (response) => {
+      await userDb.response.create({
+        data: {
+          surveyId,
+          questionId: response.questionId,
+          userId,
+          answer: response.answer,
+        },
+      });
+    }));
+
+    res.status(201).json({ message: "Response recorded successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};

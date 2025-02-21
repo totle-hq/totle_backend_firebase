@@ -32,9 +32,11 @@ model User {
   dob                   DateTime?
   mobile                String?  @unique
   status                String?
+  isLoggedIn            Boolean?
 
   // Relationship to UserMetrics
-  metrics               UserMetrics? 
+  metrics               UserMetrics?
+  responses             Response[]
 }
 
 model UserMetrics {
@@ -125,3 +127,34 @@ model Blog {
 }
 
 
+
+// ✅ Prisma Schema Update
+model Survey {
+  id        String    @id @default(uuid())
+  title     String
+  createdAt DateTime  @default(now())
+  questions Question[]
+  responses Response[]
+}
+
+model Question {
+  id        String    @id @default(uuid())
+  text      String
+  type      String
+  options   String[] // JSON string for multiple-choice options
+  surveyId  String
+  survey    Survey   @relation(fields: [surveyId], references: [id])
+  responses Response[]
+}
+
+model Response {
+  id         String    @id @default(uuid())
+  surveyId   String
+  survey     Survey   @relation(fields: [surveyId], references: [id])
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  answer     String // Store selected option, rating, or text response
+  createdAt  DateTime @default(now())
+}
