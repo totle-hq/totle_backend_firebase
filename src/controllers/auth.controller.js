@@ -374,11 +374,11 @@ export const getUserProfile = async (req, res) => {
     }
     
     const token = authHeader.split(" ")[1];
-    console.log('token', process.env.JWT_SECRET)
+    // console.log('token', process.env.JWT_SECRET)
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log('decoded', decoded.id)
+      // console.log('decoded', decoded.id)
       const userId = decoded.id;
 
       if (!userId) {
@@ -405,7 +405,7 @@ export const getUserProfile = async (req, res) => {
           location: true,
         },
       });
-      console.log('user', user)
+      // console.log('user', user)
 
       if (!user) {
         return res.status(404).json({ error: true, message: "User not found" });

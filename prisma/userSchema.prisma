@@ -11,18 +11,34 @@ generator client {
 }
 
 model User {
-  id                     Int     @id @default(autoincrement())
-  email                  String  @unique
-  isVerified             Boolean @default(false)
-  googleId               String? @unique
-  firstName              String
-  lastName               String?
-  password               String?
-  bio                    String?
-  preferred_language_id  Int?
-  preferredLanguage      Language? @relation("PreferredLanguage", fields: [preferred_language_id], references: [language_id])
-  known_language_ids     Int[]  @default([])
-  image                  Bytes?
+  id                    Int     @id @default(autoincrement())
+  email                 String  @unique
+  isVerified            Boolean @default(false)
+  googleId              String? @unique
+  firstName             String
+  lastName              String?
+  password              String?
+  bio                   String?
+  preferred_language_id Int?
+  preferredLanguage     Language? @relation("PreferredLanguage", fields: [preferred_language_id], references: [language_id])
+  known_language_ids    Int[]  @default([])
+  image                 Bytes?
+  gender                String?
+  location              String?
+  educational_qualifications String[]
+  skills                String[]
+  currentOccupation     String?
+  years_of_experience   Int?   @default(0)
+  dob                   DateTime?
+  mobile                String?  @unique
+  status                String?
+
+  // Relationship to UserMetrics
+  metrics               UserMetrics? 
+}
+
+model UserMetrics {
+  userId                 Int     @id
   concept_mastery        Int     @default(0)
   accuracy               Int     @default(0)
   skill_application      Int     @default(0)
@@ -58,16 +74,11 @@ model User {
   time_management        Int     @default(0)
   resource_utilization   Int     @default(0)
   resilience             Int     @default(0)
-  gender                 String?
-  location               String?
-  educational_qualifications String[]
-  skills                 String[]
-  currentOccupation      String?
-  years_of_experience    Int?   @default(0)
-  dob                    DateTime?
-  mobile                 String?  @unique
-  status                 String?
+
+  // Relationship back to User
+  user                   User    @relation(fields: [userId], references: [id])
 }
+
 
 
 
@@ -79,6 +90,8 @@ model Admin {
   status    String   @default("active") // Can be 'active' or 'inactive'
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  blogs Blog[]
 }
 
 
@@ -97,6 +110,18 @@ model Otp {
   expiry     DateTime?
   isVerified Boolean?  @default(false)
   createdAt  DateTime @default(now())
+}
+
+model Blog {
+  id          Int     @id @default(autoincrement())
+  title       String
+  slug        String  
+  description String
+  content     String
+  image       String?
+  createdAt   DateTime @default(now())
+  adminId     String
+  admin       Admin   @relation(fields: [adminId], references: [id])
 }
 
 
