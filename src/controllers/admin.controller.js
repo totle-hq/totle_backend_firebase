@@ -83,3 +83,159 @@ export const getAdminDetails = async (req, res) => {
 
 
 
+export const createBlog = async (req, res) => {
+  try {
+    if (!req.admin) return res.status(401).json({ message: "Unauthorized" });
+    const { title, slug, description, content, image } = req.body;
+    console.log('blog', req.body)
+
+    if (!title || !slug || !description || !content) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const adminId = req.admin.id; // Get admin ID from authentication
+    if (!req.admin || !req.admin.id) {
+      return res.status(401).json({ message: "Unauthorized: Admin ID is missing" });
+    }
+
+    const blog = await userDb.blog.create({
+      data: {
+        title,
+        slug,
+        description,
+        content,
+        image,
+        adminId, // Link the blog to the logged-in admin
+      },
+    });
+
+    res.status(201).json({ message: "Blog created successfully", blog });
+  } catch (error) {
+    console.log("error creating blog", error)
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+// ✅ Fetch All Blogs
+export const getAllBlogs = async (req, res) => {
+  try {
+    const blogs = await userDb.blog.findMany({
+      include: {
+        admin: {
+          select: { name: true, email: true }, // Include only name & email of admin
+        },
+      },
+    });
+
+    res.json(blogs);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const getBlogById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const blog = await userDb.blog.findUnique({ where: { id: parseInt(id) } });
+
+    if (!blog) return res.status(404).json({ message: "Blog not found" });
+
+    res.json(blog);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+// ✅ Fetch Single Blog by ID
+export const getAdminBlogs = async (req, res) => {
+  try {
+    const adminId = req.admin.id; // Get admin ID from authentication
+    console.log('admin id', adminId)
+
+    const blogs = await userDb.blog.findMany({
+      where: { adminId },
+    });
+
+    res.json(blogs);
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+// ✅ Update Blog
+export const updateBlog = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { title, slug, description, content, image } = req.body;
+    const adminId = req.admin.id;
+
+    const blog = await userDb.blog.findUnique({ where: { id } });
+
+    if (!blog) return res.status(404).json({ message: "Blog not found" });
+    if (blog.adminId !== adminId) return res.status(403).json({ message: "Unauthorized" });
+
+    const updatedBlog = await userDb.blog.update({
+      where: { id },
+      data: { title, slug, description, content, image },
+    });
+
+    res.json({ message: "Blog updated successfully", blog: updatedBlog });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+// ✅ Delete Blog
+export const deleteBlog = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.admin.id;
+
+    const blog = await userDb.blog.findUnique({ where: { id } });
+
+    if (!blog) return res.status(404).json({ message: "Blog not found" });
+    if (blog.adminId !== adminId) return res.status(403).json({ message: "Unauthorized" });
+
+    await userDb.blog.delete({ where: { id } });
+
+    res.json({ message: "Blog deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+
+// Ensure uploads folder exists
+const uploadDir = "src/uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "src/uploads/"); // Store in backend
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename
+  },
+});
+
+const upload = multer({ storage });
+
+// ✅ Upload Route (Backend API)
+export const uploadImage= (req, res) => {
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+
+  // Return image path
+  res.json({ imagePath: `/uploads/${req.file.filename}` });
+};
+
+// ✅ Serve Static Files
