@@ -25,7 +25,7 @@ router.get("/auth/me", getAdminDetails);
 router.post("/blogs", authenticateAdmin, createBlog);       // Create a blog (Admin only)
 router.get("/blogs", getAllBlogs);                          // Get all blogs (Public)
 router.get("/blogs/:id", getBlogById);                      // Get a single blog (Public)
-router.get("/blogs", authenticateAdmin, getAdminBlogs); // Get blogs created by logged-in admin
+router.get("/blogs", getAdminBlogs); // Get blogs created by logged-in admin
 router.put("/blogs/:id", authenticateAdmin, updateBlog);    // Update a blog (Only by author admin)
 router.delete("/blogs/:id", authenticateAdmin, deleteBlog); // Delete a blog (Only by author admin)
 router.post("/upload", upload.single("image"), uploadImage); // Upload image (Admin only)

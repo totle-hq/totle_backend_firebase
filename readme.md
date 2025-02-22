@@ -1,7 +1,7 @@
 ## Requirements
 
-npm install @prisma/client pg firebase-admin bcryptjs jsonwebtoken passport express-rate-limit multer
-npm install --save-dev nodemon prisma eslint prettier
+npm install @prisma/client pg firebase-admin bcryptjs jsonwebtoken passport express-rate-limit multer
+npm install --save-dev nodemon prisma eslint prettier
 npx prisma init
 npm install firebase-admin
 

@@ -123,12 +123,18 @@ export const getAllBlogs = async (req, res) => {
     const blogs = await userDb.blog.findMany({
       include: {
         admin: {
-          select: { name: true, email: true }, // Include only name & email of admin
+          select: { name: true, email: true },
         },
       },
     });
 
-    res.json(blogs);
+    // ✅ Ensure image paths are correctly formatted
+    const blogsWithImages = blogs.map((blog) => ({
+      ...blog,
+      image: blog.image ? `${req.protocol}://${req.get("host")}${blog.image}` : null,
+    }));
+
+    res.json(blogsWithImages);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
@@ -137,15 +143,28 @@ export const getAllBlogs = async (req, res) => {
 export const getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
-    const blog = await userDb.blog.findUnique({ where: { id: parseInt(id) } });
+    
+    const blog = await userDb.blog.findUnique({
+      where: { id: Number(id) },
+      include: {
+        admin: { select: { name: true, email: true } },
+      },
+    });
 
     if (!blog) return res.status(404).json({ message: "Blog not found" });
 
-    res.json(blog);
+    // ✅ Ensure image URL is correctly formatted
+    const blogWithImage = {
+      ...blog,
+      image: blog.image ? `${req.protocol}://${req.get("host")}${blog.image}` : null,
+    };
+
+    res.json(blogWithImage);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 // ✅ Fetch Single Blog by ID
 export const getAdminBlogs = async (req, res) => {
@@ -297,52 +316,133 @@ export const createSurvey = async (req, res) => {
 // ✅ Get All Surveys
 export const getAllSurveys = async (req, res) => {
   try {
-    const surveys = await userDb.survey.findMany({ select: { id: true, title: true } });
+    const surveys = await userDb.survey.findMany({ 
+      select: { 
+        id: true, 
+        title: true,
+        questions: {   // Include questions
+          select: {
+            id: true,
+            text: true,
+            type: true,
+            options: true
+          }
+        }
+      } 
+    });
     res.status(200).json(surveys);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
 };
 
+
 // ✅ Get Survey Results
 export const getSurveyResults = async (req, res) => {
   try {
     const { surveyId } = req.params;
+
     const survey = await userDb.survey.findUnique({
       where: { id: surveyId },
-      include: { responses: true },
+      include: {
+        questions: {
+          select: { id: true, text: true, type: true },
+        },
+        responses: {
+          select: { questionId: true, answer: true },
+        },
+      },
     });
-    
-    if (!survey) return res.status(404).json({ message: "Survey not found" });
-    res.status(200).json(survey.responses);
+
+    if (!survey) {
+      return res.status(404).json({ message: "Survey not found" });
+    }
+
+    // Organize data in the expected format
+    const results = survey.questions.map((question) => {
+      const responses = survey.responses
+        .filter((response) => response.questionId === question.id)
+        .map((r) => r.answer);
+
+      // Count responses for multiple-choice questions
+      const responseCounts =
+        question.type === "multiple-choice" || question.type === "single-choice"
+          ? responses.reduce((acc, curr) => {
+              acc[curr] = (acc[curr] || 0) + 1;
+              return acc;
+            }, {})
+          : responses;
+
+      return {
+        question: question.text,
+        type: question.type,
+        responses: responseCounts,
+      };
+    });
+
+    res.status(200).json(results);
   } catch (error) {
+    console.error("Error fetching survey results:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 // ✅ Submit a Survey Response
 export const submitSurveyResponse = async (req, res) => {
   try {
     const { surveyId } = req.params;
     const { responses } = req.body;
-    const userId = req.user.id;
-    if (!responses || !responses.length) {
-      return res.status(400).json({ message: "Responses are required" });
+    const token = req.header("Authorization"); // ✅ Get token from headers
+
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized: No token provided" });
     }
 
-    await Promise.all(responses.map(async (response) => {
-      await userDb.response.create({
-        data: {
-          surveyId,
-          questionId: response.questionId,
-          userId,
-          answer: response.answer,
-        },
-      });
-    }));
+    console.log("Received token:", token); // ✅ Debug log for token
 
-    res.status(201).json({ message: "Response recorded successfully" });
+    // ✅ Verify and decode JWT token
+    let decoded;
+    try {
+      decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
+      console.log("Decoded token:", decoded); // ✅ Log decoded token
+    } catch (error) {
+      console.error("JWT verification error:", error);
+      return res.status(401).json({ message: "Unauthorized: Invalid token" });
+    }
+
+    const userId = decoded.id; // ✅ Extract user ID from token
+
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized: User ID missing from token" });
+    }
+
+    if (!surveyId || !responses || !responses.length) {
+      return res.status(400).json({ message: "Survey ID and responses are required" });
+    }
+
+    // ✅ Validate if the survey exists
+    const surveyExists = await userDb.survey.findUnique({ where: { id: surveyId } });
+    if (!surveyExists) {
+      return res.status(404).json({ message: "Invalid survey ID" });
+    }
+
+    await Promise.all(
+      responses.map(async (response) => {
+        await userDb.response.create({
+          data: {
+            survey: { connect: { id: surveyId } },
+            question: { connect: { id: response.questionId } },
+            user: { connect: { id: userId } }, // ✅ Ensure user is connected correctly
+            answer: response.answer,
+          },
+        });
+      })
+    );
+
+    res.status(201).json({ message: "Survey submitted successfully" });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    console.error("Error submitting survey:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
