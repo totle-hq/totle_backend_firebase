@@ -1,5 +1,5 @@
 import express from "express";
-import { completeSignup, getUserProfile, loginUser, logout, otpVerification, resetPassword, resetUser, signupUserAndSendOtp, updateUserProfile, upload, verifyToken } from "../controllers/auth.controller.js";
+import { completeSignup, getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword, resetUser, signupUserAndSendOtp, updateUserProfile, upload, verifyToken } from "../controllers/auth.controller.js";
 import { loginLimiter, signupLimiter } from "../middlewares/rateLimiter.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 
@@ -31,6 +31,7 @@ router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
 router.get('/user',authMiddleware, getUserProfile);
 router.post("/logout", logout);
+router.get("/user-count", getUserCount);
 
 
 router.put("/updateUser", upload.single('image'), updateUserProfile)

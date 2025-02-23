@@ -71,7 +71,7 @@ const logout = async (req, res) => {
       return res.status(401).json({ error: true, message: "Unauthorized: No token provided" });
     }
     const decoded =await verifyToken(token);
-    console.log("Decoded in Logout:", decoded); // ✅ Debugging
+    // console.log("Decoded in Logout:", decoded); // ✅ Debugging
 
     if (!decoded) {
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
@@ -408,7 +408,7 @@ export const updateUserProfile = async (req, res) => {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log("Decoded Token:", decoded); 
+      // console.log("Decoded Token:", decoded); 
       const userId = decoded.id || decoded.userId || decoded.uid;
       if (!userId) {
         return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
@@ -549,6 +549,16 @@ export const updateUserProfile = async (req, res) => {
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+export const getUserCount = async (req, res) => {
+  try {
+    const count = await userDb.user.count(); // Count all users in the database
+    return res.status(200).json({ count });
+  } catch (error) {
+    console.error("Error fetching user count:", error);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
+  }
+};
+
 
 
 
