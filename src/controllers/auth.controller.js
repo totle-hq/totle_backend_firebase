@@ -4,7 +4,7 @@ import passport from "passport";
 import { hashPassword, comparePassword } from "../utils/hashUtils.js";
 import {  verifyOtp } from "../utils/otpService.js";
 // import prisma from "../config/prismaClient.js"; // ✅ Prisma DB Client
-import { sendOtp } from "../utils/otpService.js"; // ✅ Utility for OTP sending
+import { sendOtp,sendWelcomeEmail } from "../utils/otpService.js"; // ✅ Utility for OTP sending
 import { userDb } from "../config/prismaClient.js";
 import admin from 'firebase-admin';
 import jwt from "jsonwebtoken";
@@ -177,7 +177,9 @@ export const otpVerification = async (req, res) => {
           firstName,
         },
       });
-      
+      if (email) {
+        await sendWelcomeEmail(email, firstName);
+      }
   
       return res.status(200).json({ error: false, message: "OTP verified successfully ✅" });
     } catch (error) {

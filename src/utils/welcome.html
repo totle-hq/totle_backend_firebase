@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to TOTLE</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 600px;
+            background: #ffffff;
+            /* margin: 10px auto; */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.1);
+        }
+        .logo {
+            width: 120px;
+        }
+        .header {
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            margin-top: 0px;
+        }
+        .subheader {
+            font-size: 15px;
+            color: #666;
+            margin-top: 15px;
+            line-height: 1.1;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 6px;
+            display: inline-block;
+            /* margin-top: 15px; */
+        }
+        .info-container {
+            text-align: center;
+            max-width: 600px;
+            margin: auto;
+        }
+        .button-section {
+            margin-bottom: 10px;
+        }
+        .tab-button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 3px;
+        }
+        .tab-button.active {
+            background: #0056b3;
+        }
+        .content-section {
+            background: #f4f8ff;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: left;
+        }
+        .content {
+            display: none;
+        }
+        .content.active {
+            display: block;
+        }
+        .footer {
+            font-size: 12px;
+            color: #888;
+            margin-top: 15px;
+            line-height: 1.4;
+        }
+        .whatsapp {
+            color: #25D366;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        hr {
+            border: none;
+            height: 1px;
+            background: #ddd;
+            margin: 20px 0;
+        }
+        .p2{
+            margin: 0;
+        }
+    </style>
+    <script>
+        function showContent(section) {
+            document.querySelectorAll(".content").forEach(div => div.classList.remove("active"));
+            document.querySelectorAll(".tab-button").forEach(btn => btn.classList.remove("active"));
+            document.getElementById(section).classList.add("active");
+            event.target.classList.add("active");
+        }
+    </script>
+</head>
+<body>
+
+<div class="container">
+    <!-- <img src="https://yourlogo.com/logo.png" alt="TOTLE Logo" class="logo"> -->
+     <h2 style="color: #F28500; font-weight: bold; font-size: 32px; margin: 10px 0px; text-align: center;">TOTLE</h2>
+
+    <p class="header">Hey [User's Name]! 👋</p>
+
+    <p class="subheader">
+        Welcome to the <strong>TOTLE Beta Program</strong>! 🎉<br>
+        Account registration is succesful. You’re now part of an exclusive learning experience!
+    </p>
+
+    <a class="button" href="http://localhost:3000/auth/" style="color: whitesmoke;">🚀 Login to Your Account</a>
+
+    <p class="subheader">
+        You can update your profile and preferences anytime after logging in.
+    </p>
+    <p class="subheader p2">
+        Access our <strong>User Guide</strong> <a href="https://youruserguidelink.com">here</a> to learn more about the platform.
+    </p>
+
+    <hr>
+
+    <p class="header">✨ What’s Next?</p>
+
+    <div class="info-container">
+        <!-- <div class="button-section">
+            <button class="tab-button active" style="font-weight: bold;" onclick="showContent('features')">🚀 Features</button>
+            <button class="tab-button" style="font-weight: bold;" onclick="showContent('expectations')">📩 Your Role</button>
+        </div> -->
+        
+        <div class="content-section">
+            <h3>🚀 Features</h3>
+<ul>
+    <li>🚀 <strong>Early Access:</strong> Try new features before anyone else.</li>
+    <li>📢 <strong>Influence Development:</strong> Share feedback and help shape TOTLE.</li>
+    <li>🌍 <strong>Join the Community:</strong> Connect with like-minded learners.</li>
+    <li>🏅 <strong>Earn Rewards:</strong> Get exclusive beta user badges & perks.</li>
+    <li>🎁 <strong>Refer & Earn:</strong> Invite friends and unlock exciting benefits.</li>
+</ul>
+
+<h3>📩 Your Role</h3>
+<p class="subheader">As a beta tester, your role is to:</p>
+<ul>
+    <li>📊 Participate in surveys and provide valuable feedback.</li>
+    <li>🔍 Test new features and share your insights.</li>
+</ul>
+
+        </div>
+    </div>
+
+    <hr>
+
+    <p class="header">💬 Need Help?</p>
+    <p class="subheader">
+        Our support team is here for you! Reach out via:
+    </p>
+    <p>
+        📧 <strong>Email:</strong> <a href="mailto:totleedtech@gmail.com">totleedtech@gmail.com</a><br>
+        📱 <a href="https://wa.me/yourwhatsapplink" class="whatsapp">Chat on WhatsApp</a>
+    </p>
+
+    <hr>
+
+    <p class="footer">
+        Happy Learning, Happy Earning!<br>
+        <strong>Team TOTLE</strong>
+    </p>
+
+    <p class="footer">
+        This email and its attachments are intended solely for the recipient and may contain confidential information.
+    </p>
+</div>
+
+</body>
+</html>

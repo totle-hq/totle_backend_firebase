@@ -226,3 +226,30 @@ export const verifyOtp = async ( identifier, otp ) => {
     return { error: true, message: "Something went wrong. Please try again." };
   }
 };
+
+export const sendWelcomeEmail = async (email, firstName) => {
+  try {
+    // ✅ Load the email template
+    const templatePath = path.join(__dirname, "welcome.html");  // Adjust path if necessary
+    let emailTemplate = fs.readFileSync(templatePath, "utf-8");
+
+    // ✅ Replace placeholders with actual values
+    emailTemplate = emailTemplate.replace("[User's Name]", firstName);
+    emailTemplate = emailTemplate.replace('<a class="button">🚀 Login to Your Account</a>', 
+      `<a href="http://localhost:3000/auth" class="button">🚀 Login to Your Account</a>`);
+
+    // ✅ Email options
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "🎉 Welcome to TOTLE!",
+      html: emailTemplate,
+    };
+
+    // ✅ Send Email
+    await transporter.sendMail(mailOptions);
+    console.log(`✅ Welcome Email sent to ${email}`);
+  } catch (error) {
+    console.error("❌ Error sending Welcome Email:", error);
+  }
+};
