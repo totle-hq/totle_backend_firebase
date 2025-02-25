@@ -41,22 +41,22 @@ app.use(cors({
 }));
 app.use(helmet());
 
-io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+// io.on("connection", (socket) => {
+//   console.log("User connected:", socket.id);
 
-  socket.on("joinSession", (sessionId) => {
-    socket.join(sessionId);
-    console.log(`User joined session: ${sessionId}`);
-  });
+//   socket.on("joinSession", (sessionId) => {
+//     socket.join(sessionId);
+//     console.log(`User joined session: ${sessionId}`);
+//   });
 
-  socket.on("sessionUpdate", (sessionId, status) => {
-    io.to(sessionId).emit("sessionStatusChanged", status);
-  });
+//   socket.on("sessionUpdate", (sessionId, status) => {
+//     io.to(sessionId).emit("sessionStatusChanged", status);
+//   });
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected");
-  });
-});
+//   socket.on("disconnect", () => {
+//     console.log("User disconnected");
+//   });
+// });
 
 app.use(compression());
 app.use(morgan("dev"));
