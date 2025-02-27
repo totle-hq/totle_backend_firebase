@@ -1,6 +1,7 @@
-import { userDb } from "../config/prismaClient.js";
+// import { userDb } from "../config/prismaClient.js";
 import bcrypt from "bcryptjs";
 import dotenv from "dotenv";
+import {Admin} from "../models/AdminModel.js";
 dotenv.config();
 
 export const createSuperAdmin = async () => {
@@ -12,7 +13,7 @@ export const createSuperAdmin = async () => {
 
     await userDb.$connect(); // ✅ Ensure database connection
 
-    const existingAdmin = await userDb.admin.findUnique({ where: { email } });
+    const existingAdmin = await Admin.findUnique({ where: { email } });
     if (existingAdmin) {
       console.log("✅ Super Admin already exists!");
       return;
@@ -30,4 +31,4 @@ export const createSuperAdmin = async () => {
   }
 };
 
-createSuperAdmin().then(() => process.exit());
+

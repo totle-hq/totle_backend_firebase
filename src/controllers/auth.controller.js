@@ -1,16 +1,14 @@
 import passport from "passport";
-// import "../config/passportConfig.js"; // Ensure the file extension is .js
-// import { prisma } from "../index.js";
 import { hashPassword, comparePassword } from "../utils/hashUtils.js";
 import {  verifyOtp } from "../utils/otpService.js";
-// import prisma from "../config/prismaClient.js"; // ✅ Prisma DB Client
 import { sendOtp,sendWelcomeEmail } from "../utils/otpService.js"; // ✅ Utility for OTP sending
-import { userDb } from "../config/prismaClient.js";
-import admin from 'firebase-admin';
+// import { userDb } from "../config/prismaClient.js";
+// import admin from 'firebase-admin';
 import jwt from "jsonwebtoken";
 import { generateToken } from "../generateToken.js";
 import multer from 'multer';
 import fs from "fs"; // ✅ Import file system to read the image
+import {User} from "../Models/UserModel.js";
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -118,7 +116,7 @@ export const signupUserAndSendOtp = async (req, res) => {
 
   try {
     console.log("Checking if user exists...");
-    const existingUser = await userDb.user.findUnique({ where: isEmail? { email }: {mobile} });
+    const existingUser = await User.findOne({ where: isEmail? { email }: {mobile} });
 
     if (existingUser) {
       return res.status(403).json({ error: true, message: `User with this ${isEmail ? "email" : "mobile"} already exists`  });
@@ -166,7 +164,7 @@ export const otpVerification = async (req, res) => {
       const hashedPassword = password ? await hashPassword(password) : null;
   
       // Save the verified user to the database
-      await userDb.user.upsert({
+      await User.upsert({
         where: email ? { email } : { mobile },  // ✅ Use a single unique field
         update: { isVerified: true },  // ✅ If user exists, mark as verified
         create: {
@@ -237,7 +235,7 @@ export const loginUser = async (req, res) => {
   if (!password) return res.status(400).json({ error: true, message: "Please enter your password" });
 
   try {
-    const user = await userDb.user.findUnique({ where: { email } });
+    const user = await User.findOne({ where: { email } });
     let userToken={id: user.id, email: user.email};
     // console.log("User Found:", user);
 
@@ -250,10 +248,7 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ error: true, message: "Invalid Password" });
     }
 
-    await userDb.user.update({
-      where: { email },
-      data: { isLoggedIn: true },
-    });
+    await User.update( { isLoggedIn: true },{where: {id: user.id}});
 
     const tokenResponse =await generateToken(userToken);
     if (tokenResponse.error) {
@@ -285,7 +280,7 @@ export const resetUser = async (req, res) => {
       return res.status(400).json({ error: true, message: "Email is required" });
     }
     try {
-      const otpRecord = await userDb.otp.findUnique({ where: { email } });
+      const otpRecord = await User.findOne({ where: { email } });
   
       if (otpRecord) {
         const timeRemaining = Math.round((otpRecord.expiry - new Date()) / 1000);
@@ -320,13 +315,13 @@ export const resetPassword = async (req, res) => {
     }
   
     try {
-      const user = await userDb.user.findUnique({ where: { email } });
+      const user = await User.findOne({ where: { email } });
       if (!user) {
         return res.status(404).json({ error: true, message: "User not found" });
       }
   
       const hashedPassword = await hashPassword(newPassword);
-      await userDb.user.update({
+      await User.update({
         where: { email },
         data: { password: hashedPassword },
       });
@@ -359,24 +354,9 @@ export const getUserProfile = async (req, res) => {
       }
 
       // Fetch user from the database
-      const user = await userDb.user.findUnique({
+      const user = await User.findOne({
         where: { id: userId },
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          dob: true,
-          gender: true,
-          known_language_ids: true,
-          preferred_language_id: true,
-          educational_qualifications: true,
-          status: true,
-          currentOccupation: true,
-          skills: true,
-          years_of_experience: true,
-          location: true,
-        },
+        attributes: ['id', 'firstName', 'lastName', 'email', 'dob', 'gender', 'known_language_ids', 'preferred_language_id', 'educational_qualifications', 'status', 'currentOccupation', 'skills', 'years_of_experience', 'location']
       });
       // console.log('user', user)
 
@@ -510,26 +490,10 @@ export const updateUserProfile = async (req, res) => {
     }
 
     // ✅ Update user in the database
-    const updatedUser = await userDb.user.update({
+    const updatedUser = await User.update({
       where: { id: userId },
       data: updateData,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        dob: true,
-        gender: true,
-        educational_qualifications: true,
-        status: true,
-        currentOccupation: true,
-        skills: true,
-        years_of_experience: true,
-        location: true,
-        preferredLanguage: { select: { language_name: true } },
-        known_language_ids: true,
-        image: true, // ✅ Image stored as Bytes
-      },
+      attributes: ['id', 'firstName', 'lastName', 'email', 'dob', 'gender', 'known_language_ids', 'preferred_language_id', 'educational_qualifications', 'status', 'currentOccupation', 'skills', 'years_of_experience', 'location', 'image'],
     });
     // console.log('updated user details' ,updateData)
 
@@ -553,7 +517,7 @@ export const updateUserProfile = async (req, res) => {
 };
 export const getUserCount = async (req, res) => {
   try {
-    const count = await userDb.user.count(); // Count all users in the database
+    const count = await User.count(); // Count all users in the database
     return res.status(200).json({ count });
   } catch (error) {
     console.error("Error fetching user count:", error);

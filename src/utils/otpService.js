@@ -2,8 +2,9 @@ import fs from "fs";
 import path from "path";import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
-import { userDb } from "../config/prismaClient.js";
+// import { userDb } from "../config/prismaClient.js";
 import { fileURLToPath } from "url";
+import {OTP} from "../models/OtpModel.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -93,7 +94,7 @@ export const sendOtp = async (identifier) => {
   const isEmail = identifier.includes("@");
   if (isEmail) {
     try {
-      const existingOtp = await userDb.otp.findUnique({ where: { email:identifier } });
+      const existingOtp = await OTP.findOne({ where: { email:identifier } });
       console.log('existing otp', existingOtp)
       if (existingOtp) {
         if (new Date() < existingOtp.expiry) {
@@ -120,9 +121,9 @@ export const sendOtp = async (identifier) => {
           // Existing OTP has expired; generate a new one
           const professionalSentMessage = "A new OTP has been generated and sent to ${identifier}. Please use it before it expires.";
 
-          await userDb.otp.update(
-            { where: { email: identifier, },
-              data: { otp, expiry, isVerified: false },
+          await OTP.update(
+            { otp, expiry, isVerified: false },
+            { where: { email: identifier }
           });
           
           await sendEmailOtp(identifier, otp);
@@ -136,13 +137,11 @@ export const sendOtp = async (identifier) => {
       } else {
         // Create a new OTP if none exists
         
-        await userDb.otp.create({
-          data: {
+        await OTP.create({
             email: identifier,
             otp: otp,
             expiry: expiry,
             isVerified: false,
-          },
         });
         
         // console.log('entered send otp email')
@@ -194,14 +193,15 @@ export const verifyOtp = async ( identifier, otp ) => {
     // const otpRecord = await userDb.otp.findUnique({
     //   where: { email, otp, isVerified: false },
     // });
-    const otpRecord = await userDb.otp.findFirst({
+    const otpRecord = await OTP.findOne({
       where: {
-        OR: [
+        [Sequelize.Op.or]: [
           { email: identifier, otp: otp, isVerified: false },
           { mobile: identifier, otp: otp, isVerified: false },
         ],
       },
     });
+    
     
 
     if (!otpRecord) return { error: true, message: randomFailureMessage };
@@ -212,12 +212,17 @@ export const verifyOtp = async ( identifier, otp ) => {
     }
 
     // Verify OTP and update status
-    await userDb.otp.updateMany({
-      where: {
-        OR: [{ email: otpRecord.email }, { mobile: otpRecord.mobile }], // ✅ Works for either email or mobile
-      },
-      data: { isVerified: true },
-    });
+    await OTP.update(
+      { isVerified: true }, // Data to update
+      {
+        where: {
+          [Sequelize.Op.or]: [
+            { email: otpRecord.email },
+            { mobile: otpRecord.mobile }
+          ]
+        }
+      }
+    );
     
 
     return { error: false, message: otpSuccessMessage };
@@ -230,7 +235,7 @@ export const verifyOtp = async ( identifier, otp ) => {
 export const sendWelcomeEmail = async (email, firstName) => {
   try {
     // ✅ Load the email template
-    const templatePath = path.join(__dirname, "welcome.html");  // Adjust path if necessary
+    const templatePath = path.join(__dirname, "welcome3.html");  // Adjust path if necessary
     let emailTemplate = fs.readFileSync(templatePath, "utf-8");
 
     // ✅ Replace placeholders with actual values

@@ -20,7 +20,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-router.post("/login", loginLimiter, adminLogin);
+router.post("/login", adminLogin);
 router.get("/auth/me", getAdminDetails);
 router.post("/blogs", authenticateAdmin, createBlog);       // Create a blog (Admin only)
 router.get("/blogs", getAllBlogs);                          // Get all blogs (Public)

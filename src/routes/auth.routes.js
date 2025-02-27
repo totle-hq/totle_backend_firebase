@@ -12,19 +12,19 @@ router.post("/verify-token", verifyToken);
 /**
  * ✅ Step 1: Send OTP for Signup (Email or Mobile)
  */
-router.post("/signup", signupLimiter, signupUserAndSendOtp);
+router.post("/signup", signupUserAndSendOtp);
 
 /**
  * ✅ Step 2: Verify OTP & Create Account
  */
-router.post("/signup/verifyOtp",signupLimiter, otpVerification);
+router.post("/signup/verifyOtp", otpVerification);
 
 // router.post("/signup/complete", completeSignup);
 
 /**
  * ✅ Secure Login with Email/Mobile & Password
  */
-router.post("/login", loginLimiter, loginUser);
+router.post("/login", loginUser);
 
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)

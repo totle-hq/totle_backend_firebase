@@ -1,5 +1,9 @@
 
-import { userDb } from "../config/prismaClient.js";
+// import { userDb } from "../config/prismaClient.js";
+import {Admin} from '../models/AdminModel.js';
+import {Blog} from '../models/BlogModel.js';
+import {Survey} from '../models/SurveyModel.js';
+import {Responses} from '../models/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
@@ -7,20 +11,19 @@ dotenv.config();
 
 
 export const createAdmin = async (email, password) => {
-  return await userDb.admin.create({
-    data: { email, password, status: "active" },
+  return await Admin.create({ // Sequelize Admin model
+    email, 
+    password,
+    status: "active",
   });
 };
 
 export const findAdminByEmail = async (email) => {
-  return await userDb.admin.findUnique({ where: { email } });
+  return await Admin.findOne({ where: { email } }); // Sequelize Admin model
 };
 
 export const updateAdminStatus = async (adminId, status) => {
-  return await userDb.admin.update({
-    where: { id: adminId },
-    data: { status },
-  });
+  return await Admin.update({ status }, { where: { id: adminId } }); // Sequelize Admin model
 };
 
 
@@ -62,7 +65,7 @@ export const getAdminDetails = async (req, res) => {
     }
 
     // Find admin by decoded token ID
-    const admin = await userDb.admin.findUnique({ where: { id: decoded.id } });
+    const admin = await Admin.findOne({ where: { id: decoded.id } });
 
     if (!admin) {
       return res.status(404).json({ message: "Admin not found" });
@@ -98,15 +101,13 @@ export const createBlog = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized: Admin ID is missing" });
     }
 
-    const blog = await userDb.blog.create({
-      data: {
+    const blog = await Blog.create({
         title,
         slug,
         description,
         content,
         image,
-        adminId, // Link the blog to the logged-in admin
-      },
+        adminId, 
     });
 
     res.status(201).json({ message: "Blog created successfully", blog });
@@ -120,7 +121,7 @@ export const createBlog = async (req, res) => {
 // ✅ Fetch All Blogs
 export const getAllBlogs = async (req, res) => {
   try {
-    const blogs = await userDb.blog.findMany({
+    const blogs = await Blog.findAll({
       include: {
         admin: {
           select: { name: true, email: true },
@@ -144,7 +145,7 @@ export const getBlogById = async (req, res) => {
   try {
     const { id } = req.params;
     
-    const blog = await userDb.blog.findUnique({
+    const blog = await Blog.findOne({
       where: { id: Number(id) },
       include: {
         admin: { select: { name: true, email: true } },
@@ -172,7 +173,7 @@ export const getAdminBlogs = async (req, res) => {
     const adminId = req.admin.id; // Get admin ID from authentication
     console.log('admin id', adminId)
 
-    const blogs = await userDb.blog.findMany({
+    const blogs = await Blog.findAll({
       where: { adminId },
     });
 
@@ -190,12 +191,12 @@ export const updateBlog = async (req, res) => {
     const { title, slug, description, content, image } = req.body;
     const adminId = req.admin.id;
 
-    const blog = await userDb.blog.findUnique({ where: { id } });
+    const blog = await Blog.findOne({ where: { id } });
 
     if (!blog) return res.status(404).json({ message: "Blog not found" });
     if (blog.adminId !== adminId) return res.status(403).json({ message: "Unauthorized" });
 
-    const updatedBlog = await userDb.blog.update({
+    const updatedBlog = await Blog.update({
       where: { id },
       data: { title, slug, description, content, image },
     });
@@ -213,7 +214,7 @@ export const deleteBlog = async (req, res) => {
     const { id } = req.params;
     const adminId = req.admin.id;
 
-    const blog = await userDb.blog.findUnique({ where: { id } });
+    const blog = await Blog.findOne({ where: { id } });
 
     if (!blog) return res.status(404).json({ message: "Blog not found" });
     if (blog.adminId !== adminId) return res.status(403).json({ message: "Unauthorized" });
@@ -291,8 +292,7 @@ export const createSurvey = async (req, res) => {
       return res.status(400).json({ message: "Title and questions are required" });
     }
 
-    const survey = await userDb.survey.create({
-      data: {
+    const survey = await Survey.create({
         title,
         questions: {
           create: questions.map(q => ({
@@ -301,7 +301,6 @@ export const createSurvey = async (req, res) => {
             options: q.options || [],
           })),
         },
-      },
       include: { questions: true },
     });
 
@@ -316,7 +315,7 @@ export const createSurvey = async (req, res) => {
 // ✅ Get All Surveys
 export const getAllSurveys = async (req, res) => {
   try {
-    const surveys = await userDb.survey.findMany({ 
+    const surveys = await Survey.findAll({ 
       select: { 
         id: true, 
         title: true,
@@ -342,16 +341,18 @@ export const getSurveyResults = async (req, res) => {
   try {
     const { surveyId } = req.params;
 
-    const survey = await userDb.survey.findUnique({
+    const survey = await Survey.findOne({
       where: { id: surveyId },
-      include: {
-        questions: {
-          select: { id: true, text: true, type: true },
+      include: [
+        {
+          model: Question,
+          attributes: ['id', 'text', 'type'],
         },
-        responses: {
-          select: { questionId: true, answer: true },
+        {
+          model: Responses,
+          attributes: ['questionId', 'answer'],
         },
-      },
+      ],
     });
 
     if (!survey) {
@@ -422,21 +423,20 @@ export const submitSurveyResponse = async (req, res) => {
     }
 
     // ✅ Validate if the survey exists
-    const surveyExists = await userDb.survey.findUnique({ where: { id: surveyId } });
+    const surveyExists = await Survey.findOne({ where: { id: surveyId } });
     if (!surveyExists) {
       return res.status(404).json({ message: "Invalid survey ID" });
     }
 
     await Promise.all(
       responses.map(async (response) => {
-        await userDb.response.create({
-          data: {
+        await Response.create({
             survey: { connect: { id: surveyId } },
             question: { connect: { id: response.questionId } },
             user: { connect: { id: userId } }, // ✅ Ensure user is connected correctly
             answer: response.answer,
           },
-        });
+        );
       })
     );
 
