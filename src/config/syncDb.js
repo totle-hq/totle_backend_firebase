@@ -102,10 +102,10 @@ export async function syncDatabase() {
     console.log("🔄 Syncing tables in the correct order...");
 
     // Step 6: Sync tables in correct order (tables with no dependencies first)
-    const { Admin } = await import("../models/admin.js");
+    const { Admin } = await import("../Models/AdminModel.js");
     await Admin.sync({ alter: true }); // Admin table first, since other tables depend on it
 
-    const { Blog } = await import("../models/blog.js");
+    const { Blog } = await import("../Models/BlogModel.js");
     await Blog.sync({ alter: true }); // Now sync Blog after Admin exists
 
     // Now sync all remaining tables

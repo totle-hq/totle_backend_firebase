@@ -1,22 +1,23 @@
 // config/associations.js
-import User from '../models/user';
-import Admin from '../models/admin';
-import Blog from '../models/blog';
-import Survey from '../models/survey';
-import Response from '../models/response';
-import Language from '../models/language';
-import OTP from '../models/OtpModel';
-import Question from '../models/question';
-import UserMetrics from '../models/userMetrics';
+import { Admin } from "../Models/AdminModel.js";
+import { Blog } from "../Models/BlogModel.js";
+import { Language } from "../Models/LanguageModel.js";
+import { Responses } from "../Models/ResponsesModel.js";
+import { Survey } from "../Models/SurveyModel.js";
+import { User } from "../Models/UserModel.js";
+import { UserMetrics } from "../Models/UserMetricsModel.js";
+import { Question } from "../Models/QuestionModel.js";
+import { OTP } from "../Models/OtpModel.js";
+
 
 const defineRelationships = () => {
   // User to Response Relationship
-  User.hasMany(Response, { foreignKey: 'userId' });
-  Response.belongsTo(User, { foreignKey: 'userId' });
+  User.hasMany(Responses, { foreignKey: 'userId' });
+  Responses.belongsTo(User, { foreignKey: 'userId' });
 
   // Survey to Response Relationship
-  Survey.hasMany(Response, { foreignKey: 'surveyId' });
-  Response.belongsTo(Survey, { foreignKey: 'surveyId' });
+  Survey.hasMany(Responses, { foreignKey: 'surveyId' });
+  Responses.belongsTo(Survey, { foreignKey: 'surveyId' });
 
   // Admin to Blog Relationship
   Admin.hasMany(Blog, { foreignKey: 'adminId' });
@@ -33,6 +34,9 @@ const defineRelationships = () => {
   // User to UserMetrics Relationship
   User.hasOne(UserMetrics, { foreignKey: 'userId' });
   UserMetrics.belongsTo(User, { foreignKey: 'userId' });
+  
+  User.hasMany(OTP, { foreignKey: 'userId', onDelete: 'CASCADE' });
+  OTP.belongsTo(User, { foreignKey: 'userId' });
 };
 
 export default defineRelationships;

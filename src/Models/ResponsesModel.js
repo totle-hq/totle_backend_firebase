@@ -11,7 +11,7 @@ const Responses = sequelize1.define('Response', {
   surveyId: {
     type: DataTypes.UUID,
     references: {
-      model: 'Surveys',
+      model: { schema: "public", tableName: "surveys" }, 
       key: 'id',
     },
   },

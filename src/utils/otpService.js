@@ -4,7 +4,8 @@ import nodemailer from "nodemailer";
 import twilio from "twilio";
 // import { userDb } from "../config/prismaClient.js";
 import { fileURLToPath } from "url";
-import {OTP} from "../models/OtpModel.js";
+import {OTP} from "../Models/OtpModel.js";
+import { Sequelize } from "sequelize";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -165,34 +166,12 @@ export const sendOtp = async (identifier) => {
 
 export const verifyOtp = async ( identifier, otp ) => {
   try {
-    // Randomized messages for responses
-    const failureMessages = [
-      "Invalid OTP, please try again.",
-      "Incorrect OTP, request a new one.",
-      "Oops! That OTP is not valid.",
-    ];
-    const expiredMessages = [
-      "Your OTP has expired. Please request a new one.",
-      "Session expired. Generate a new OTP.",
-    ];
-    const otpSuccess = [
-      "OTP verified successfully!",
-      "Great! Your OTP is confirmed.",
-    ];
 
-    const randomFailureMessage = failureMessages[Math.floor(Math.random() * failureMessages.length)];
-    const randomExpiredMessage = expiredMessages[Math.floor(Math.random() * expiredMessages.length)];
-    const otpSuccessMessage = otpSuccess[Math.floor(Math.random() * otpSuccess.length)];
-
-    if (!identifier) {
-      return { error: true, message: "Email or Mobile is required." };
+    if (!identifier || !otp) {
+      return { error: true, message: "❌ Email or Mobile and OTP are required." };
     }
 
-
-    // Fetch OTP record from the specified database model
-    // const otpRecord = await userDb.otp.findUnique({
-    //   where: { email, otp, isVerified: false },
-    // });
+    // ✅ Fetch OTP from database
     const otpRecord = await OTP.findOne({
       where: {
         [Sequelize.Op.or]: [
@@ -201,36 +180,27 @@ export const verifyOtp = async ( identifier, otp ) => {
         ],
       },
     });
-    
-    
 
-    if (!otpRecord) return { error: true, message: randomFailureMessage };
-
-    // Check if OTP is expired
-    if (new Date() > otpRecord.expiry) {
-      return { error: true, message: randomExpiredMessage };
+    if (!otpRecord) {
+      console.log("❌ OTP Not Found or Already Used.");
+      return { error: true, message: "Invalid OTP, please try again." };
     }
 
-    // Verify OTP and update status
-    await OTP.update(
-      { isVerified: true }, // Data to update
-      {
-        where: {
-          [Sequelize.Op.or]: [
-            { email: otpRecord.email },
-            { mobile: otpRecord.mobile }
-          ]
-        }
-      }
-    );
-    
+    // ✅ Check if OTP is expired
+    if (new Date() > otpRecord.expiry) {
+      console.log("⏳ OTP Expired:", otpRecord.expiry);
+      return { error: true, message: "Your OTP has expired. Please request a new one." };
+    }
 
-    return { error: false, message: otpSuccessMessage };
+    // ✅ Verify OTP
+    await OTP.update({ isVerified: true }, { where: { email: identifier } });
+    return { error: false, message: "OTP verified successfully!" };
+
   } catch (error) {
-    console.error("Error verifying OTP:", error);
-    return { error: true, message: "Something went wrong. Please try again." };
+    return { error: true, message: "Something went wrong. Please try again.", details: error.message };
   }
 };
+
 
 export const sendWelcomeEmail = async (email, firstName) => {
   try {

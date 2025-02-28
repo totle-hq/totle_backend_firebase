@@ -79,10 +79,8 @@ const logout = async (req, res) => {
       return res.status(400).json({ error: true, message: "Invalid token: Missing user ID" });
     }
     // ✅ Update `isLoggedIn` using `id`
-    await userDb.user.update({
-      where: { id: userId },
-      data: { isLoggedIn: false },
-    });
+    await User.update({ isLoggedIn: false },
+      {where: { id: userId }});
     return res.status(200).json({ error: false, message: "Logout successful" });
   } catch (error) {
     console.error("Error during logout: ", error);
@@ -139,6 +137,7 @@ export const signupUserAndSendOtp = async (req, res) => {
 
 export const otpVerification = async (req, res) => {
     const { email, mobile, password, firstName } = req.body;
+    console.log(req.body);
     let otp = parseInt(req.body.otp, 10);
     if (isNaN(otp)) {
       return { error: true, message: "Invalid OTP format." };
@@ -164,17 +163,19 @@ export const otpVerification = async (req, res) => {
       const hashedPassword = password ? await hashPassword(password) : null;
   
       // Save the verified user to the database
-      await User.upsert({
-        where: email ? { email } : { mobile },  // ✅ Use a single unique field
-        update: { isVerified: true },  // ✅ If user exists, mark as verified
-        create: {
-          email: email || null,  // ✅ Store email only if provided
-          mobile: mobile || null,  // ✅ Store mobile only if provided
-          password: email ? hashedPassword : null,  // ✅ Password only for email signup
-          isVerified: true,
-          firstName,
-        },
+      const [user, created] = await User.upsert({
+        email: email || null,
+        mobile: mobile || null,
+        password: email ? hashedPassword : null,  // ✅ Store password if email-based signup
+        isVerified: true,
+        firstName: firstName || "", 
+        status: "active",
+        updatedAt: new Date(),
       });
+      await OTP.update(
+        { isVerified: true },
+        { where: { email: email, otp: otp } }
+      );
       if (email) {
         await sendWelcomeEmail(email, firstName);
       }
@@ -526,6 +527,53 @@ export const getUserCount = async (req, res) => {
 };
 
 
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+import { OTP } from "../Models/OtpModel.js";
+
+dotenv.config();
+
+export const sendContactEmail = async (req, res) => {
+  const { name, email, message } = req.body;
+
+  if (!name || !email || !message) {
+    return res.status(400).json({ error: true, message: "All fields are required!" });
+  }
+
+  try {
+    // Configure Email Transporter
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER, // Your email
+        pass: process.env.EMAIL_PASS, // App password (if using Gmail)
+      },
+    });
+
+    // Email Content
+    const mailOptions = {
+      from: email, // Sender Email
+      to: "support@totle.co", // Destination Email
+      subject: `New Contact Form Submission from ${name}`,
+      html: `
+        <h3>Contact Form Submission</h3>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Message:</strong></p>
+        <p>${message}</p>
+      `,
+    };
+
+    // Send Email
+    await transporter.sendMail(mailOptions);
+
+    console.log("✅ Contact Email Sent!");
+    return res.status(200).json({ error: false, message: "Message sent successfully! We will get back to you soon." });
+  } catch (error) {
+    console.error("❌ Error sending contact email:", error);
+    return res.status(500).json({ error: true, message: "Error sending email. Please try again later." });
+  }
+};
 
 
 

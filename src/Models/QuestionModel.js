@@ -22,7 +22,7 @@ const Question = sequelize1.define('Question', {
   surveyId: {
     type: DataTypes.UUID,
     references: {
-      model: 'Surveys', // Reference to Survey table
+      model: 'surveys', // Reference to Survey table
       key: 'id',
     },
   },

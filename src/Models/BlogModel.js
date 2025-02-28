@@ -30,7 +30,7 @@ const Blog = sequelize1.define('Blog', {
   adminId: {
     type: DataTypes.UUID,
     references: {
-      model: 'Admins',
+      model: 'admins',
       key: 'id',
     },
   },

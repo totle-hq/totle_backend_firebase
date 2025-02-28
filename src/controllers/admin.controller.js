@@ -1,9 +1,9 @@
 
 // import { userDb } from "../config/prismaClient.js";
-import {Admin} from '../models/AdminModel.js';
-import {Blog} from '../models/BlogModel.js';
-import {Survey} from '../models/SurveyModel.js';
-import {Responses} from '../models/ResponsesModel.js';
+import {Admin} from '../Models/AdminModel.js';
+import {Blog} from '../Models/BlogModel.js';
+import {Survey} from '../Models/SurveyModel.js';
+import {Responses} from '../Models/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
@@ -219,7 +219,7 @@ export const deleteBlog = async (req, res) => {
     if (!blog) return res.status(404).json({ message: "Blog not found" });
     if (blog.adminId !== adminId) return res.status(403).json({ message: "Unauthorized" });
 
-    await userDb.blog.delete({ where: { id } });
+    await Blog.destroy({ where: { id } });
 
     res.json({ message: "Blog deleted successfully" });
   } catch (error) {
