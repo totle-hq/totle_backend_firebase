@@ -4,9 +4,9 @@ import { sequelize1 } from '../config/sequelize.js'; // Use the main DB connecti
 
 const User = sequelize1.define('User', {
   id: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID, // ✅ Use UUID as primary key
     primaryKey: true,
-    autoIncrement: true,
+    defaultValue: DataTypes.UUIDV4,
   },
   email: {
     type: DataTypes.STRING,
@@ -39,7 +39,7 @@ const User = sequelize1.define('User', {
     type: DataTypes.STRING,
   },
 }, {
-  schema: 'private', // Private schema
+  schema: 'user', // Private schema
   tableName: 'users', // Table name
 });
 

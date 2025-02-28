@@ -13,7 +13,7 @@ const Language = sequelize1.define('Language', {
     unique: true,
   },
 }, {
-  schema: 'public', // Public schema
+  schema: 'user', // Public schema
   tableName: 'languages', // Table name
 });
 

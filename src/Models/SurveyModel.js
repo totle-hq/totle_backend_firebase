@@ -16,7 +16,7 @@ const Survey = sequelize1.define('Survey', {
     defaultValue: DataTypes.NOW,
   },
 }, {
-  schema: 'public', // Public schema
+  schema: 'admin', // Public schema
   tableName: 'surveys', // Table name
 });
 

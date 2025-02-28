@@ -22,12 +22,14 @@ const Question = sequelize1.define('Question', {
   surveyId: {
     type: DataTypes.UUID,
     references: {
-      model: 'surveys', // Reference to Survey table
+      model: { schema: "admin", tableName: "surveys" }, // Reference to Survey table
       key: 'id',
     },
+    onDelete: "CASCADE",
+    onUpdate: "CASCADE",
   },
 }, {
-  schema: 'public', // Questions are in the public schema
+  schema: 'user', // Questions are in the public schema
   tableName: 'questions',
 });
 

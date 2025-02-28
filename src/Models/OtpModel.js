@@ -31,7 +31,7 @@ const OTP = sequelize1.define('Otp', {
     defaultValue: DataTypes.NOW,
   },
 }, {
-  schema: 'private', // OTP is stored in the private schema
+  schema: 'user', // OTP is stored in the private schema
   tableName: 'otps',
 });
 

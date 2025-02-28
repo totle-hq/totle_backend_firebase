@@ -3,10 +3,12 @@ import { insertLanguages } from '../controllers/language.controller.js'; // Impo
 import { Language } from '../Models/LanguageModel.js'; // Import Sequelize models
 import { sequelize1,sequelize2 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
+import dotenv from "dotenv";
+dotenv.config();
 
 // Function to create schemas if they don't exist
 async function createSchemas(sequelize) {
-  const schemas = ['admin', 'public', 'private'];
+  const schemas = ['admin', 'user'];
 
   for (const schema of schemas) {
     // Create schema if it doesn't exist
@@ -51,7 +53,7 @@ async function insertLanguagesIfNeeded() {
 async function createDatabaseIfNeeded( dbName) {
   try {
     // Connect to the default "postgres" database first
-    const sequelizeRoot = new Sequelize("postgres", "postgres", "Admin", {
+    const sequelizeRoot = new Sequelize("postgres", process.env.DB_USER, process.env.DB_PASSWORD, {
       host: "localhost",
       dialect: "postgres",
       logging: false,
@@ -107,6 +109,11 @@ export async function syncDatabase() {
 
     const { Blog } = await import("../Models/BlogModel.js");
     await Blog.sync({ alter: true }); // Now sync Blog after Admin exists
+    const { Survey } = await import("../Models/SurveyModel.js");
+    await Survey.sync({ alter: true }); // ✅ Ensure surveys table is created first
+
+    const { Question } = await import("../Models/QuestionModel.js");
+    await Question.sync({ alter: true }); // ✅ Now sync Questions
 
     // Now sync all remaining tables
     await sequelize1.sync({ alter: true });

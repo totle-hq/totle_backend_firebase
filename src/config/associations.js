@@ -15,6 +15,18 @@ const defineRelationships = () => {
   User.hasMany(Responses, { foreignKey: 'userId' });
   Responses.belongsTo(User, { foreignKey: 'userId' });
 
+  // User to Preferred Language Relationship
+  User.belongsTo(Language, { foreignKey: 'preferred_language_id' });
+  Language.hasMany(User, { foreignKey: 'preferred_language_id' });
+
+  // User to UserMetrics Relationship
+  User.hasOne(UserMetrics, { foreignKey: 'userId' });
+  UserMetrics.belongsTo(User, { foreignKey: 'userId' });
+
+  // Survey to Question Relationship
+  Survey.hasMany(Question, { foreignKey: 'surveyId' });
+  Question.belongsTo(Survey, { foreignKey: 'surveyId' });
+
   // Survey to Response Relationship
   Survey.hasMany(Responses, { foreignKey: 'surveyId' });
   Responses.belongsTo(Survey, { foreignKey: 'surveyId' });
@@ -23,17 +35,9 @@ const defineRelationships = () => {
   Admin.hasMany(Blog, { foreignKey: 'adminId' });
   Blog.belongsTo(Admin, { foreignKey: 'adminId' });
 
-  // User to Preferred Language Relationship
-  User.belongsTo(Language, { foreignKey: 'preferred_language_id' });
-  Language.hasMany(User, { foreignKey: 'preferred_language_id' });
+  Admin.hasMany(Survey, { foreignKey: "adminId" });
+  Survey.belongsTo(Admin, { foreignKey: "adminId" });
 
-  // Survey to Question Relationship
-  Survey.hasMany(Question, { foreignKey: 'surveyId' });
-  Question.belongsTo(Survey, { foreignKey: 'surveyId' });
-
-  // User to UserMetrics Relationship
-  User.hasOne(UserMetrics, { foreignKey: 'userId' });
-  UserMetrics.belongsTo(User, { foreignKey: 'userId' });
   
   User.hasMany(OTP, { foreignKey: 'userId', onDelete: 'CASCADE' });
   OTP.belongsTo(User, { foreignKey: 'userId' });
