@@ -448,9 +448,8 @@ export const updateUserProfile = async (req, res) => {
       if (!isNaN(preferredLanguage)) {
         // console.log("🔹 Searching for Preferred Language ID:", preferredLanguage);
     
-        const prefLanguage = await userDb.language.findUnique({
+        const prefLanguage = await Language.findOne({
           where: { language_id: preferredLanguage },  // ✅ Search by language_id, not language_name
-          select: { language_id: true },
         });
     
         if (prefLanguage) {
@@ -472,9 +471,9 @@ export const updateUserProfile = async (req, res) => {
         knownLanguages=[]
       }
       knownLanguages = knownLanguages.map(lang => Number(lang)).filter(lang => !isNaN(lang));
-      const knownLanguagesList = await userDb.language.findMany({
+      const knownLanguagesList = await Language.findAll({
         where: { language_id: { in: knownLanguages } },
-        select: { language_id: true },
+        attributes: ["language_id"],
       });
 
       if (knownLanguagesList.length > 0) {
@@ -491,10 +490,34 @@ export const updateUserProfile = async (req, res) => {
     }
 
     // ✅ Update user in the database
-    const updatedUser = await User.update({
+    const [updatedRowCount] = await User.update(updateData, {
       where: { id: userId },
-      data: updateData,
-      attributes: ['id', 'firstName', 'lastName', 'email', 'dob', 'gender', 'known_language_ids', 'preferred_language_id', 'educational_qualifications', 'status', 'currentOccupation', 'skills', 'years_of_experience', 'location', 'image'],
+      returning: true, // Ensure the updated user data is returned
+    });
+
+    if (updatedRowCount === 0) {
+      return res.status(404).json({ error: true, message: "User not found or no changes detected." });
+    }
+
+    const updatedUser = await User.findOne({
+      where: { id: userId },
+      attributes: [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "dob",
+        "gender",
+        "known_language_ids",
+        "preferred_language_id",
+        "educational_qualifications",
+        "status",
+        "currentOccupation",
+        "skills",
+        "years_of_experience",
+        "location",
+        "image",
+      ],
     });
     // console.log('updated user details' ,updateData)
 
@@ -502,8 +525,8 @@ export const updateUserProfile = async (req, res) => {
       success: true,
       message: "Profile updated successfully.",
       user: {
-        ...updatedUser,
-        preferredLanguage: updatedUser.preferredLanguage?.language_name || null,
+        ...updatedUser.dataValues,
+        preferredLanguage: updatedUser.preferred_language_id  || null,
         knownLanguages: updatedUser.known_language_ids || [],
       },
     });
@@ -530,6 +553,7 @@ export const getUserCount = async (req, res) => {
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { OTP } from "../Models/OtpModel.js";
+import { Language } from "../Models/LanguageModel.js";
 
 dotenv.config();
 
