@@ -84,6 +84,10 @@ const User = sequelize1.define('User', {
     type: DataTypes.BLOB("long"), // ✅ Store image as BLOB
     allowNull: true,
   },
+  isLoggedIn:{
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
   createdAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,

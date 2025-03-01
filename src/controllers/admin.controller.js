@@ -3,6 +3,9 @@
 import {Admin} from '../Models/AdminModel.js';
 import {Blog} from '../Models/BlogModel.js';
 import {Survey} from '../Models/SurveyModel.js';
+import { User } from '../Models/UserModel.js';
+import { Language } from '../Models/LanguageModel.js';
+import { Question } from '../Models/QuestionModel.js';
 import {Responses} from '../Models/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
@@ -260,21 +263,27 @@ export const uploadImage= (req, res) => {
 
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await userDb.user.findMany({
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        isVerified: true,
-        status: true,
-        preferredLanguage: { select: { language_name: true } },
-        location: true,
-        mobile: true,
-        currentOccupation: true,
-        skills: true,
-        isLoggedIn: true
-      },
+    const users = await User.findAll({
+      attributes: [
+        "id",
+        "firstName",
+        "lastName",
+        "email",
+        "isVerified",
+        "status",
+        "location",
+        "mobile",
+        "currentOccupation",
+        "skills",
+        "isLoggedIn", 
+      ],
+      include: [
+        {
+          model: Language,
+          as: "preferredLanguage", // ✅ Ensure association exists in `associations.js`
+          attributes: ["language_name"],
+        },
+      ],
     });
 
     res.status(200).json(users);

@@ -16,8 +16,9 @@ const defineRelationships = () => {
   Responses.belongsTo(User, { foreignKey: 'userId' });
 
   // User to Preferred Language Relationship
-  User.belongsTo(Language, { foreignKey: 'preferred_language_id' });
-  Language.hasMany(User, { foreignKey: 'preferred_language_id' });
+  User.belongsTo(Language, { foreignKey: "preferred_language_id", as: "preferredLanguage" });
+  Language.hasMany(User, { foreignKey: "preferred_language_id", as: "users" });
+
 
   // User to UserMetrics Relationship
   User.hasOne(UserMetrics, { foreignKey: 'userId' });
