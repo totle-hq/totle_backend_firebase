@@ -8,6 +8,7 @@ import { User } from "../Models/UserModel.js";
 import { UserMetrics } from "../Models/UserMetricsModel.js";
 import { Question } from "../Models/QuestionModel.js";
 import { OTP } from "../Models/OtpModel.js";
+import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
 
 
 const defineRelationships = () => {
@@ -42,6 +43,12 @@ const defineRelationships = () => {
   
   User.hasMany(OTP, { foreignKey: 'userId', onDelete: 'CASCADE' });
   OTP.belongsTo(User, { foreignKey: 'userId' });
+
+  User.hasMany(MarketplaceSuggestion, { foreignKey: "userId" });
+  MarketplaceSuggestion.belongsTo(User, { foreignKey: "userId" });
+
+  // ✅ Admin Access to Marketplace Suggestions (Indirect Access)
+  Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
 };
 
 export default defineRelationships;

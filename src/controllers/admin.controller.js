@@ -234,6 +234,7 @@ export const deleteBlog = async (req, res) => {
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { MarketplaceSuggestion } from '../Models/MarketplaceModel.js';
 
 // Ensure uploads folder exists
 const uploadDir = "src/uploads";
@@ -453,5 +454,25 @@ export const submitSurveyResponse = async (req, res) => {
   } catch (error) {
     console.error("Error submitting survey:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+// ✅ API for Admins to Fetch All Suggestions
+export const getAllSuggestionsForAdmin = async (req, res) => {
+  try {
+    const suggestions = await MarketplaceSuggestion.findAll({
+      include: [
+        {
+          model: User,
+          attributes: ["firstName"],
+        },
+      ],
+      order: [["createdAt", "DESC"]],
+    });
+
+    return res.status(200).json({ success: true, suggestions });
+  } catch (error) {
+    console.error("❌ Error fetching suggestions for admin:", error);
+    return res.status(500).json({ error: true, message: "Server error." });
   }
 };

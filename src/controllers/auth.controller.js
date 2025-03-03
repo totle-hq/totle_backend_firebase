@@ -237,13 +237,13 @@ export const loginUser = async (req, res) => {
 
   try {
     const user = await User.findOne({ where: { email } });
-    let userToken={id: user.id, email: user.email};
     // console.log("User Found:", user);
-
+    
     if (!user) {
       return res.status(400).json({ error: true, message: "User doesn't exist, please register" });
     }
-
+    
+    let userToken={id: user.id, email: user.email, userName: user.firstName};
     const match = await comparePassword(password, user.password);
     if (!match) {
       return res.status(401).json({ error: true, message: "Invalid Password" });
@@ -554,6 +554,7 @@ import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { OTP } from "../Models/OtpModel.js";
 import { Language } from "../Models/LanguageModel.js";
+import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
 
 dotenv.config();
 
@@ -596,6 +597,48 @@ export const sendContactEmail = async (req, res) => {
   } catch (error) {
     console.error("❌ Error sending contact email:", error);
     return res.status(500).json({ error: true, message: "Error sending email. Please try again later." });
+  }
+};
+
+
+export const submitSuggestion = async (req, res) => {
+  try {
+    // ✅ Extract JWT Token from Headers
+    const token = req.headers.authorization?.split(" ")[1]; // Format: "Bearer <token>"
+
+    if (!token) {
+      return res.status(401).json({ error: true, message: "Unauthorized: No token provided." });
+    }
+
+    // ✅ Verify Token and Extract User Data
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id || decoded.userId; // Ensure correct field name
+    const userName = decoded.userName || decoded.name; // Adjust based on token payload
+
+    if (!userId || !userName) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token data." });
+    }
+
+    const { interest } = req.body;
+    if (!interest) {
+      return res.status(400).json({ error: true, message: "Interest is required." });
+    }
+
+    // ✅ Save Suggestion to Database
+    const suggestion = await MarketplaceSuggestion.create({
+      userId,
+      userName,
+      message: interest,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Suggestion submitted successfully!",
+      suggestion,
+    });
+  } catch (error) {
+    console.error("❌ Error submitting suggestion:", error);
+    return res.status(500).json({ error: true, message: "Server error." });
   }
 };
 

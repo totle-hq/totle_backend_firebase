@@ -1,6 +1,6 @@
 import express from "express";
 
-import { adminLogin, createBlog, createSurvey, deleteBlog, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSurveys, getAllUsers, getBlogById, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
+import { adminLogin, createBlog, createSurvey, deleteBlog, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
 import { loginLimiter } from "../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
@@ -34,6 +34,7 @@ router.post("/surveys", createSurvey);
 router.get("/surveys", getAllSurveys);
 router.get("/surveys/:surveyId/results", getSurveyResults);
 router.post("/surveys/:surveyId/responses", submitSurveyResponse);
+router.get("/getSuggestions", getAllSuggestionsForAdmin);
 
 export default router;
 
