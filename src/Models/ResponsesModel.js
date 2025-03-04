@@ -13,7 +13,7 @@ const Responses = sequelize1.define(
       type: DataTypes.UUID,
       allowNull: false,
       references: {
-        model:  { schema: "user", tableName: "users" }, // Reference Users table in user schema
+        model: { schema: "user", tableName: "users" }, // Reference Users table
         key: "id",
       },
     },
@@ -25,8 +25,21 @@ const Responses = sequelize1.define(
         key: "id",
       },
     },
+    questionId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: { schema: "user", tableName: "questions" },
+        key: "id",
+      },
+    },
+    statusSubmitted:{
+      type: DataTypes.ENUM("pending", "submitted"),
+      defaultValue: "pending",
+    },
     answer: {
-      type: DataTypes.STRING, // Store selected option, rating, or text response
+      type: DataTypes.JSON, // ✅ Store multiple answers in an array format
+      allowNull: false,
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -34,8 +47,8 @@ const Responses = sequelize1.define(
     },
   },
   {
-    schema: "user", // Store Responses in "user" schema
-    tableName: "responses", // Table name
+    schema: "user",
+    tableName: "responses",
   }
 );
 

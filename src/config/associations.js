@@ -26,12 +26,13 @@ const defineRelationships = () => {
   UserMetrics.belongsTo(User, { foreignKey: 'userId' });
 
   // Survey to Question Relationship
-  Survey.hasMany(Question, { foreignKey: 'surveyId' });
+  Survey.hasMany(Question, { foreignKey: 'surveyId', as: "questions" });
   Question.belongsTo(Survey, { foreignKey: 'surveyId' });
 
   // Survey to Response Relationship
   Survey.hasMany(Responses, { foreignKey: 'surveyId' });
   Responses.belongsTo(Survey, { foreignKey: 'surveyId' });
+  Responses.belongsTo(Question, { as: "questions" });
 
   // Admin to Blog Relationship
   Admin.hasMany(Blog, { foreignKey: 'adminId' });

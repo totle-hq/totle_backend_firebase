@@ -47,7 +47,7 @@ export const adminLogin = async (req, res) => {
 
     const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    res.status(200).json({message: "Successfully Logged in!", token, admin:{name: admin.name, email: admin.email} });
+    res.status(200).json({message: "Successfully Logged in!", token, admin:{name: admin.name, email: admin.email, id: admin.id} });
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
@@ -232,7 +232,7 @@ export const deleteBlog = async (req, res) => {
 
 
 import multer from "multer";
-import path from "path";
+import path, { format } from "path";
 import fs from "fs";
 import { MarketplaceSuggestion } from '../Models/MarketplaceModel.js';
 
@@ -293,169 +293,250 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-export const createSurvey = async (req, res) => {
+export const createOrUpdateSurvey = async (req, res) => {
   try {
     console.log("Received survey data:", req.body);
-    const { title, questions } = req.body;
+    const { surveyId, title, questions, adminId } = req.body;
 
-    if (!title || !Array.isArray(questions) || questions.length === 0) {
-      return res.status(400).json({ message: "Title and questions are required" });
+    if (!adminId || !title || !Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ message: "Admin ID, title, and questions are required" });
     }
 
-    const survey = await Survey.create({
+    let survey;
+    if (surveyId) {
+      // ✅ Step 1: If surveyId exists, update the survey
+      survey = await Survey.findByPk(surveyId);
+      if (!survey) {
+        return res.status(404).json({ message: "Survey not found" });
+      }
+      survey.title = title;
+      await survey.save();
+
+      // ✅ Step 2: Delete existing questions (to replace with new ones)
+      await Question.destroy({ where: { surveyId: surveyId } });
+    } else {
+      // ✅ Step 1: Create new survey
+      survey = await Survey.create({
+        adminId,
         title,
-        questions: {
-          create: questions.map(q => ({
-            text: q.text,
-            type: q.type,
-            options: q.options || [],
-          })),
-        },
-      include: { questions: true },
+      });
+    }
+
+    // ✅ Step 3: Insert new questions into the `questions` table
+    const createdQuestions = await Promise.all(
+      questions.map(async (q) => {
+        let formattedOptions = [];
+        if (q.type === "multiple-choice" || q.type === "single-choice") {
+          formattedOptions = Array.isArray(q.options) ? q.options : [];
+        } else if (q.type === "text") {
+          formattedOptions = [];
+        } else {
+          throw new Error(`Invalid question type: ${q.type}`);
+        }
+
+        return await Question.create({
+          surveyId: survey.id, // ✅ Link question to the survey
+          text: q.text,
+          type: q.type,
+          options: formattedOptions,
+        });
+      })
+    );
+
+    // ✅ Step 4: Send Response
+    res.status(200).json({
+      message: surveyId ? "Survey updated successfully" : "Survey created successfully",
+      survey,
+      questions: createdQuestions,
     });
 
-    res.status(201).json({ message: "Survey created successfully", survey });
   } catch (error) {
-    console.error("Error creating survey:", error);
+    console.error("❌ Error creating/updating survey:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
 
 
 // ✅ Get All Surveys
 export const getAllSurveys = async (req, res) => {
   try {
-    const surveys = await Survey.findAll({ 
-      select: { 
-        id: true, 
-        title: true,
-        questions: {   // Include questions
-          select: {
-            id: true,
-            text: true,
-            type: true,
-            options: true
-          }
+    const token=req.header("Authorization");
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized: No token provided" });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({ message: "Invalid token", error: error.message });
+    }
+
+    const userId = decoded.id; // ✅ Extract user ID from token
+    console.log('userId', userId)
+
+    const surveys = await Survey.findAll({
+      attributes: ['id', 'title'], // ✅ Select survey fields
+      include: [
+        {
+          model: Question,
+          as: "questions",
+          attributes: ['id', 'text', 'type', 'options'], 
+        },
+        {
+          model: Responses,
+          attributes: ['statusSubmitted'],
+          required: false,
+          where: { userId }, // ✅ Only fetch responses from the logged-in user
         }
-      } 
+      ],
     });
-    res.status(200).json(surveys);
+
+    // ✅ Transform response: Ensure `statusSubmitted` is correctly set for each survey
+    const formattedSurveys = surveys.map((survey) => ({
+      id: survey.id,
+      title: survey.title,
+      submitted: survey.Responses?.[0]?.statusSubmitted ?? false, // ✅ Extract submission status
+    }));
+
+    console.log('form', formattedSurveys)
+    res.status(200).json(formattedSurveys);
   } catch (error) {
+    console.error("❌ Error fetching surveys:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 
 // ✅ Get Survey Results
 export const getSurveyResults = async (req, res) => {
   try {
-    const { surveyId } = req.params;
-
-    const survey = await Survey.findOne({
-      where: { id: surveyId },
+    const surveyResults = await Survey.findAll({
+      attributes: ["id", "title"], // Get survey ID and title
       include: [
         {
-          model: Question,
-          attributes: ['id', 'text', 'type'],
-        },
-        {
           model: Responses,
-          attributes: ['questionId', 'answer'],
+          attributes: ["userId", "questionId", "answer"], // ✅ Include response details
+          required: true, // ✅ Only include surveys that have responses
+          include: [
+            {
+              model: User,
+              attributes: ["id", "firstName"], // ✅ Get user details
+            },
+            {
+              model: Question,
+              as: "questions",
+              attributes: ["id", "text", "type", "options"], // ✅ Get question details
+            },
+          ],
         },
       ],
     });
 
-    if (!survey) {
-      return res.status(404).json({ message: "Survey not found" });
+    if (!surveyResults.length) {
+      return res.status(404).json({ message: "No survey responses found" });
     }
 
-    // Organize data in the expected format
-    const results = survey.questions.map((question) => {
-      const responses = survey.responses
-        .filter((response) => response.questionId === question.id)
-        .map((r) => r.answer);
+    // ✅ Transform response to structured format
+    const formattedResults = surveyResults.flatMap((survey) => 
+      (survey.Responses || []).map((response) => ({
+        surveyTitle: survey.title,
+        username: response.User?.firstName || "Unknown", // ✅ Ensure user exists
+        question: response.Question?.text || "Unknown", // ✅ Ensure question exists
+        answer:
+          response.Question?.type === "multiple-choice"
+            ? (Array.isArray(response.answer) ? response.answer : response.answer.split(",")) // ✅ Handle array-based responses
+            : response.answer, // ✅ Store as string for single-choice/text responses
+      }))
+    );
 
-      // Count responses for multiple-choice questions
-      const responseCounts =
-        question.type === "multiple-choice" || question.type === "single-choice"
-          ? responses.reduce((acc, curr) => {
-              acc[curr] = (acc[curr] || 0) + 1;
-              return acc;
-            }, {})
-          : responses;
-
-      return {
-        question: question.text,
-        type: question.type,
-        responses: responseCounts,
-      };
-    });
-
-    res.status(200).json(results);
+    res.status(200).json(formattedResults);
   } catch (error) {
-    console.error("Error fetching survey results:", error);
+    console.error("❌ Error fetching survey results:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
 
 
-// ✅ Submit a Survey Response
+
 export const submitSurveyResponse = async (req, res) => {
   try {
     const { surveyId } = req.params;
     const { responses } = req.body;
-    const token = req.header("Authorization"); // ✅ Get token from headers
+    const token = req.header("Authorization");
 
+    // ✅ 1️⃣ Check if token is provided
     if (!token) {
       return res.status(401).json({ message: "Unauthorized: No token provided" });
     }
 
-    console.log("Received token:", token); // ✅ Debug log for token
-
-    // ✅ Verify and decode JWT token
     let decoded;
     try {
       decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
-      console.log("Decoded token:", decoded); // ✅ Log decoded token
     } catch (error) {
-      console.error("JWT verification error:", error);
-      return res.status(401).json({ message: "Unauthorized: Invalid token" });
+      return res.status(401).json({ message: "Invalid token", error: error.message });
     }
 
-    const userId = decoded.id; // ✅ Extract user ID from token
+    const userId = decoded.id;
 
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized: User ID missing from token" });
+    // ✅ 2️⃣ Validate Inputs
+    if (!surveyId || !responses || typeof responses !== "object" || Object.keys(responses).length === 0) {
+      return res.status(400).json({ message: "Survey ID and responses are required, and responses must be an object" });
     }
 
-    if (!surveyId || !responses || !responses.length) {
-      return res.status(400).json({ message: "Survey ID and responses are required" });
-    }
-
-    // ✅ Validate if the survey exists
     const surveyExists = await Survey.findOne({ where: { id: surveyId } });
     if (!surveyExists) {
       return res.status(404).json({ message: "Invalid survey ID" });
     }
 
+    // ✅ 3️⃣ Process Each Response
     await Promise.all(
-      responses.map(async (response) => {
-        await Response.create({
-            survey: { connect: { id: surveyId } },
-            question: { connect: { id: response.questionId } },
-            user: { connect: { id: userId } }, // ✅ Ensure user is connected correctly
-            answer: response.answer,
-          },
-        );
+      Object.entries(responses).map(async ([questionId, answer]) => {
+        if (!questionId || answer === undefined || answer === null) {
+          throw new Error(`Invalid response format for question ${questionId}`);
+        }
+
+        const question = await Question.findOne({ where: { id: questionId } });
+        if (!question) {
+          throw new Error(`Question ID ${questionId} does not exist`);
+        }
+
+        // ✅ 4️⃣ Ensure Correct Answer Format
+        let formattedAnswer;
+        switch (question.type) {
+          case "multiple-choice":
+            formattedAnswer = Array.isArray(answer) ? answer : [answer]; // Ensure array format
+            break;
+          case "rating-scale":
+            formattedAnswer = Number(answer); // Convert rating-scale to number
+            break;
+          default:
+            formattedAnswer = String(answer); // Store text or single-choice as a string
+        }
+
+        // ✅ 5️⃣ Prevent Duplicate Responses: Update if exists, otherwise create new
+        const existingResponse = await Responses.findOne({ where: { surveyId, userId, questionId } });
+        if (existingResponse) {
+          await existingResponse.update({ answer: formattedAnswer, statusSubmitted: "submitted" });
+        } else {
+          await Responses.create({ surveyId, userId, questionId, answer: formattedAnswer, statusSubmitted: "submitted" });
+        }
       })
     );
 
-    res.status(201).json({ message: "Survey submitted successfully" });
+    // ✅ 6️⃣ Return Success Message
+    res.status(201).json({ message: "Survey submitted successfully" , submitted: true});
+
   } catch (error) {
-    console.error("Error submitting survey:", error);
+    console.error("❌ Error submitting survey:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
 
 // ✅ API for Admins to Fetch All Suggestions
 export const getAllSuggestionsForAdmin = async (req, res) => {
@@ -474,5 +555,59 @@ export const getAllSuggestionsForAdmin = async (req, res) => {
   } catch (error) {
     console.error("❌ Error fetching suggestions for admin:", error);
     return res.status(500).json({ error: true, message: "Server error." });
+  }
+};
+
+export const getQuestionsBySurveyId = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+
+    const surveyTitle = await Survey.findOne({
+      where: { id: surveyId },
+      attributes: ["title"],
+    });
+    let title=surveyTitle.title;
+
+    // ✅ Fetch questions where surveyId matches
+    const questions = await Question.findAll({
+      where: { surveyId },
+      as:"questions",
+      attributes: ["id", "text", "type", "options"],
+    });
+
+    if (!questions || questions.length === 0) {
+      return res.status(404).json({ message: "No questions found for this survey" });
+    }
+
+    // console.log("Fetched Questions:", questions); // ✅ Debugging log
+
+    res.status(200).json({ title, questions });
+  } catch (error) {
+    console.error("❌ Error fetching questions:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+
+export const deleteSurveyById = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+
+    // ✅ Check if the survey exists
+    const survey = await Survey.findByPk(surveyId);
+    if (!survey) {
+      return res.status(404).json({ message: "Survey not found" });
+    }
+
+    // ✅ Delete all questions linked to this survey
+    await Question.destroy({ where: { surveyId } });
+
+    // ✅ Delete the survey
+    await Survey.destroy({ where: { id: surveyId } });
+
+    res.status(200).json({ message: "Survey and associated questions deleted successfully" });
+  } catch (error) {
+    console.error("❌ Error deleting survey:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 };
