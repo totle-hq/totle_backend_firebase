@@ -235,6 +235,7 @@ import multer from "multer";
 import path, { format } from "path";
 import fs from "fs";
 import { MarketplaceSuggestion } from '../Models/MarketplaceModel.js';
+import { type } from 'os';
 
 // Ensure uploads folder exists
 const uploadDir = "src/uploads";
@@ -375,7 +376,7 @@ export const getAllSurveys = async (req, res) => {
     }
 
     const userId = decoded.id; // ✅ Extract user ID from token
-    console.log('userId', userId)
+    // console.log('userId', userId)
 
     const surveys = await Survey.findAll({
       attributes: ['id', 'title'], // ✅ Select survey fields
@@ -401,7 +402,7 @@ export const getAllSurveys = async (req, res) => {
       submitted: survey.Responses?.[0]?.statusSubmitted ?? false, // ✅ Extract submission status
     }));
 
-    console.log('form', formattedSurveys)
+    // console.log('form', formattedSurveys)
     res.status(200).json(formattedSurveys);
   } catch (error) {
     console.error("❌ Error fetching surveys:", error);
@@ -414,45 +415,112 @@ export const getAllSurveys = async (req, res) => {
 // ✅ Get Survey Results
 export const getSurveyResults = async (req, res) => {
   try {
-    const surveyResults = await Survey.findAll({
-      attributes: ["id", "title"], // Get survey ID and title
+    const responses = await Responses.findAll({
+      attributes: ["userId", "surveyId", "questionId", "answer"], // Fetch responses
+      where: { statusSubmitted: "submitted" }, // ✅ Fetch only submitted responses
       include: [
         {
-          model: Responses,
-          attributes: ["userId", "questionId", "answer"], // ✅ Include response details
-          required: true, // ✅ Only include surveys that have responses
-          include: [
-            {
-              model: User,
-              attributes: ["id", "firstName"], // ✅ Get user details
-            },
-            {
-              model: Question,
-              as: "questions",
-              attributes: ["id", "text", "type", "options"], // ✅ Get question details
-            },
-          ],
+          model: User,
+          attributes: ["id", "firstName"], // ✅ Fetch user first name
+        },
+        {
+          model: Survey,
+          attributes: ["id", "title"], // ✅ Fetch survey title
+        },
+        {
+          model: Question,
+          as:"questions",
+          attributes: ["id", "text", "type", "options"], // ✅ Fetch question text & type
+        },
+      ],
+    });
+    if (!responses.length) {
+      return res.status(404).json({ message: "No submitted survey responses found" });
+    }
+
+    // ✅ Transform response to structured format
+    const formattedResults = responses.map((response) => ({
+      id:response.Survey?.id,
+      title: response.Survey?.title || "Unknown Survey", // ✅ Ensure survey exists
+      username: response.User?.firstName || "Unknown User", // ✅ Ensure user exists
+      question: response.questions?.text || "Unknown Question", // ✅ Ensure question exists
+      answer:
+        response.questions?.type === "multiple-choice"
+          ? Array.isArray(response.answer)
+            ? response.answer
+            : response.answer.split(",") // ✅ Convert stored JSON string to array
+          : response.answer, // ✅ Store as string for single-choice/text responses
+    }));
+    // console.log("Fetched responses:", formattedResults);
+    // console.log("Raw Sequelize Response:", JSON.stringify(responses, null, 2));
+// console.log("Raw Sequelize Response:", JSON.stringify(responses, null, 2));
+
+
+
+    res.status(200).json(formattedResults);
+  } catch (error) {
+    console.error("❌ Error fetching survey results:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const getResultsBySurveyId = async (req, res) => {
+  try {
+    const { surveyId } = req.params; // Extract survey ID
+
+    if (!surveyId) {
+      return res.status(400).json({ message: "Survey ID is required" });
+    }
+
+    // Fetch responses for this survey
+    const responses = await Responses.findAll({
+      attributes: ["userId", "questionId", "answer"], // Fetch relevant fields
+      where: { surveyId, statusSubmitted: "submitted" }, // Only submitted responses
+      include: [
+        {
+          model: User,
+          attributes: ["id", "firstName"], // Fetch user details
+        },
+        {
+          model: Question,
+          as: "questions", // Match alias from associations.js
+          attributes: ["id", "text", "type", "options"], // Fetch question details
         },
       ],
     });
 
-    if (!surveyResults.length) {
-      return res.status(404).json({ message: "No survey responses found" });
+    if (!responses.length) {
+      return res.status(404).json({ message: "No submitted responses found for this survey" });
     }
 
-    // ✅ Transform response to structured format
-    const formattedResults = surveyResults.flatMap((survey) => 
-      (survey.Responses || []).map((response) => ({
-        surveyTitle: survey.title,
-        username: response.User?.firstName || "Unknown", // ✅ Ensure user exists
-        question: response.Question?.text || "Unknown", // ✅ Ensure question exists
-        answer:
-          response.Question?.type === "multiple-choice"
-            ? (Array.isArray(response.answer) ? response.answer : response.answer.split(",")) // ✅ Handle array-based responses
-            : response.answer, // ✅ Store as string for single-choice/text responses
-      }))
-    );
+    // Transform responses into UI-compatible format
+    const questionMap = {}; // Store questions & aggregate responses
 
+    responses.forEach(({ questions, answer }) => {
+      if (!questions) return;
+
+      if (!questionMap[questions.id]) {
+        questionMap[questions.id] = {
+          question: questions.text,
+          type: questions.type,
+          responses: questions.type === "text" ? [] : {}, // Text => List | MCQ => Count
+        };
+      }
+
+      if (questions.type === "multiple-choice" || questions.type === "single-choice") {
+        const options = Array.isArray(answer) ? answer : answer.split(",");
+        options.forEach((opt) => {
+          questionMap[questions.id].responses[opt] = (questionMap[questions.id].responses[opt] || 0) + 1;
+        });
+      } else {
+        questionMap[questions.id].responses.push(answer);
+      }
+    });
+
+    // Convert aggregated results to an array
+    const formattedResults = Object.values(questionMap);
+
+    console.log(`✅ Results for Survey ${surveyId}:`, formattedResults);
     res.status(200).json(formattedResults);
   } catch (error) {
     console.error("❌ Error fetching survey results:", error);

@@ -1,6 +1,6 @@
 import express from "express";
 
-import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
+import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
 import { loginLimiter } from "../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
@@ -34,6 +34,7 @@ router.post("/surveys", createOrUpdateSurvey);
 router.get("/surveys", getAllSurveys);
 router.get("/surveys/questions/:surveyId", getQuestionsBySurveyId);
 router.get("/surveys/surveyResults", getSurveyResults);
+router.get("/surveys/:surveyId/surveyResults", getResultsBySurveyId);
 router.post("/surveys/:surveyId/responses", submitSurveyResponse);
 router.get("/getSuggestions", getAllSuggestionsForAdmin);
 router.delete("/surveys/:surveyId", deleteSurveyById);
