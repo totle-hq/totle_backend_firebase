@@ -591,6 +591,18 @@ export const getResultsBySurveyId = async (req, res) => {
           }
         });
       }
+      else if (question.type === "text") {
+        // ✅ Initialize text responses if not present
+        if (!question.responses) {
+          question.responses = {};
+        }
+    
+        if (question.responses.hasOwnProperty(answer.trim())) {
+          question.responses[answer.trim()] += 1;
+        } else {
+          question.responses[answer.trim()] = 1;
+        }
+      }
     });
 
     // ✅ Convert aggregated results to an array
