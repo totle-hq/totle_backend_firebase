@@ -1,11 +1,12 @@
 import express from "express";
 
-import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
+import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
 import { loginLimiter } from "../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
 import multer from "multer";
 import path from "path";
+import { create } from "domain";
 
 // Setup Multer storage
 const storage = multer.diskStorage({
@@ -31,10 +32,12 @@ router.delete("/blogs/:id", authenticateAdmin, deleteBlog); // Delete a blog (On
 router.post("/upload", upload.single("image"), uploadImage); // Upload image (Admin only)
 router.get('/users',getAllUsers);
 router.post("/surveys", createOrUpdateSurvey);
+router.put("/surveys/:surveyId", createOrUpdateSurvey);
 router.get("/surveys", getAllSurveys);
+router.get("/surveyNames", getSurveyNames)
 router.get("/surveys/questions/:surveyId", getQuestionsBySurveyId);
 router.get("/surveys/surveyResults", getSurveyResults);
-router.get("/surveys/:surveyId/surveyResults", getResultsBySurveyId);
+router.get("/surveys/surveyResults/:surveyId", getResultsBySurveyId);
 router.post("/surveys/:surveyId/responses", submitSurveyResponse);
 router.get("/getSuggestions", getAllSuggestionsForAdmin);
 router.delete("/surveys/:surveyId", deleteSurveyById);

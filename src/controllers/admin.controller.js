@@ -297,16 +297,18 @@ export const getAllUsers = async (req, res) => {
 export const createOrUpdateSurvey = async (req, res) => {
   try {
     console.log("Received survey data:", req.body);
-    const { surveyId, title, questions, adminId } = req.body;
+    const {surveyId} = req.params;
+    const { title, questions, adminId } = req.body;
 
     if (!adminId || !title || !Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ message: "Admin ID, title, and questions are required" });
     }
 
     let survey;
+    let existingQuestions=[];
     if (surveyId) {
       // ✅ Step 1: If surveyId exists, update the survey
-      survey = await Survey.findByPk(surveyId);
+      survey = await Survey.findByPk(surveyId, { include: [{ model: Question, as: "questions" }] });
       if (!survey) {
         return res.status(404).json({ message: "Survey not found" });
       }
@@ -314,41 +316,56 @@ export const createOrUpdateSurvey = async (req, res) => {
       await survey.save();
 
       // ✅ Step 2: Delete existing questions (to replace with new ones)
-      await Question.destroy({ where: { surveyId: surveyId } });
+      existingQuestions = survey.questions;
+      const incomingQuestionIds = questions.map(q => q.id).filter(id => id); // IDs of incoming questions
+      const deletedQuestions = existingQuestions.filter(eq => !incomingQuestionIds.includes(eq.id));
+      await Promise.all(deletedQuestions.map(q => q.destroy()));
+
+      for (const q of questions) {
+        const existingQuestion = existingQuestions.find(eq => eq.id === q.id);
+
+        if (existingQuestion) {
+          // ✅ Update existing question
+          existingQuestion.text = q.text;
+          existingQuestion.type = q.type;
+          existingQuestion.options = q.type === "text" ? null : Array.isArray(q.options) ? q.options : [];
+          await existingQuestion.save();
+        } else {
+          // ✅ Add new question
+          await Question.create({
+            surveyId,
+            text: q.text,
+            type: q.type,
+            options: q.type === "text" ? null : Array.isArray(q.options) ? q.options : [],
+          });
+        }
+      }
     } else {
       // ✅ Step 1: Create new survey
       survey = await Survey.create({
         adminId,
         title,
       });
+      await Promise.all(
+        questions.map(q =>
+          Question.create({
+            surveyId: survey.id,
+            text: q.text,
+            type: q.type,
+            options: q.type === "text" ? null : Array.isArray(q.options) ? q.options : [],
+          })
+        )
+      );
     }
 
-    // ✅ Step 3: Insert new questions into the `questions` table
-    const createdQuestions = await Promise.all(
-      questions.map(async (q) => {
-        let formattedOptions = [];
-        if (q.type === "multiple-choice" || q.type === "single-choice") {
-          formattedOptions = Array.isArray(q.options) ? q.options : [];
-        } else if (q.type === "text") {
-          formattedOptions = [];
-        } else {
-          throw new Error(`Invalid question type: ${q.type}`);
-        }
-
-        return await Question.create({
-          surveyId: survey.id, // ✅ Link question to the survey
-          text: q.text,
-          type: q.type,
-          options: formattedOptions,
-        });
-      })
-    );
+    const updatedSurvey = await Survey.findByPk(surveyId, {
+      include: [{ model: Question, as: "questions" }], // ✅ Alias added
+    });
 
     // ✅ Step 4: Send Response
     res.status(200).json({
       message: surveyId ? "Survey updated successfully" : "Survey created successfully",
-      survey,
-      questions: createdQuestions,
+      survey: updatedSurvey,
     });
 
   } catch (error) {
@@ -415,47 +432,86 @@ export const getAllSurveys = async (req, res) => {
 // ✅ Get Survey Results
 export const getSurveyResults = async (req, res) => {
   try {
-    const responses = await Responses.findAll({
-      attributes: ["userId", "surveyId", "questionId", "answer"], // Fetch responses
-      where: { statusSubmitted: "submitted" }, // ✅ Fetch only submitted responses
+    // ✅ Fetch all surveys with all questions (ensures missing questions are included)
+    const surveys = await Survey.findAll({
+      attributes: ["id", "title"],
       include: [
         {
-          model: User,
-          attributes: ["id", "firstName"], // ✅ Fetch user first name
-        },
-        {
-          model: Survey,
-          attributes: ["id", "title"], // ✅ Fetch survey title
-        },
-        {
           model: Question,
-          as:"questions",
-          attributes: ["id", "text", "type", "options"], // ✅ Fetch question text & type
+          as: "questions",
+          attributes: ["id", "text", "type", "options"],
         },
       ],
     });
-    if (!responses.length) {
-      return res.status(404).json({ message: "No submitted survey responses found" });
+
+    // ✅ Fetch all submitted responses
+    const responses = await Responses.findAll({
+      attributes: ["surveyId", "questionId", "answer"],
+      where: { statusSubmitted: "submitted" },
+    });
+
+    if (!surveys.length) {
+      return res.status(404).json({ message: "No surveys found" });
     }
 
-    // ✅ Transform response to structured format
-    const formattedResults = responses.map((response) => ({
-      id:response.Survey?.id,
-      title: response.Survey?.title || "Unknown Survey", // ✅ Ensure survey exists
-      username: response.User?.firstName || "Unknown User", // ✅ Ensure user exists
-      question: response.questions?.text || "Unknown Question", // ✅ Ensure question exists
-      answer:
-        response.questions?.type === "multiple-choice"
-          ? Array.isArray(response.answer)
-            ? response.answer
-            : response.answer.split(",") // ✅ Convert stored JSON string to array
-          : response.answer, // ✅ Store as string for single-choice/text responses
+    const surveyMap = {};
+
+    // ✅ Initialize survey structure with all questions and options (pre-set to 0)
+    surveys.forEach((survey) => {
+      if (!surveyMap[survey.id]) {
+        surveyMap[survey.id] = {
+          survey: survey.title,
+          results: {},
+        };
+      }
+
+      survey.questions.forEach((question) => {
+        if (!surveyMap[survey.id].results[question.id]) {
+          surveyMap[survey.id].results[question.id] = {
+            question: question.text,
+            responses: {},
+          };
+
+          // ✅ Initialize multiple-choice/single-choice options with 0 count
+          if (question.type === "multiple-choice" || question.type === "single-choice") {
+            (question.options || []).forEach((opt) => {
+              surveyMap[survey.id].results[question.id].responses[opt] = 0;
+            });
+          } else {
+            surveyMap[survey.id].results[question.id].responses["Text Responses"] = 0;
+          }
+        }
+      });
+    });
+
+    // ✅ Process submitted responses and update counts correctly
+    responses.forEach(({ surveyId, questionId, answer }) => {
+      if (!surveyMap[surveyId] || !surveyMap[surveyId].results[questionId]) return;
+
+      const question = surveyMap[surveyId].results[questionId];
+
+      if (answer) {
+        if (question.responses["Text Responses"] !== undefined) {
+          // ✅ Count text-based answers correctly
+          question.responses["Text Responses"] += 1;
+        } else {
+          // ✅ Ensure answer is split properly for multiple-choice/single-choice
+          let selectedOptions = Array.isArray(answer) ? answer : answer.split(",").map(opt => opt.trim());
+
+          selectedOptions.forEach((opt) => {
+            if (question.responses.hasOwnProperty(opt)) {
+              question.responses[opt] += 1;
+            }
+          });
+        }
+      }
+    });
+
+    // ✅ Convert results into an array format for the frontend
+    const formattedResults = Object.values(surveyMap).map((survey) => ({
+      survey: survey.survey,
+      results: Object.values(survey.results),
     }));
-    // console.log("Fetched responses:", formattedResults);
-    // console.log("Raw Sequelize Response:", JSON.stringify(responses, null, 2));
-// console.log("Raw Sequelize Response:", JSON.stringify(responses, null, 2));
-
-
 
     res.status(200).json(formattedResults);
   } catch (error) {
@@ -464,60 +520,80 @@ export const getSurveyResults = async (req, res) => {
   }
 };
 
+export const getSurveyNames = async (req, res) => {
+  try {
+    const surveys = await Survey.findAll({
+      attributes: ["id", "title"],
+    });
+
+    res.status(200).json(surveys);
+  } catch (error) {
+    console.error("❌ Error fetching survey names:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+}
+
 export const getResultsBySurveyId = async (req, res) => {
   try {
-    const { surveyId } = req.params; // Extract survey ID
+    const { surveyId } = req.params;
 
     if (!surveyId) {
       return res.status(400).json({ message: "Survey ID is required" });
     }
 
-    // Fetch responses for this survey
-    const responses = await Responses.findAll({
-      attributes: ["userId", "questionId", "answer"], // Fetch relevant fields
-      where: { surveyId, statusSubmitted: "submitted" }, // Only submitted responses
-      include: [
-        {
-          model: User,
-          attributes: ["id", "firstName"], // Fetch user details
-        },
-        {
-          model: Question,
-          as: "questions", // Match alias from associations.js
-          attributes: ["id", "text", "type", "options"], // Fetch question details
-        },
-      ],
+    // ✅ Fetch all questions for this survey
+    const surveyQuestions = await Question.findAll({
+      where: { surveyId },
+      attributes: ["id", "text", "type", "options"],
     });
 
-    if (!responses.length) {
-      return res.status(404).json({ message: "No submitted responses found for this survey" });
+    if (!surveyQuestions.length) {
+      return res.status(404).json({ message: "No questions found for this survey" });
     }
 
-    // Transform responses into UI-compatible format
+    // ✅ Fetch all submitted responses for this survey
+    const responses = await Responses.findAll({
+      attributes: ["questionId", "answer"],
+      where: { surveyId, statusSubmitted: "submitted" },
+    });
+
     const questionMap = {}; // Store questions & aggregate responses
 
-    responses.forEach(({ questions, answer }) => {
-      if (!questions) return;
+    // ✅ Initialize all questions with response options set to 0
+    surveyQuestions.forEach((question) => {
+      questionMap[question.id] = {
+        question: question.text.trim(),
+        type: question.type,
+        responses: {},
+      };
 
-      if (!questionMap[questions.id]) {
-        questionMap[questions.id] = {
-          question: questions.text,
-          type: questions.type,
-          responses: questions.type === "text" ? [] : {}, // Text => List | MCQ => Count
-        };
-      }
-
-      if (questions.type === "multiple-choice" || questions.type === "single-choice") {
-        const options = Array.isArray(answer) ? answer : answer.split(",");
-        options.forEach((opt) => {
-          questionMap[questions.id].responses[opt] = (questionMap[questions.id].responses[opt] || 0) + 1;
+      if (question.type === "multiple-choice" || question.type === "single-choice") {
+        (question.options || []).forEach((opt) => {
+          questionMap[question.id].responses[opt.trim()] = 0; // ✅ Ensure response keys are properly formatted
         });
-      } else {
-        questionMap[questions.id].responses.push(answer);
       }
     });
 
-    // Convert aggregated results to an array
+    // ✅ Process responses and update counts correctly
+    responses.forEach(({ questionId, answer }) => {
+      if (!questionMap[questionId]) return;
+
+      const question = questionMap[questionId];
+
+      if (question.type === "multiple-choice" || question.type === "single-choice") {
+        const selectedOptions = Array.isArray(answer)
+          ? answer
+          : answer.split(",").map(opt => opt.trim());
+
+        selectedOptions.forEach((opt) => {
+          if (question.responses.hasOwnProperty(opt)) {
+            question.responses[opt] += 1;
+          }
+        });
+      }
+    });
+
+    // ✅ Convert aggregated results to an array
     const formattedResults = Object.values(questionMap);
 
     console.log(`✅ Results for Survey ${surveyId}:`, formattedResults);
@@ -527,6 +603,7 @@ export const getResultsBySurveyId = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 
 
