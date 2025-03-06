@@ -362,7 +362,7 @@ export const getUserProfile = async (req, res) => {
       // console.log('user', user)
 
       if (!user) {
-        return res.status(404).json({ error: true, message: "User not found" });
+        return res.status(404).json({ error: true, message: "User not found", hasSeenWelcomeMessage: false });
       }
 
       return res.status(200).json({ success: true, user });
@@ -380,27 +380,34 @@ import path from "path";
 
 export const updateUserProfile = async (req, res) => {
   try {
-    // ✅ Extract token from Authorization header
     const authHeader = req.headers.authorization;
-    console.log("Received Auth Header:", authHeader);
+    // console.log("Received Auth Header:", authHeader);
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
     }
 
     const token = authHeader.split(" ")[1];
 
+    // ✅ Validate JWT format
+    if (!token || token.split(".").length !== 3) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Malformed token" });
+    }
+
+    let decoded;
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      // console.log("Decoded Token:", decoded); 
-      const userId = decoded.id || decoded.userId || decoded.uid;
-      if (!userId) {
-        return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
-      }
-      
-    
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (jwtError) {
+      console.error("❌ JWT Verification Error:", jwtError);
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid or expired token" });
+    }
 
+    const userId = decoded.id || decoded.userId || decoded.uid;
+    if (!userId) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token payload" });
+    }
 
-    // ✅ Extract fields from request body
+    // ✅ Extract and validate input data
     let {
       firstName,
       lastName,
@@ -416,129 +423,69 @@ export const updateUserProfile = async (req, res) => {
       years_of_experience,
       location,
     } = req.body;
-    // console.log('requird fields', req.body);
-
-    // ✅ Prepare update data
-    const updateData = {};
-
-    // ✅ Handle Image Upload (Convert Image to Bytes if Prisma Uses `Bytes`)
     if (req.file) {
       const imagePath = path.join("src/uploads", req.file.filename);
       const imageBuffer = fs.readFileSync(imagePath); // ✅ Read image as buffer
       updateData.image = imageBuffer; // ✅ Store as Bytes in Prisma
     }
 
-    // ✅ Only update fields if they exist in the request body
-    if (email) updateData.email=email;
+    const updateData = {};
+
+    if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
-    if (dob) updateData.dob = new Date(dob).toISOString();
+    if (dob) updateData.dob = dob ? new Date(dob).toISOString() : null;
     if (gender) updateData.gender = gender;
     if (qualification) updateData.educational_qualifications = Array.isArray(qualification) ? qualification : [qualification];
     if (status) updateData.status = status;
     if (currentOccupation) updateData.currentOccupation = currentOccupation;
-    if (skills) updateData.skills = Array.isArray(skills) ? skills : [skills]; // ✅ Ensure skills is always an array
-    if (years_of_experience !== undefined) updateData.years_of_experience = parseInt(years_of_experience, 10); // ✅ Ensure it's an integer
+    if (skills) updateData.skills = Array.isArray(skills) ? skills : [];
     if (location) updateData.location = location;
 
-    // ✅ Handle language updates
+    // ✅ Fix years_of_experience to always be an integer
+    updateData.years_of_experience = !isNaN(parseInt(years_of_experience, 10)) ? parseInt(years_of_experience, 10) : 0;
+
+    // ✅ Ensure language IDs are valid numbers
     if (preferredLanguage) {
       preferredLanguage = Number(preferredLanguage);
-      
-      if (!isNaN(preferredLanguage)) {
-        // console.log("🔹 Searching for Preferred Language ID:", preferredLanguage);
-    
-        const prefLanguage = await Language.findOne({
-          where: { language_id: preferredLanguage },  // ✅ Search by language_id, not language_name
-        });
-    
-        if (prefLanguage) {
-          updateData.preferred_language_id = prefLanguage.language_id;
-          // console.log("✅ Preferred Language Found:", updateData.preferred_language_id);
-        } else {
-          console.log("⚠️ Preferred Language Not Found in DB");
-        }
-      } else {
-        console.log("❌ Invalid Preferred Language ID Received:", preferredLanguage);
-      }
-    }
-    
-
-    if (knownLanguages ) {
-      if(typeof knownLanguages === 'string'){
-        knownLanguages=[knownLanguages]
-      }else if(!Array.isArray(knownLanguages)){
-        knownLanguages=[]
-      }
-      knownLanguages = knownLanguages.map(lang => Number(lang)).filter(lang => !isNaN(lang));
-      const knownLanguagesList = await Language.findAll({
-        where: { language_id: { in: knownLanguages } },
-        attributes: ["language_id"],
-      });
-
-      if (knownLanguagesList.length > 0) {
-        updateData.known_language_ids = knownLanguagesList.map((lang) => lang.language_id);
-        // console.log("✅ Known Languages Found:", updateData.known_language_ids);
-      } else {
-        console.log("⚠️ No Known Languages Found");
+      if (!isNaN(preferredLanguage) && preferredLanguage > 0) {
+        const prefLanguage = await Language.findOne({ where: { language_id: preferredLanguage } });
+        if (prefLanguage) updateData.preferred_language_id = prefLanguage.language_id;
       }
     }
 
-    // ✅ Ensure at least one valid field exists before updating
+    if (knownLanguages) {
+      knownLanguages = Array.isArray(knownLanguages) ? knownLanguages.map((lang) => Number(lang)).filter((lang) => !isNaN(lang)) : [];
+      if (knownLanguages.length > 0) {
+        const knownLanguagesList = await Language.findAll({ where: { language_id: knownLanguages }, attributes: ["language_id"] });
+        if (knownLanguagesList.length > 0) updateData.known_language_ids = knownLanguagesList.map((lang) => lang.language_id);
+      }
+    }
+
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ error: true, message: "No valid fields provided for update." });
     }
 
     // ✅ Update user in the database
-    const [updatedRowCount] = await User.update(updateData, {
-      where: { id: userId },
-      returning: true, // Ensure the updated user data is returned
-    });
+    const [updatedRowCount] = await User.update(updateData, { where: { id: userId }, returning: true });
 
     if (updatedRowCount === 0) {
       return res.status(404).json({ error: true, message: "User not found or no changes detected." });
     }
 
-    const updatedUser = await User.findOne({
-      where: { id: userId },
-      attributes: [
-        "id",
-        "firstName",
-        "lastName",
-        "email",
-        "dob",
-        "gender",
-        "known_language_ids",
-        "preferred_language_id",
-        "educational_qualifications",
-        "status",
-        "currentOccupation",
-        "skills",
-        "years_of_experience",
-        "location",
-        "image",
-      ],
-    });
-    // console.log('updated user details' ,updateData)
+    const updatedUser = await User.findOne({ where: { id: userId } });
 
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully.",
-      user: {
-        ...updatedUser.dataValues,
-        preferredLanguage: updatedUser.preferred_language_id  || null,
-        knownLanguages: updatedUser.known_language_ids || [],
-      },
+      user: updatedUser,
     });
-  } catch (jwtError) {
-    console.error("❌ JWT Verification Error:", jwtError);
-    return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
-  }
   } catch (error) {
     console.error("❌ Error updating user profile:", error);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
 export const getUserCount = async (req, res) => {
   try {
     const count = await User.count(); // Count all users in the database
