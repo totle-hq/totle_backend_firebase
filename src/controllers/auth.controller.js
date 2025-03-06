@@ -268,6 +268,7 @@ export const loginUser = async (req, res) => {
         // preferredLanguage,
         // knownLanguages,
       },
+      hasSeenWelcomeScreen: false
     });
   } catch (error) {
     console.error("Error during login: ", error);
@@ -362,10 +363,10 @@ export const getUserProfile = async (req, res) => {
       // console.log('user', user)
 
       if (!user) {
-        return res.status(404).json({ error: true, message: "User not found", hasSeenWelcomeMessage: false });
+        return res.status(404).json({ error: true, message: "User not found" });
       }
 
-      return res.status(200).json({ success: true, user });
+      return res.status(200).json({ success: true, user, hasSeenWelcomeScreen: false });
     } catch (error) {
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
     }
