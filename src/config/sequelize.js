@@ -8,10 +8,10 @@ const sequelize1 = new Sequelize(process.env.DATABASE_URL, {
 });
 
 // Sequelize instance for the second database (if applicable)
-const sequelize2 = new Sequelize(process.env.DATABASE_URL2, {
-  dialect: 'postgres',
-  logging: false,
-});
+// const sequelize2 = new Sequelize(process.env.DATABASE_URL2, {
+//   dialect: 'postgres',
+//   logging: false,
+// });
 
 // Export both Sequelize instances
-export { sequelize1, sequelize2 };
+export { sequelize1 };

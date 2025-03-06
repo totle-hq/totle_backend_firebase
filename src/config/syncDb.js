@@ -1,7 +1,7 @@
 import { createSuperAdmin } from '../controllers/superAdmin.controller.js'; // Import SuperAdmin function
 import { insertLanguages } from '../controllers/language.controller.js'; // Import languages insertion function
 import { Language } from '../Models/LanguageModel.js'; // Import Sequelize models
-import { sequelize1,sequelize2 } from './sequelize.js';
+import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
 import dotenv from "dotenv";
 dotenv.config();
@@ -88,7 +88,7 @@ export async function syncDatabase() {
 
     // Step 1: Create database if it doesn't exist for both instances
     await createDatabaseIfNeeded( dbName1);
-    await createDatabaseIfNeeded( dbName2);
+    // await createDatabaseIfNeeded( dbName2);
     
     // Sync models (this will create tables in the corresponding schemas if they don’t exist)
     await createSchemas(sequelize1);
@@ -99,7 +99,7 @@ export async function syncDatabase() {
 
     // Step 5: Disable foreign key constraints to avoid order issues
     await sequelize1.query("SET session_replication_role = 'replica';");
-    await sequelize2.query("SET session_replication_role = 'replica';");
+    // await sequelize2.query("SET session_replication_role = 'replica';");
 
     console.log("🔄 Syncing tables in the correct order...");
 
@@ -117,13 +117,13 @@ export async function syncDatabase() {
 
     // Now sync all remaining tables
     await sequelize1.sync({ alter: true });
-    await sequelize2.sync({ alter: true });
+    // await sequelize2.sync({ alter: true });
 
     console.log("✅ All tables synced successfully!");
 
     // Step 7: Re-enable foreign key constraints after syncing
     await sequelize1.query("SET session_replication_role = 'origin';");
-    await sequelize2.query("SET session_replication_role = 'origin';");
+    // await sequelize2.query("SET session_replication_role = 'origin';");
 
     console.log("✅ Foreign key constraints re-enabled!");
 
