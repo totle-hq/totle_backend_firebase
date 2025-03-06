@@ -54,7 +54,7 @@ async function createDatabaseIfNeeded( dbName) {
   try {
     // Connect to the default "postgres" database first
     const sequelizeRoot = new Sequelize("postgres", process.env.DB_USER, process.env.DB_PASSWORD, {
-      host: "localhost",
+      host: process.env.DB_HOST,
       dialect: "postgres",
       logging: false,
     });
