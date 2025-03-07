@@ -103,25 +103,25 @@ const verifyToken = async (token) => {
 
 
 export const signupUserAndSendOtp = async (req, res) => {
-  const { email, mobile } = req.body;
+  const { email } = req.body;
 
-  if (!email && !mobile) {
-    return res.status(400).json({ error: true, message: "Email/Mobile number is required" });
+  if (!email) {
+    return res.status(400).json({ error: true, message: "Email is required" });
   }
 
-  const identifier = email || mobile;
+  // const identifier = email || mobile;
   const isEmail = !!email;
 
   try {
     console.log("Checking if user exists...");
-    const existingUser = await User.findOne({ where: isEmail? { email }: {mobile} });
+    const existingUser = await User.findOne({  where: { email } });
 
     if (existingUser) {
       return res.status(403).json({ error: true, message: `User with this ${isEmail ? "email" : "mobile"} already exists`  });
     }
 
     console.log("Sending OTP...");
-    const otpResponse = await sendOtp(identifier);
+    const otpResponse = await sendOtp(email);
 
     if (otpResponse.error) {
       return res.status(400).json({ error: true, message: otpResponse.message });

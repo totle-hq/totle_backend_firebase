@@ -88,7 +88,7 @@ export const sendSmsOtp = async (mobile, otp) => {
 export const sendOtp = async (identifier) => {
   console.log('email send otp', identifier)
   if (!identifier) {
-    throw new Error("❌ No Email or Mobile provided for OTP.");
+    throw new Error("❌ No Email  provided for OTP.");
   }
   const otp = Math.floor(100000 + Math.random() * 900000);
   const expiry = new Date(Date.now() + 5 * 60 * 1000);
