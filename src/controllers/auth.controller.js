@@ -136,7 +136,7 @@ export const signupUserAndSendOtp = async (req, res) => {
 
 
 export const otpVerification = async (req, res) => {
-    const { email, mobile, password, firstName } = req.body;
+    const { email, password, firstName } = req.body;
     console.log(req.body);
     let otp = parseInt(req.body.otp, 10);
     if (isNaN(otp)) {
@@ -146,12 +146,12 @@ export const otpVerification = async (req, res) => {
     if (!firstName) {
       return res.status(400).json({ error: true, message: "Firstname is required" });
     }
-    if ((!email && !mobile) || !otp) {
-      return res.status(400).json({ error: true, message: "Email/Mobile and OTP are required" });
+    if ((!email) || !otp) {
+      return res.status(400).json({ error: true, message: "Email and OTP are required" });
     }
   
     try {
-      const result = await verifyOtp(email || mobile, otp);
+      const result = await verifyOtp(email, otp);
       if (result.error) {
         return res.status(400).json({ error: true, message: result.message });
       }
@@ -165,7 +165,7 @@ export const otpVerification = async (req, res) => {
       // Save the verified user to the database
       const [user, created] = await User.upsert({
         email: email || null,
-        mobile: mobile || null,
+        mobile: null,
         password: email ? hashedPassword : null,  // ✅ Store password if email-based signup
         isVerified: true,
         firstName: firstName || "", 
