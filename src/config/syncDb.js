@@ -128,10 +128,10 @@ export async function syncDatabase() {
     console.log("✅ All tables synced successfully!");
 
     // Step 7: Re-enable foreign key constraints after syncing
-    await sequelize1.query("SET session_replication_role = 'origin';");
+    // await sequelize1.query("SET session_replication_role = 'origin';");
     // await sequelize2.query("SET session_replication_role = 'origin';");
 
-    console.log("✅ Foreign key constraints re-enabled!");
+    // console.log("✅ Foreign key constraints re-enabled!");
 
     // Check if admin schema exists and run super admin function
     await createSuperAdminIfNeeded(sequelize1);
