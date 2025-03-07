@@ -110,7 +110,7 @@ export const signupUserAndSendOtp = async (req, res) => {
   }
 
   // const identifier = email || mobile;
-  const isEmail = !!email;
+  // const isEmail = !!email;
 
   try {
     console.log("Checking if user exists...");

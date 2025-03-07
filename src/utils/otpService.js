@@ -92,10 +92,11 @@ export const sendOtp = async (identifier) => {
   }
   const otp = Math.floor(100000 + Math.random() * 900000);
   const expiry = new Date(Date.now() + 5 * 60 * 1000);
-  const isEmail = identifier.includes("@");
-  if (isEmail) {
+  // const isEmail = identifier.includes("@");
+  // if (identifier) {
     try {
-      const existingOtp = await OTP.findOne({ where: { email:identifier } });
+      const existingOtp = await OTP.findOne({ where: { email } });
+      // const existingOtp = await OTP.findOne({ where: { email:identifier } });
       console.log('existing otp', existingOtp)
       if (existingOtp) {
         if (new Date() < existingOtp.expiry) {
@@ -153,15 +154,15 @@ export const sendOtp = async (identifier) => {
       console.error("Error sending OTP:", error);
       return { error: true, message: "Failed sending otp" };
     }
-  } else {
-    try {
-      await sendSmsOtp(identifier, otp);
-      return { error: false, mesage: `Otp sent to ${identifier}` }
-    } catch (error) {
-      console.error("Error sending OTP:", error);
-      return { error: true, message: "Failed sending otp" };
-    }
-  }
+  // } else {
+  //   try {
+  //     await sendSmsOtp(identifier, otp);
+  //     return { error: false, mesage: `Otp sent to ${identifier}` }
+  //   } catch (error) {
+  //     console.error("Error sending OTP:", error);
+  //     return { error: true, message: "Failed sending otp" };
+  //   }
+  // }
 };
 
 export const verifyOtp = async ( identifier, otp ) => {
