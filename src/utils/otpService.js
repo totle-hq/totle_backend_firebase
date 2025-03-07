@@ -152,7 +152,7 @@ export const sendOtp = async (identifier) => {
       }
     } catch (error) {
       console.error("Error sending OTP:", error);
-      return { error: true, message: "Failed sending otp" };
+      return { error: true, message: "Failed sending otp to email" };
     }
   // } else {
   //   try {
