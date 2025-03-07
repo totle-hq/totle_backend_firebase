@@ -98,9 +98,15 @@ export async function syncDatabase() {
     console.log("✅ Model associations defined!");
 
     // Step 5: Disable foreign key constraints to avoid order issues
-    await sequelize1.query("SET session_replication_role = 'replica';");
+    //await sequelize1.query("SET session_replication_role = 'replica';");
     // await sequelize2.query("SET session_replication_role = 'replica';");
-
+    try {
+      console.log("🔄 Syncing tables in defaultdb...");
+      await sequelize1.sync({ alter: true }); // Only creates tables, does NOT create a DB
+      console.log("✅ Tables synced successfully!");
+    } catch (error) {
+      console.error("❌ Error syncing tables:", error);
+    }
     console.log("🔄 Syncing tables in the correct order...");
 
     // Step 6: Sync tables in correct order (tables with no dependencies first)

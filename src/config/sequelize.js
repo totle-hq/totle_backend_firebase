@@ -1,17 +1,28 @@
 import { Sequelize } from 'sequelize';
 import dotenv from 'dotenv';
+
 dotenv.config();
-// Sequelize instance for the first database
-const sequelize1 = new Sequelize(process.env.DATABASE_URL, {
+
+if (!process.env.DB_HOST || !process.env.DB_NAME || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+  console.error("❌ Missing DB environment variables!");
+  process.exit(1);
+}
+
+// ✅ Use explicit database parameters
+const sequelize1 = new Sequelize({
+  database: process.env.DB_NAME,
+  username: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || 5432, // Default to 5432 if not set
   dialect: 'postgres',
-  logging: false, // Turn off logging for production
+  logging: false,
+  dialectOptions: {
+    ssl: process.env.DB_SSL === "true" ? { require: true, rejectUnauthorized: false } : false,
+  },
 });
 
-// Sequelize instance for the second database (if applicable)
-// const sequelize2 = new Sequelize(process.env.DATABASE_URL2, {
-//   dialect: 'postgres',
-//   logging: false,
-// });
+console.log(`✅ Connecting to PostgreSQL at ${process.env.DB_HOST}:${process.env.DB_PORT}...`);
 
-// Export both Sequelize instances
 export { sequelize1 };
+
