@@ -85,9 +85,9 @@ export const sendSmsOtp = async (mobile, otp) => {
  * @param {string} mobile - User's Mobile Number (Optional)
  * @param {string} otp - OTP Code
  */
-export const sendOtp = async (identifier) => {
-  console.log('email send otp', identifier)
-  if (!identifier) {
+export const sendOtp = async (email) => {
+  console.log('email send otp', email)
+  if (!email) {
     throw new Error("❌ No Email  provided for OTP.");
   }
   const otp = Math.floor(100000 + Math.random() * 900000);
@@ -111,7 +111,7 @@ export const sendOtp = async (identifier) => {
           ];
           
           const randomIndex = Math.floor(Math.random() * professionalMessages.length);
-          const selectedMessage = professionalMessages[randomIndex].replace("${minutes}", minutes).replace("${seconds}", seconds).replace("${identifier}", identifier);
+          const selectedMessage = professionalMessages[randomIndex].replace("${minutes}", minutes).replace("${seconds}", seconds).replace("${identifier}", email);
           
           return { 
             error: true,
@@ -125,14 +125,14 @@ export const sendOtp = async (identifier) => {
 
           await OTP.update(
             { otp, expiry, isVerified: false },
-            { where: { email: identifier }
+            { where: { email }
           });
           
-          await sendEmailOtp(identifier, otp);
+          await sendEmailOtp(email, otp);
 
           return { 
             error: false, 
-            message: professionalSentMessage.replace("${identifier}", identifier) 
+            message: professionalSentMessage.replace("${identifier}", email) 
           };
 
         }
@@ -140,15 +140,15 @@ export const sendOtp = async (identifier) => {
         // Create a new OTP if none exists
         
         await OTP.create({
-            email: identifier,
+            email: email,
             otp: otp,
             expiry: expiry,
             isVerified: false,
         });
         
         // console.log('entered send otp email')
-        await sendEmailOtp(identifier, otp);
-        return { error: false, message: `An OTP is sent for registration, Please check your ${identifier} inbox` };
+        await sendEmailOtp(email, otp);
+        return { error: false, message: `An OTP is sent for registration, Please check your ${email} inbox` };
       }
     } catch (error) {
       console.error("Error sending OTP:", error);
@@ -165,21 +165,16 @@ export const sendOtp = async (identifier) => {
   // }
 };
 
-export const verifyOtp = async ( identifier, otp ) => {
+export const verifyOtp = async ( email, otp ) => {
   try {
 
-    if (!identifier || !otp) {
-      return { error: true, message: "❌ Email or Mobile and OTP are required." };
+    if (!email || !otp) {
+      return { error: true, message: "❌ Email and OTP are required." };
     }
 
     // ✅ Fetch OTP from database
     const otpRecord = await OTP.findOne({
-      where: {
-        [Sequelize.Op.or]: [
-          { email: identifier, otp: otp, isVerified: false },
-          { mobile: identifier, otp: otp, isVerified: false },
-        ],
-      },
+      where: { email, otp, isVerified: false},
     });
 
     if (!otpRecord) {
@@ -194,7 +189,7 @@ export const verifyOtp = async ( identifier, otp ) => {
     }
 
     // ✅ Verify OTP
-    await OTP.update({ isVerified: true }, { where: { email: identifier } });
+    await OTP.update({ isVerified: true }, { where: { email } });
     return { error: false, message: "OTP verified successfully!" };
 
   } catch (error) {

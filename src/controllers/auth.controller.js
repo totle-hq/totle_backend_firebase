@@ -117,7 +117,7 @@ export const signupUserAndSendOtp = async (req, res) => {
     const existingUser = await User.findOne({  where: { email } });
 
     if (existingUser) {
-      return res.status(403).json({ error: true, message: `User with this ${isEmail ? "email" : "mobile"} already exists`  });
+      return res.status(403).json({ error: true, message: "User with this email already exists"  });
     }
 
     console.log("Sending OTP...");
