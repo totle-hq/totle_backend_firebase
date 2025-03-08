@@ -97,7 +97,7 @@ export const sendOtp = async (email) => {
     try {
       const existingOtp = await OTP.findOne({ where: { email } });
       // const existingOtp = await OTP.findOne({ where: { email:identifier } });
-      console.log('existing otp', existingOtp)
+      // console.log('existing otp', existingOtp)
       if (existingOtp) {
         if (new Date() < existingOtp.expiry) {
           const timeRemaining = Math.round((existingOtp.expiry - new Date()) / 1000); // Time remaining in seconds
@@ -114,10 +114,10 @@ export const sendOtp = async (email) => {
           const selectedMessage = professionalMessages[randomIndex].replace("${minutes}", minutes).replace("${seconds}", seconds).replace("${identifier}", email);
           
           return { 
-            error: true,
+            error: false,
             message: selectedMessage, 
             expiry: existingOtp.expiry,
-            status: "already-sent" 
+            nextStep: "already-sent" 
           };
         } else {
           // Existing OTP has expired; generate a new one
@@ -125,8 +125,8 @@ export const sendOtp = async (email) => {
 
           await OTP.update(
             { otp, expiry, isVerified: false },
-            { where: { email }
-          });
+            { where: { email }}
+          );
           
           await sendEmailOtp(email, otp);
 
@@ -174,7 +174,7 @@ export const verifyOtp = async ( email, otp ) => {
 
     // ✅ Fetch OTP from database
     const otpRecord = await OTP.findOne({
-      where: { email, otp, isVerified: false},
+      where: { email, otp},
     });
 
     if (!otpRecord) {

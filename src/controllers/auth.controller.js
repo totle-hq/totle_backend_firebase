@@ -308,11 +308,29 @@ export const resetUser = async (req, res) => {
       return res.status(500).json({ error: true, message: "Internal Server Error" });
     }
 };
-  
+
+export const verifyResetOtp = async (req, res) => {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ error: true, message: "Email and OTP are required" });
+    }
+    try {
+      const result = await verifyOtp(email, otp);
+      if (result.error) {
+        return res.status(400).json({ error: true, message: result.message });
+      }
+      
+      return res.status(200).json({ error: false, message: "OTP verified successfully" });
+
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
+      return res.status(500).json({ error: true, message: "Internal Server Error" });
+    }
+}
 
 export const resetPassword = async (req, res) => {
-    const { email, newPassword } = req.body;
-    if (!email || !newPassword) {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !newPassword || !otp) {
       return res.status(400).json({ error: true, message: "Email and new password are required" });
     }
   
@@ -323,10 +341,7 @@ export const resetPassword = async (req, res) => {
       }
   
       const hashedPassword = await hashPassword(newPassword);
-      await User.update({
-        where: { email },
-        data: { password: hashedPassword },
-      });
+      await User.update({ password: hashedPassword }, {where: { email }});
   
       return res.status(200).json({ message: "Password has been reset successfully" });
     } catch (error) {
