@@ -13,8 +13,8 @@ import languageRoutes from './routes/languages.routes.js'
 // import { catalogDb, userDb } from "./config/prismaClient.js";
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
-import { createServer } from "http";
-import { Server } from "socket.io";
+// import { createServer } from "http";
+// import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
@@ -26,10 +26,10 @@ dotenv.config();
 
 const app = express();
 
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: "*" },
-});
+// const httpServer = createServer(app);
+// const io = new Server(httpServer, {
+//   cors: { origin: "*" },
+// });
 
 app.use("/uploads", express.static(path.resolve("src/uploads")));
 app.use(express.json({ limit: "50mb" }));
