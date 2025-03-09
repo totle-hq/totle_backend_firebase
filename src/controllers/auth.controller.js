@@ -74,7 +74,7 @@ const logout = async (req, res) => {
     if (!decoded) {
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
     }
-    const userId = Number(decoded.id); // ✅ Ensure `id` is an integer
+    const userId = decoded.id; // ✅ Ensure `id` is an integer
     if (!userId) {
       return res.status(400).json({ error: true, message: "Invalid token: Missing user ID" });
     }
@@ -512,6 +512,15 @@ export const getUserCount = async (req, res) => {
   }
 };
 
+export const getWelcome = async(req, res)=> res.status(200).json({hasSeenWelcomeScreen: false});
+export const updateWelcome = async(req, res)=>{
+  let {hasSeenWelcomeScreen} = req.body;
+  if(hasSeenWelcomeScreen){
+    return res.status(200).json({ success: true, message: "Welcome status updated" });
+  }else{
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+}
 
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
