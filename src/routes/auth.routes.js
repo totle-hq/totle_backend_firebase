@@ -29,7 +29,7 @@ router.post("/login", loginUser);
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
-router.get('/user',authMiddleware, getUserProfile);
+router.get('/user', getUserProfile);
 router.post("/logout", logout);
 router.get("/user-count", getUserCount);
 router.post("/contactus",sendContactEmail)
