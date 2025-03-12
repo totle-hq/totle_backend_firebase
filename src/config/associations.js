@@ -9,6 +9,14 @@ import { UserMetrics } from "../Models/UserMetricsModel.js";
 import { Question } from "../Models/QuestionModel.js";
 import { OTP } from "../Models/OtpModel.js";
 import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
+import { School } from "../Models/SchoolModel.js";
+import { Category } from "../Models/CategoryModel.js";
+import { College } from "../Models/CollegeModel.js";
+import { ICSEBoard } from "../Models/ICSEboardModel.js";
+import { CBSEBoard } from "../Models/CBSEboardModel.js";
+import { Grade } from "../Models/GradeModel.js";
+import { Subject } from "../Models/SubjectModel.js";
+import { Topic } from "../Models/TopicModel.js";
 
 
 const defineRelationships = () => {
@@ -50,6 +58,34 @@ const defineRelationships = () => {
 
   // ✅ Admin Access to Marketplace Suggestions (Indirect Access)
   Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
+
+
+  // Define the relationship
+  School.belongsTo(Category, { foreignKey: 'categoryId' });
+  Category.hasMany(School, { foreignKey: 'categoryId' });
+
+  // Define the relationship between College and Category
+  College.belongsTo(Category, { foreignKey: 'categoryId' });
+  Category.hasMany(College, { foreignKey: 'categoryId' });
+
+  // Define the relationship between ICSEBoard and School
+  ICSEBoard.belongsTo(School, { foreignKey: 'schoolId' });
+  School.hasMany(ICSEBoard, { foreignKey: 'schoolId' });
+  // Define the relationship between CBSEBoard and School
+  CBSEBoard.belongsTo(School, { foreignKey: 'schoolId' });
+  School.hasMany(CBSEBoard, { foreignKey: 'schoolId' });
+
+  // Define the relationship between Grade and School
+  Grade.belongsTo(School, { foreignKey: 'schoolId' });
+  School.hasMany(Grade, { foreignKey: 'schoolId' });
+
+  // Define the relationship between Subject and Grade
+  Subject.belongsTo(Grade, { foreignKey: 'gradeId' });
+  Grade.hasMany(Subject, { foreignKey: 'gradeId' });
+
+  // Define the relationship between Topic and Subject
+  Topic.belongsTo(Subject, { foreignKey: 'subjectId' });
+  Subject.hasMany(Topic, { foreignKey: 'subjectId' });
 };
 
 export default defineRelationships;
