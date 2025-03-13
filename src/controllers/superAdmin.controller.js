@@ -7,8 +7,8 @@ dotenv.config();
 
 export const createSuperAdmin = async () => {
   try {
-    const email = "admin@totle.com";
-    const password = "Admin@123"; // Change this to a strong password
+    const email = "adminteam@totle.co";
+    const password = "BareCapital&210"; // Change this to a strong password
     const name = "Admin mawa";
     const hashedPassword = await bcrypt.hash(password, 10);
 

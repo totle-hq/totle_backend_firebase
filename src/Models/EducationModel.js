@@ -3,7 +3,7 @@ import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
 import { Category } from './CategoryModel.js';
 
-const College = sequelize1.define('College', {
+const Education = sequelize1.define('Education', {
   id: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
@@ -23,8 +23,8 @@ const College = sequelize1.define('College', {
   },
 }, {
   schema: 'catalog',
-  tableName: 'college',  // Table name for college
+  tableName: 'education',  // Table name for college
 });
 
-export { College };
+export { Education };
 

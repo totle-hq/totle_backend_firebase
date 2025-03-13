@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 if (!process.env.DB_HOST || !process.env.DB_NAME || !process.env.DB_USER || !process.env.DB_PASSWORD) {
+  console.log(process.env.DB_HOST, process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD)
   console.error("❌ Missing DB environment variables!");
   process.exit(1);
 }

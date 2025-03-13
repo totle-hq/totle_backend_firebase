@@ -128,8 +128,12 @@ export const sendOtp = async (email) => {
             { where: { email }}
           );
           
-          await sendEmailOtp(email, otp);
-
+          try {
+            await sendEmailOtp(email, otp);
+          } catch (error) {
+            console.error("❌ Email OTP sending failed:", error);
+            return { error: true, message: "Failed to send OTP via email." };
+          }
           return { 
             error: false, 
             message: professionalSentMessage.replace("${identifier}", email) 

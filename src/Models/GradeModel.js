@@ -1,8 +1,7 @@
 // grade.js
 import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
-import { School } from './SchoolModel.js';
-
+import { Board } from './BoardModel.js';
 const Grade = sequelize1.define('Grade', {
   id: {
     type: DataTypes.INTEGER,
@@ -16,13 +15,13 @@ const Grade = sequelize1.define('Grade', {
   description: {
     type: DataTypes.STRING,  // Optional description of the grade
   },
-  schoolId: {
+  boardId: {
     type: DataTypes.INTEGER,
     references: {
-      model: School,  // Reference to the School model
+      model: Board,  // Reference to the Board model
       key: 'id',
     },
-    allowNull: false,  // The Grade must be linked to a School
+    allowNull: false,  // The Grade must be linked to a Board
   },
 }, {
   schema: 'catalog',

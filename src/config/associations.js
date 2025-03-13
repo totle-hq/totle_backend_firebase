@@ -9,14 +9,12 @@ import { UserMetrics } from "../Models/UserMetricsModel.js";
 import { Question } from "../Models/QuestionModel.js";
 import { OTP } from "../Models/OtpModel.js";
 import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
-import { School } from "../Models/SchoolModel.js";
 import { Category } from "../Models/CategoryModel.js";
-import { College } from "../Models/CollegeModel.js";
-import { ICSEBoard } from "../Models/ICSEboardModel.js";
-import { CBSEBoard } from "../Models/CBSEboardModel.js";
 import { Grade } from "../Models/GradeModel.js";
 import { Subject } from "../Models/SubjectModel.js";
 import { Topic } from "../Models/TopicModel.js";
+import { Board } from "../Models/BoardModel.js";
+import { Education } from "../Models/EducationModel.js";
 
 
 const defineRelationships = () => {
@@ -59,25 +57,20 @@ const defineRelationships = () => {
   // ✅ Admin Access to Marketplace Suggestions (Indirect Access)
   Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
 
-
-  // Define the relationship
-  School.belongsTo(Category, { foreignKey: 'categoryId' });
-  Category.hasMany(School, { foreignKey: 'categoryId' });
-
   // Define the relationship between College and Category
-  College.belongsTo(Category, { foreignKey: 'categoryId' });
-  Category.hasMany(College, { foreignKey: 'categoryId' });
+  Education.belongsTo(Category, { foreignKey: 'categoryId' });
+  Category.hasMany(Education, { foreignKey: 'categoryId' });
 
-  // Define the relationship between ICSEBoard and School
-  ICSEBoard.belongsTo(School, { foreignKey: 'schoolId' });
-  School.hasMany(ICSEBoard, { foreignKey: 'schoolId' });
-  // Define the relationship between CBSEBoard and School
-  CBSEBoard.belongsTo(School, { foreignKey: 'schoolId' });
-  School.hasMany(CBSEBoard, { foreignKey: 'schoolId' });
+  // Define the relationship between Board and School
+  Board.belongsTo(Education, { foreignKey: 'eduId' });
+  Education.hasMany(Board, { foreignKey: 'eduId' });
+
+  Board.hasMany(Grade, { foreignKey: 'boardId', onDelete: 'CASCADE' });
+  Grade.belongsTo(Board, { foreignKey: 'boardId' });
 
   // Define the relationship between Grade and School
-  Grade.belongsTo(School, { foreignKey: 'schoolId' });
-  School.hasMany(Grade, { foreignKey: 'schoolId' });
+  Grade.belongsTo(Education, { foreignKey: 'eduId' });
+  Education.hasMany(Grade, { foreignKey: 'eduId' });
 
   // Define the relationship between Subject and Grade
   Subject.belongsTo(Grade, { foreignKey: 'gradeId' });
