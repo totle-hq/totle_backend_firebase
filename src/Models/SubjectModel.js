@@ -1,7 +1,7 @@
 // subject.js
 import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
-import { Grade } from './grade.js';  // Import the Grade model
+import { Grade } from './GradeModel.js';
 
 const Subject = sequelize1.define('Subject', {
   id: {

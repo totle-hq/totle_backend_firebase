@@ -30,7 +30,7 @@ const transporter = nodemailer.createTransport({
  */
 export const sendEmailOtp = async (email, otp) => {
   if (!email) throw new Error("❌ Email is required for OTP.");
-  console.log('email', email, 'otp', otp)
+  console.log('email', email, 'otp', otp, process.env.EMAIL_PASS)
 
   try {
 

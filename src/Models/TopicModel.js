@@ -1,7 +1,7 @@
 // topic.js
 import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
-import { Subject } from './subject.js';  // Import the Subject model
+import { Subject } from './SubjectModel.js';
 
 const Topic = sequelize1.define('Topic', {
   id: {

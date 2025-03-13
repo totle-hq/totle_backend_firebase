@@ -8,7 +8,7 @@ dotenv.config();
 
 // Function to create schemas if they don't exist
 async function createSchemas(sequelize) {
-  const schemas = ['admin', 'user'];
+  const schemas = ['admin', 'user','catalog'];
 
   for (const schema of schemas) {
     // Create schema if it doesn't exist

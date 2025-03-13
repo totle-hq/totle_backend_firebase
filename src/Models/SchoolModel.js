@@ -1,7 +1,7 @@
 // school.js
 import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
-import { Category } from './category.js';  // Import Category model
+import { Category } from './CategoryModel.js';
 
 const School = sequelize1.define('School', {
   id: {

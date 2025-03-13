@@ -1,7 +1,7 @@
 // cbseBoard.js
 import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
-import { School } from './school.js';  // Import the School model
+import { School } from './SchoolModel.js';
 
 const CBSEBoard = sequelize1.define('CBSEBoard', {
   id: {
