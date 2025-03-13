@@ -35,7 +35,7 @@ app.use("/uploads", express.static(path.resolve("src/uploads")));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors({
-  origin: ['https://www.totle.co', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000'],
+  origin: ['totle.co','www.totle.co','totle.co/','www.totle.co/','https://www.totle.co/','https://www.totle.co', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"]
 }));
