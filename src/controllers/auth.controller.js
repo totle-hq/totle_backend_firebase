@@ -101,7 +101,7 @@ const logout = async (req, res) => {
 const verifyToken = async (token) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('decoded', decoded)
+    // console.log('decoded', decoded)
     return decoded; // ✅ Ensure it returns the decoded user details
   } catch (error) {
     console.error("Error verifying token:", error);
@@ -344,7 +344,7 @@ export const getUserProfile = async (req, res) => {
     }
     
     const token = authHeader.split(" ")[1];
-    console.log('tokenn', token)
+    // console.log('tokenn', token)
     // console.log('token', process.env.JWT_SECRET)
 
     try {
@@ -378,6 +378,7 @@ export const getUserProfile = async (req, res) => {
 };
 
 import path from "path";
+import { GetUpdates } from "../Models/GetUpdatesModel.js";
 
 
 export const updateUserProfile = async (req, res) => {
@@ -591,6 +592,63 @@ export const submitSuggestion = async (req, res) => {
   } catch (error) {
     console.error("❌ Error submitting suggestion:", error);
     return res.status(500).json({ error: true, message: "Server error." });
+  }
+};
+
+export const getUpdates = async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+    }
+
+    const token = authHeader.split(" ")[1];
+    let decoded;
+
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+    }
+
+    const userId = decoded.id || decoded.userId || decoded.uid;
+    if (!userId) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token payload" });
+    }
+
+    const user = await User.findOne({ where: { id: userId } });
+    if (!user || !user.email) {
+      return res.status(404).json({ error: true, message: "User not found or email missing" });
+    }
+
+    const { teach, learn, endeavour } = req.body;
+    const updateFields = {};
+
+    if (teach === true) updateFields.teach = true;
+    if (learn === true) updateFields.learn = true;
+    if (endeavour === true) updateFields.endeavour = true;
+
+    const [existing, created] = await GetUpdates.findOrCreate({
+      where: { email: user.email },
+      defaults: {
+        email: user.email,
+        firstName: user.firstName || "",
+        teach: !!teach,
+        learn: !!learn,
+        endeavour: !!endeavour,
+      },
+    });
+
+    if (!created) {
+      // Already exists — update interests only if they were newly selected
+      await existing.update(updateFields);
+      return res.status(200).json({ error: false, message: "✅ Preferences updated successfully!" });
+    }
+
+    return res.status(200).json({ error: false, message: "✅ Thanks! You'll get updates soon." });
+  } catch (error) {
+    console.error("❌ Error in getUpdates:", error);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
   }
 };
 
