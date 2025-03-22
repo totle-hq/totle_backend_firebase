@@ -10,6 +10,12 @@ import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
 // import sessionRoutes from "./routes/session.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
+import topicRoutes from './routes/topic.routes.js';
+import subjectRoutes from './routes/subject.routes.js';
+import gradeRoutes from './routes/grade.routes.js';
+import boardRoutes from './routes/board.routes.js';
+import educationRoutes from './routes/education.routes.js';
+import categoryRoutes from './routes/category.routes.js';
 // import { catalogDb, userDb } from "./config/prismaClient.js";
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
@@ -66,7 +72,12 @@ app.use("/languages", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 // app.use("/session", authMiddleware, sessionRoutes);
 app.use("/admin", adminRoutes);
-
+app.use("/api/topics", topicRoutes);
+app.use("/api/subjects", subjectRoutes);
+app.use("/api/grades", gradeRoutes);
+app.use("/api/boards", boardRoutes);
+app.use("/api/education", educationRoutes);
+app.use("/api/categories", categoryRoutes);
 
 // Test route
 app.get("/", (req, res) => {

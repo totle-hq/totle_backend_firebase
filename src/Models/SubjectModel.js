@@ -9,20 +9,20 @@ const Subject = sequelize1.define('Subject', {
     autoIncrement: true,
     primaryKey: true,
   },
+  parent_id: {  // ✅ Unified Parent ID
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Grade,
+      key: 'id',
+    },
+  },
   name: {
     type: DataTypes.STRING,
     allowNull: false,  // Name of the subject (e.g., "Mathematics", "Physics")
   },
   description: {
     type: DataTypes.STRING,  // Optional description of the subject
-  },
-  gradeId: {
-    type: DataTypes.INTEGER,
-    references: {
-      model: Grade,  // Reference to the Grade model
-      key: 'id',
-    },
-    allowNull: false,  // The Subject must be linked to a Grade
   },
 }, {
   schema: 'catalog',

@@ -188,47 +188,6 @@ export const otpVerification = async (req, res) => {
 };
   
 
-export const completeSignup = async (req, res) => {
-  const { preferredLanguage, knownLanguages, email } = req.body;
-
-  if (!preferredLanguage || !Array.isArray(knownLanguages)) {
-    return res.status(400).json({ error: true, message: "Languages are required." });
-  }
-
-  try {
-    const prefLanguage = await userDb.language.findUnique({
-      where: { language_name: preferredLanguage },
-      select: { language_id: true },
-    });
-
-    if (!prefLanguage) {
-      return res.status(400).json({ error: true, message: "Preferred language not found." });
-    }
-
-    const knownLanguagesList = await userDb.language.findMany({
-      where: { language_name: { in: knownLanguages } },
-      select: { language_id: true },
-    });
-
-    if (knownLanguagesList.length !== knownLanguages.length) {
-      return res.status(400).json({ error: true, message: "One or more known languages are invalid." });
-    }
-
-    await userDb.user.update({
-      where: { email },
-      data: {
-        preferred_language_id: prefLanguage.language_id,
-        known_language_ids: knownLanguagesList.map(lang => lang.language_id),
-      },
-    });
-
-    return res.status(201).json({ error: false, message: "User registered successfully." });
-  } catch (error) {
-    console.error("Error during final registration:", error);
-    return res.status(500).json({ error: true, message: "Internal server error." });
-  }
-};
-
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
@@ -359,11 +318,12 @@ export const getUserProfile = async (req, res) => {
     }
     
     const token = authHeader.split(" ")[1];
+    console.log('tokenn', token)
     // console.log('token', process.env.JWT_SECRET)
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      // console.log('decoded', decoded.id)
+      console.log('decoded', decoded.id)
       const userId = decoded.id;
 
       if (!userId) {

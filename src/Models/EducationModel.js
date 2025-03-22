@@ -13,13 +13,13 @@ const Education = sequelize1.define('Education', {
     type: DataTypes.STRING,
     allowNull: false,  // Name of the college
   },
-  categoryId: {
+  parent_id: {  // ✅ Unified Parent ID
     type: DataTypes.INTEGER,
+    allowNull: false, 
     references: {
-      model: Category,  // Reference to the Category model
+      model: Category,
       key: 'id',
     },
-    allowNull: false,  // College must have a category
   },
 }, {
   schema: 'catalog',

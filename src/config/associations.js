@@ -58,27 +58,27 @@ const defineRelationships = () => {
   Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
 
   // Define the relationship between College and Category
-  Education.belongsTo(Category, { foreignKey: 'categoryId' });
-  Category.hasMany(Education, { foreignKey: 'categoryId' });
+  Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
+  Category.hasMany(Education, { foreignKey: 'parent_id' });
 
   // Define the relationship between Board and School
-  Board.belongsTo(Education, { foreignKey: 'eduId' });
-  Education.hasMany(Board, { foreignKey: 'eduId' });
+  Board.belongsTo(Education, { foreignKey: 'parent_id' });
+  Education.hasMany(Board, { foreignKey: 'parent_id' , onDelete: "CASCADE" });
 
-  Board.hasMany(Grade, { foreignKey: 'boardId', onDelete: 'CASCADE' });
-  Grade.belongsTo(Board, { foreignKey: 'boardId' });
+  Board.hasMany(Grade, { foreignKey: 'parent_id', onDelete: 'CASCADE' });
+  Grade.belongsTo(Board, { foreignKey: 'parent_id'});
 
   // Define the relationship between Grade and School
-  Grade.belongsTo(Education, { foreignKey: 'eduId' });
-  Education.hasMany(Grade, { foreignKey: 'eduId' });
+  // Grade.belongsTo(Education, { foreignKey: 'parent_id' });
+  // Education.hasMany(Grade, { foreignKey: 'parent_id' });
 
   // Define the relationship between Subject and Grade
-  Subject.belongsTo(Grade, { foreignKey: 'gradeId' });
-  Grade.hasMany(Subject, { foreignKey: 'gradeId' });
+  Subject.belongsTo(Grade, { foreignKey: 'parent_id' });
+  Grade.hasMany(Subject, { foreignKey: 'parent_id' , onDelete: "CASCADE" });
 
   // Define the relationship between Topic and Subject
-  Topic.belongsTo(Subject, { foreignKey: 'subjectId' });
-  Subject.hasMany(Topic, { foreignKey: 'subjectId' });
+  Topic.belongsTo(Subject, { foreignKey: 'parent_id' });
+  Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
 };
 
 export default defineRelationships;

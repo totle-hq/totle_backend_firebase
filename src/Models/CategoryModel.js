@@ -7,6 +7,10 @@ const Category = sequelize1.define('Category', {
     autoIncrement: true,
     primaryKey: true,
   },
+  parent_id: {  // ✅ Unified Parent ID for hierarchy
+    type: DataTypes.INTEGER,
+    allowNull: true, // NULL for top-level categories
+  },
   name: {
     type: DataTypes.STRING,
     allowNull: false,  // Name of the category (e.g., "JEE Mains & Advanced")

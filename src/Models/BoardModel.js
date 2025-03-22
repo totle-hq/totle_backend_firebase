@@ -9,20 +9,20 @@ const Board = sequelize1.define('Board', {
     autoIncrement: true,
     primaryKey: true,
   },
+  parent_id: {  // ✅ Unified Parent ID
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    references: {
+      model: Education,
+      key: 'id',
+    },
+  },
   name: {
     type: DataTypes.STRING,
     allowNull: false,  // Name of the board, e.g., "ICSE"
   },
   description: {
     type: DataTypes.STRING,  // Optional description of the board
-  },
-  eduId: {
-    type: DataTypes.INTEGER,
-    references: {
-      model: Education,  // Reference to the School model
-      key: 'id',
-    },
-    allowNull: false,  // The Board must be linked to a School
   },
 }, {
   schema: 'catalog',
