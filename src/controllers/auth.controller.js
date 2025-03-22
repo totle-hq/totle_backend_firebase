@@ -9,6 +9,14 @@ import { generateToken } from "../generateToken.js";
 import multer from 'multer';
 import fs from "fs"; // ✅ Import file system to read the image
 import {User} from "../Models/UserModel.js";
+import { BetaUsers } from "../Models/BetaUsersModel.js";
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+import { OTP } from "../Models/OtpModel.js";
+import { Language } from "../Models/LanguageModel.js";
+import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
+
+dotenv.config();
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -115,8 +123,9 @@ export const signupUserAndSendOtp = async (req, res) => {
   try {
     console.log("Checking if user exists...");
     const existingUser = await User.findOne({  where: { email } });
+    const existingBetaUser = await BetaUsers.findOne({ where: { email } });
 
-    if (existingUser) {
+    if (existingUser || existingBetaUser) {
       return res.status(403).json({ error: true, message: "User with this email already exists"  });
     }
 
@@ -172,6 +181,22 @@ export const otpVerification = async (req, res) => {
         status: "active",
         updatedAt: new Date(),
       });
+      let betaFlag=false;
+      const betaUserCount = await BetaUsers.count();
+
+      if (betaUserCount < 1001) {
+        betaFlag = true;
+        try {
+          await BetaUsers.create({ email, firstName });
+          console.log("✅ Successfully inserted into BetaUsers");
+        } catch (err) {
+          console.error("❌ Error inserting into BetaUsers:", err);
+        }
+        
+      } else {
+        betaFlag = false;
+      }
+
       await OTP.update(
         { isVerified: true },
         { where: { email: email, otp: otp } }
@@ -180,7 +205,7 @@ export const otpVerification = async (req, res) => {
         await sendWelcomeEmail(email, firstName);
       }
   
-      return res.status(200).json({ error: false, message: "OTP verified successfully ✅" });
+      return res.status(200).json({ error: false, message: "OTP verified successfully ✅", betaFlag: betaFlag });
     } catch (error) {
       console.error("Error during OTP verification:", error);
       return res.status(500).json({ error: true, message: "Internal server error." });
@@ -196,9 +221,10 @@ export const loginUser = async (req, res) => {
 
   try {
     const user = await User.findOne({ where: { email } });
+    const betaUser = await BetaUsers.findOne({ where: { email } });
     // console.log("User Found:", user);
     
-    if (!user) {
+    if (!user && !betaUser) {
       return res.status(400).json({ error: true, message: "User doesn't exist, please register" });
     }
     
@@ -464,7 +490,8 @@ export const updateUserProfile = async (req, res) => {
 
 export const getUserCount = async (req, res) => {
   try {
-    const count = await User.count(); // Count all users in the database
+    const count = await BetaUsers.count(); // Count all users in the database
+    console.log('counting',count)
     return res.status(200).json({ count });
   } catch (error) {
     console.error("Error fetching user count:", error);
@@ -482,13 +509,6 @@ export const updateWelcome = async(req, res)=>{
   }
 }
 
-import nodemailer from "nodemailer";
-import dotenv from "dotenv";
-import { OTP } from "../Models/OtpModel.js";
-import { Language } from "../Models/LanguageModel.js";
-import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
-
-dotenv.config();
 
 export const sendContactEmail = async (req, res) => {
   const { name, email, message } = req.body;
