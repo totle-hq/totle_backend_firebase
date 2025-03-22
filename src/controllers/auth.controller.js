@@ -572,7 +572,7 @@ export const submitSuggestion = async (req, res) => {
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token data." });
     }
 
-    const { interest } = req.body;
+    const { interest,teach, learn } = req.body;
     if (!interest) {
       return res.status(400).json({ error: true, message: "Interest is required." });
     }
@@ -582,6 +582,8 @@ export const submitSuggestion = async (req, res) => {
       userId,
       userName,
       message: interest,
+      teach: teach || "",
+      learn: learn || "",
     });
 
     return res.status(201).json({

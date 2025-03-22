@@ -16,7 +16,6 @@ import gradeRoutes from './routes/grade.routes.js';
 import boardRoutes from './routes/board.routes.js';
 import educationRoutes from './routes/education.routes.js';
 import categoryRoutes from './routes/category.routes.js';
-// import { catalogDb, userDb } from "./config/prismaClient.js";
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
@@ -99,25 +98,6 @@ app.get("/db", async (req, res) => {
     res.status(500).json({ message: "❌ Database connection error", error });
   }
 });
-
-// const closePrismaConnections = async () => {
-//   await userDb.$disconnect();
-//   await catalogDb.$disconnect();
-//   console.log("✅ Prisma connections closed on server shutdown.");
-// };
-
-// Handle process exit signals
-// process.on('SIGINT', async () => {
-//   console.log("\n🛑 Server shutting down...");
-//   await closePrismaConnections();
-//   process.exit(0);
-// });
-
-// process.on('SIGTERM', async () => {
-//   console.log("\n🛑 Server shutting down...");
-//   await closePrismaConnections();
-//   process.exit(0);
-// });
 
 const startServer = async () => {
   try {

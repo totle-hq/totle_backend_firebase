@@ -25,6 +25,14 @@ const MarketplaceSuggestion = sequelize1.define(
       type: DataTypes.TEXT,
       allowNull: false,
     },
+    teach:{
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
+    learn:{
+      type: DataTypes.STRING,
+      allowNull: false,
+    }
   },
   {
     schema: "user", // ✅ Stored under the `user` schema
