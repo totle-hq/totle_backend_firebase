@@ -1,57 +1,43 @@
-// src/routes/catalogue.routes.js
+// File: src/routes/catalogue.routes.js
 
 import express from "express";
 import {
-    getNodes,
-    getNodeById,
-    createNode,
-    updateNode,
-    deleteNode,
-    updateDomainPrices,
-    updateSubjectPrices,
-  } from "../controllers/catalogue.controller.js";
-  
+  createCatalogueNode,
+  getCatalogueNodeById,
+  updateCatalogueNode,
+  deleteCatalogueNode,
+  listCatalogueNodesByTypeAndParent,
+  updateDomainPrices,
+  updateSubjectPrices,
+    getCatalogueNodes,
+} from "../controllers/catalogue.controller.js";
 
 const router = express.Router();
 
-/**
- * GET /api/catalogue
- * Fetch all nodes, optionally filtered by parent_id
- */
-router.get("/", getNodes);
+router.get("/", getCatalogueNodes); // <-- Add this at the top
 
-/**
- * GET /api/catalogue/:node_id
- * Fetch a single node by ID
- */
-router.get("/:node_id", getNodeById);
 
-/**
- * POST /api/catalogue
- * Create a new catalogue node
- */
-router.post("/", createNode);
+// Create a new catalogue node
+router.post("/", createCatalogueNode);
 
-/**
- * PUT /api/catalogue/:node_id
- * Update a catalogue node
- */
-router.put("/:node_id", updateNode);
+// Get a node by its ID
+router.get("/:id", getCatalogueNodeById);
 
-/**
- * DELETE /api/catalogue/:node_id
- * Delete a node and its children
- */
-router.delete("/:node_id", deleteNode);
-/**
- * POST /api/catalogue/:domain_id/update-domain-prices
- */
+// Update a node by ID
+router.put("/:id", updateCatalogueNode);
+
+// Delete a node by ID
+router.delete("/:node_id", deleteCatalogueNode);
+
+// Get all nodes by type and optional parentId (e.g., /api/catalogue/subject?parentId=xyz)
+router.get("/type/:type", listCatalogueNodesByTypeAndParent);
+
+// Batch update prices at domain level
 router.post("/:domain_id/update-domain-prices", updateDomainPrices);
 
-/**
- * POST /api/catalogue/:subject_id/update-subject-prices
- */
+// Batch update prices at subject level
 router.post("/:subject_id/update-subject-prices", updateSubjectPrices);
+
 
 
 export default router;

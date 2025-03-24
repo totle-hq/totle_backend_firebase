@@ -4,6 +4,8 @@ import { Language } from '../Models/LanguageModel.js'; // Import Sequelize model
 import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
 import dotenv from "dotenv";
+import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
+
 dotenv.config();
 
 // Function to create schemas if they don't exist
@@ -121,6 +123,9 @@ export async function syncDatabase() {
     const { Question } = await import("../Models/QuestionModel.js");
     await Question.sync({ alter: true }); // ✅ Now sync Questions
 
+    const { CatalogueNode } = await import("../Models/catalogueNode.model.js");
+await CatalogueNode.sync({ alter: true });
+
     // Now sync all remaining tables
     await sequelize1.sync({ alter: true });
     // await sequelize2.sync({ alter: true });
@@ -138,6 +143,9 @@ export async function syncDatabase() {
 
     // Insert languages if they don't exist
     await insertLanguagesIfNeeded();
+
+    await seedCatalogueDomains();
+
 
   } catch (error) {
     console.error('❌ Error syncing database:', error);

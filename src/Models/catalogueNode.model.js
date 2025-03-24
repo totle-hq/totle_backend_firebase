@@ -68,7 +68,7 @@ export const CatalogueNode = sequelizeCatalog.define(
       type: DataTypes.ENUM("draft", "active", "archived"),
       allowNull: false,
       defaultValue: "draft",
-      comment: "Current publishing status",
+    //   comment: "Current publishing status",
     },
     topic_params: {
       type: DataTypes.JSONB,
