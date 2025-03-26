@@ -1,5 +1,5 @@
 import express from "express";
-import { completeSignup, getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword, resetUser, signupUserAndSendOtp, updateUserProfile, upload, verifyToken } from "../controllers/auth.controller.js";
+import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, upload, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates } from "../controllers/auth.controller.js";
 import { loginLimiter, signupLimiter } from "../middlewares/rateLimiter.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 
@@ -12,26 +12,32 @@ router.post("/verify-token", verifyToken);
 /**
  * ✅ Step 1: Send OTP for Signup (Email or Mobile)
  */
-router.post("/signup", signupLimiter, signupUserAndSendOtp);
+router.post("/signup", signupUserAndSendOtp);
 
 /**
  * ✅ Step 2: Verify OTP & Create Account
  */
-router.post("/signup/verifyOtp",signupLimiter, otpVerification);
+router.post("/signup/verifyOtp", otpVerification);
 
 // router.post("/signup/complete", completeSignup);
 
 /**
  * ✅ Secure Login with Email/Mobile & Password
  */
-router.post("/login", loginLimiter, loginUser);
+router.post("/login", loginUser);
 
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
-router.get('/user',authMiddleware, getUserProfile);
+router.get('/user', getUserProfile);
 router.post("/logout", logout);
 router.get("/user-count", getUserCount);
+router.post("/contactus",sendContactEmail)
+router.post("/suggestion",submitSuggestion)
+router.post('/verifyResetOtp', verifyResetOtp);
+router.get("/welcomeScreen", getWelcome)
+router.post("/update-welcome", updateWelcome);
+router.post("/getUpdates", getUpdates)
 
 
 router.put("/updateUser", upload.single('image'), updateUserProfile)

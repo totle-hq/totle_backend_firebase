@@ -1,11 +1,12 @@
 import express from "express";
 
-import { adminLogin, createBlog, createSurvey, deleteBlog, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSurveys, getAllUsers, getBlogById, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
+import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
 import { loginLimiter } from "../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
 import multer from "multer";
 import path from "path";
+import { create } from "domain";
 
 // Setup Multer storage
 const storage = multer.diskStorage({
@@ -20,7 +21,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 
-router.post("/login", loginLimiter, adminLogin);
+router.post("/login", adminLogin);
 router.get("/auth/me", getAdminDetails);
 router.post("/blogs", authenticateAdmin, createBlog);       // Create a blog (Admin only)
 router.get("/blogs", getAllBlogs);                          // Get all blogs (Public)
@@ -30,10 +31,16 @@ router.put("/blogs/:id", authenticateAdmin, updateBlog);    // Update a blog (On
 router.delete("/blogs/:id", authenticateAdmin, deleteBlog); // Delete a blog (Only by author admin)
 router.post("/upload", upload.single("image"), uploadImage); // Upload image (Admin only)
 router.get('/users',getAllUsers);
-router.post("/surveys", createSurvey);
+router.post("/surveys", createOrUpdateSurvey);
+router.put("/surveys/:surveyId", createOrUpdateSurvey);
 router.get("/surveys", getAllSurveys);
-router.get("/surveys/:surveyId/results", getSurveyResults);
+router.get("/surveyNames", getSurveyNames)
+router.get("/surveys/questions/:surveyId", getQuestionsBySurveyId);
+router.get("/surveys/surveyResults", getSurveyResults);
+router.get("/surveys/surveyResults/:surveyId", getResultsBySurveyId);
 router.post("/surveys/:surveyId/responses", submitSurveyResponse);
+router.get("/getSuggestions", getAllSuggestionsForAdmin);
+router.delete("/surveys/:surveyId", deleteSurveyById);
 
 export default router;
 

@@ -7,35 +7,42 @@ import morgan from "morgan";
 // import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
-import sessionRoutes from "./routes/session.routes.js";
+// import sessionRoutes from "./routes/session.routes.js";
 import adminRoutes from "./routes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
-import { catalogDb, userDb } from "./config/prismaClient.js";
-import authMiddleware from "./middlewares/authMiddleware.js";
+import topicRoutes from './routes/topic.routes.js';
+import subjectRoutes from './routes/subject.routes.js';
+import catalogueRoutes from './routes/catalogue.routes.js'; // ✅ Catalogue API
+
+import gradeRoutes from './routes/grade.routes.js';
+import boardRoutes from './routes/board.routes.js';
+import educationRoutes from './routes/education.routes.js';
+import categoryRoutes from './routes/category.routes.js';
+// import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
-import { createServer } from "http";
-import { Server } from "socket.io";
+// import { createServer } from "http";
+// import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
+import {syncDatabase} from './config/syncDb.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 
 dotenv.config();
 
 const app = express();
 
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: "*" },
-});
+// const httpServer = createServer(app);
+// const io = new Server(httpServer, {
+//   cors: { origin: "*" },
+// });
 
 app.use("/uploads", express.static(path.resolve("src/uploads")));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors({
-  origin: ['https://www.totle.co', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000'],
+  origin: ['totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000'],
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"]
 }));
@@ -64,37 +71,21 @@ app.use("/auth", authRoutes); // Add authentication routes
 app.use("/users", userRoutes);
 app.use("/languages", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
-app.use("/session", authMiddleware, sessionRoutes);
+// app.use("/session", authMiddleware, sessionRoutes);
 app.use("/admin", adminRoutes);
+app.use("/api/topics", topicRoutes);
+app.use("/api/subjects", subjectRoutes);
+app.use("/api/catalogue", catalogueRoutes); // ✅ Mount catalogue endpoints
 
-
+app.use("/api/grades", gradeRoutes);
+app.use("/api/boards", boardRoutes);
+app.use("/api/education", educationRoutes);
+app.use("/api/categories", categoryRoutes);
 
 // Test route
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
 });
-async function insertLanguages() {
-  const languages = [
-    "Assamese", "Bengali", "Bodo", "Dogri", "English",
-    "Gujarati", "Hindi", "Kannada", "Kashmiri", "Konkani",
-    "Maithili", "Malayalam", "Manipuri", "Marathi", "Nepali",
-    "Odia", "Punjabi", "Sanskrit", "Santali", "Sindhi",
-    "Tamil", "Telugu", "Urdu", "Bhili", "Gondi", "Tulu"
-  ];
-
-  try {
-    await userDb.language.createMany({
-      data: languages.map((lang) => ({ language_name: lang })),
-      skipDuplicates: true, // Prevents inserting duplicates
-    });
-
-    console.log("✅ All Indian languages inserted successfully!");
-  } catch (error) {
-    console.error("❌ Error inserting languages:", error);
-  } finally {
-    await userDb.$disconnect();
-  }
-}
 
 // Run the function
 // insertLanguages();
@@ -112,24 +103,20 @@ app.get("/db", async (req, res) => {
   }
 });
 
-const closePrismaConnections = async () => {
-  await userDb.$disconnect();
-  await catalogDb.$disconnect();
-  console.log("✅ Prisma connections closed on server shutdown.");
+const startServer = async () => {
+  try {
+    // Step 1: Run the syncDatabase function to set up the database before starting the server
+    await syncDatabase();  // Automatically run the syncDatabase on server start
+
+    // Step 2: Once syncDatabase has finished, start the server
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+  } catch (error) {
+    console.error("❌ Error during database setup or server start:", error);
+  }
 };
 
-// Handle process exit signals
-process.on('SIGINT', async () => {
-  console.log("\n🛑 Server shutting down...");
-  await closePrismaConnections();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log("\n🛑 Server shutting down...");
-  await closePrismaConnections();
-  process.exit(0);
-});
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Call the async startServer function using an immediately invoked function expression (IIFE)
+(async () => {
+  await startServer(); // Call async function to start server after database setup
+})();
