@@ -10,6 +10,13 @@ const Topic = sequelize1.define('Topic',
     autoIncrement: true,
     primaryKey: true,
   },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,  // Name of the topic (e.g., "Algebra", "Mechanics")
+  },
+  description: {
+    type: DataTypes.STRING,  // Optional description of the topic
+  },
   parent_id: {  // ✅ Unified Parent ID
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -18,13 +25,53 @@ const Topic = sequelize1.define('Topic',
       key: 'id',
     },
   },
-  name: {
+  parent_name: {
     type: DataTypes.STRING,
-    allowNull: false,  // Name of the topic (e.g., "Algebra", "Mechanics")
+    allowNull: true,
   },
-  description: {
-    type: DataTypes.STRING,  // Optional description of the topic
+  status: {
+    type: DataTypes.ENUM("active", "draft", "archived"),
+    defaultValue: "draft",
   },
+  is_domain: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  is_topic: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  session_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+  },
+  average_session_count: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  prices: {
+    type: DataTypes.JSONB,
+    defaultValue: { bridger: 0, expert: 0, master: 0, legend: 0 },
+  },
+  topic_params: {
+    type: DataTypes.JSONB,
+    defaultValue: {},
+  },
+  prerequisites: {
+    type: DataTypes.ARRAY(DataTypes.JSONB),
+    defaultValue: [],
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: DataTypes.NOW,  // Automatically set the current timestamp
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: DataTypes.NOW,  // Automatically set the current timestamp on updates
+  },
+  
 }, {
   schema: 'catalog',
   tableName: 'topic',  // Table name for topics

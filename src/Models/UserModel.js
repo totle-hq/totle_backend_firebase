@@ -39,6 +39,7 @@ const User = sequelize1.define('User', {
   },
   status: {
     type: DataTypes.STRING,
+    allowNull: true,
   },
   dob: {
     type: DataTypes.DATE,
