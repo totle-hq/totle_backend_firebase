@@ -12,6 +12,8 @@ import adminRoutes from "./routes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import topicRoutes from './routes/topic.routes.js';
 import subjectRoutes from './routes/subject.routes.js';
+import catalogueRoutes from './routes/catalogue.routes.js'; // ✅ Catalogue API
+
 import gradeRoutes from './routes/grade.routes.js';
 import boardRoutes from './routes/board.routes.js';
 import educationRoutes from './routes/education.routes.js';
@@ -73,9 +75,9 @@ app.use("/languages", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 // app.use("/session", authMiddleware, sessionRoutes);
 app.use("/admin", adminRoutes);
-app.use("/api/catalogue/nodes", catalogueNodeRoutes);
-
-app.use("/api/tests", testRoutes);
+app.use("/api/topics", topicRoutes);
+app.use("/api/subjects", subjectRoutes);
+app.use("/api/catalogue", catalogueRoutes); // ✅ Mount catalogue endpoints
 
 app.use("/api/grades", gradeRoutes);
 app.use("/api/boards", boardRoutes);

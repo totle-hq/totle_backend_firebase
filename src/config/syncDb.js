@@ -5,6 +5,7 @@ import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
 import dotenv from "dotenv";
 import { Test } from '../Models/test.model.js'; // ✅ Test model for storing generated tests
+import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
 
 dotenv.config();
 
@@ -129,6 +130,8 @@ export async function syncDatabase() {
     await Question.sync({ alter: true }); // ✅ Now sync Questions
 
     await Test.sync({ alter: true }); // ✅ Ensure test table is synced
+    const { CatalogueNode } = await import("../Models/catalogueNode.model.js");
+    await CatalogueNode.sync({ alter: true });
 
     // Now sync all remaining tables
     await sequelize1.sync({ alter: true });
@@ -150,8 +153,6 @@ export async function syncDatabase() {
 
     await seedCatalogueDomains();
 
-
-    // await seedCatalogueDomains();
 
   } catch (error) {
     console.error('❌ Error syncing database:', error);
