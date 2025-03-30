@@ -14,8 +14,6 @@ import topicRoutes from './routes/topic.routes.js';
 import subjectRoutes from './routes/subject.routes.js';
 import catalogueRoutes from './routes/catalogue.routes.js'; // ✅ Catalogue API
 
-import catalogueRoutes from './routes/catalogue.routes.js'; // ✅ Catalogue API
-
 import gradeRoutes from './routes/grade.routes.js';
 import boardRoutes from './routes/board.routes.js';
 import educationRoutes from './routes/education.routes.js';
@@ -27,9 +25,7 @@ import categoryRoutes from './routes/category.routes.js';
 import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
-import testRoutes from "./routes/test.routes.js";
-
-import testRoutes from "./routes/test.routes.js";
+// import testRoutes from "./routes/test.routes.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
