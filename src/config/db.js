@@ -35,25 +35,29 @@ dotenv.config();
 
 const { Pool } = pkg;
 
-const pool = new Pool({
+// 🧠 User DB
+const userDb = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
 
-const pool2 = new Pool({
+// 📘 Catalogue DB
+const catalogDb = new Pool({
   connectionString: process.env.DATABASE_URL2,
-})
+});
 
-pool
-  .connect()
+// 🔌 Connect user DB
+userDb.connect()
   .then(() => {
-    console.log("✅ PostgreSQL Connected!")
+    console.log("✅ User DB connected!");
   })
-  .catch((err) => console.error("❌ Connection Error:", err));
+  .catch((err) => console.error("❌ User DB connection error:", err));
 
-pool2.connect()
+// 🔌 Connect catalogue DB
+catalogDb.connect()
   .then(() => {
-    console.log("Catalog db connected!")
+    console.log("✅ Catalogue DB connected!");
   })
-  .catch(err=> console.log("Catalog db connection error:", err));
+  .catch((err) => console.error("❌ Catalogue DB connection error:", err));
 
-export default {pool, pool2};
+// ✅ Named exports
+export { userDb, catalogDb };

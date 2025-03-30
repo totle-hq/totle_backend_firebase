@@ -20,8 +20,15 @@ async function createSchemas(sequelize) {
     } catch (error) {
       console.error(`❌ Failed to create schema '${schema}':`, error.message);
     }
+    try {
+      await sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      console.log(`✅ Schema '${schema}' created or already exists.`);
+    } catch (error) {
+      console.error(`❌ Failed to create schema '${schema}':`, error.message);
+    }
   }
 }
+
 
 
 // Function to check if admin schema exists and create super admin
@@ -92,6 +99,7 @@ async function createDatabaseIfNeeded( dbName) {
 export async function syncDatabase() {
   try {
     const dbName1 = process.env.DB_NAME || 'totle'; // Use environment variable or default name
+    // const dbName2 = process.env.DB_NAME2 || 'catalog_db'; // Use environment variable or default name
     // const dbName2 = process.env.DB_NAME2 || 'catalog_db'; // Use environment variable or default name
 
     // Step 1: Create database if it doesn't exist for both instances
