@@ -28,10 +28,14 @@ const MarketplaceSuggestion = sequelize1.define(
     teach:{
       type: DataTypes.STRING,
       allowNull: false,
+      defaultValue: "", // ✅ Prevent sync failure on existing rows
+
     },
     learn:{
       type: DataTypes.STRING,
       allowNull: false,
+      defaultValue: "", // ✅ Prevent sync failure on existing rows
+
     }
   },
   {

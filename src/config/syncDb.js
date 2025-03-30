@@ -4,17 +4,25 @@ import { Language } from '../Models/LanguageModel.js'; // Import Sequelize model
 import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
 import dotenv from "dotenv";
+import { Test } from '../Models/test.model.js'; // ✅ Test model for storing generated tests
+// import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
+
 dotenv.config();
 
 // Function to create schemas if they don't exist
 async function createSchemas(sequelize) {
-  const schemas = ['admin', 'user','catalog'];
+  const schemas = ['admin', 'user', 'catalog'];
 
   for (const schema of schemas) {
-    // Create schema if it doesn't exist
-    await sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+    try {
+      await sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      console.log(`✅ Schema '${schema}' created or already exists.`);
+    } catch (error) {
+      console.error(`❌ Failed to create schema '${schema}':`, error.message);
+    }
   }
 }
+
 
 // Function to check if admin schema exists and create super admin
 async function createSuperAdminIfNeeded() {
@@ -84,7 +92,7 @@ async function createDatabaseIfNeeded( dbName) {
 export async function syncDatabase() {
   try {
     const dbName1 = process.env.DB_NAME || 'totle'; // Use environment variable or default name
-    const dbName2 = process.env.DB_NAME2 || 'catalog_db'; // Use environment variable or default name
+    // const dbName2 = process.env.DB_NAME2 || 'catalog_db'; // Use environment variable or default name
 
     // Step 1: Create database if it doesn't exist for both instances
     await createDatabaseIfNeeded( dbName1);
@@ -121,6 +129,10 @@ export async function syncDatabase() {
     const { Question } = await import("../Models/QuestionModel.js");
     await Question.sync({ alter: true }); // ✅ Now sync Questions
 
+    await Test.sync({ alter: true }); // ✅ Ensure test table is synced
+    const { CatalogueNode } = await import("../Models/catalogueNode.model.js");
+    await CatalogueNode.sync({ alter: true });
+
     // Now sync all remaining tables
     await sequelize1.sync({ alter: true });
     // await sequelize2.sync({ alter: true });
@@ -138,6 +150,9 @@ export async function syncDatabase() {
 
     // Insert languages if they don't exist
     await insertLanguagesIfNeeded();
+
+    // await seedCatalogueDomains();
+
 
   } catch (error) {
     console.error('❌ Error syncing database:', error);

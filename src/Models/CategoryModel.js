@@ -18,6 +18,22 @@ const Category = sequelize1.define('Category', {
   description: {
     type: DataTypes.STRING,  // Optional description of the category
   },
+  status: {
+    type: DataTypes.ENUM("active", "draft", "archived"),
+    defaultValue: "draft",
+  },
+  is_domain: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  is_topic: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  session_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+  },
   createdAt: {
     type: DataTypes.DATE,
     allowNull: true,
