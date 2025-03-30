@@ -25,6 +25,8 @@ import categoryRoutes from './routes/category.routes.js';
 import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
+import testRoutes from "./routes/test.routes.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
