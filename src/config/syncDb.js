@@ -5,7 +5,7 @@ import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
 import dotenv from "dotenv";
 import { Test } from '../Models/test.model.js'; // ✅ Test model for storing generated tests
-import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
+// import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
 
 dotenv.config();
 
@@ -20,8 +20,15 @@ async function createSchemas(sequelize) {
     } catch (error) {
       console.error(`❌ Failed to create schema '${schema}':`, error.message);
     }
+    try {
+      await sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
+      console.log(`✅ Schema '${schema}' created or already exists.`);
+    } catch (error) {
+      console.error(`❌ Failed to create schema '${schema}':`, error.message);
+    }
   }
 }
+
 
 
 // Function to check if admin schema exists and create super admin
@@ -93,6 +100,7 @@ export async function syncDatabase() {
   try {
     const dbName1 = process.env.DB_NAME || 'totle'; // Use environment variable or default name
     // const dbName2 = process.env.DB_NAME2 || 'catalog_db'; // Use environment variable or default name
+    // const dbName2 = process.env.DB_NAME2 || 'catalog_db'; // Use environment variable or default name
 
     // Step 1: Create database if it doesn't exist for both instances
     await createDatabaseIfNeeded( dbName1);
@@ -151,7 +159,7 @@ export async function syncDatabase() {
     // Insert languages if they don't exist
     await insertLanguagesIfNeeded();
 
-    await seedCatalogueDomains();
+    // await seedCatalogueDomains();
 
 
   } catch (error) {

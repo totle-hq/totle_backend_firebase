@@ -178,6 +178,7 @@ export const getNodes = async (req, res) => {
         }
         case "Subject": {
           const topics = await Topic.findAll({ where: { parent_id: parentId } });
+          console.log("📥 Fetched topics:", topics);
           nodes = topics.map((n) => ({
             ...n.toJSON(),
             node_type: "Topic",
@@ -190,6 +191,7 @@ export const getNodes = async (req, res) => {
     }
 
     console.log("📤 Fetched nodes:", nodes);
+    console.log("📥 Parent type:", parentType, "Parent ID:", parentId);
     res.json({ data: nodes });
   } catch (error) {
     console.error("❌ Failed to fetch nodes:", error);
@@ -202,6 +204,27 @@ export const deleteNode = async (req, res) => {
   const { id } = req.params;
 
   try {
+
+     // Check if this node has children in the next model
+     const childChecks = [
+      { model: Topic, foreignKey: "parent_id" },
+      { model: Subject, foreignKey: "parent_id" },
+      { model: Grade, foreignKey: "parent_id" },
+      { model: Board, foreignKey: "parent_id" },
+      { model: Education, foreignKey: "parent_id" },
+    ];
+
+    for (const { model, foreignKey } of childChecks) {
+      const child = await model.findOne({ where: { [foreignKey]: id } });
+      if (child) {
+        return res.status(400).json({
+          error: "Cannot delete node with children",
+          child: child.name,
+        });
+      }
+    }
+
+
     // Try deleting from every model (reverse order of hierarchy)
     const deleted =
       (await Topic.destroy({ where: { id } })) ||

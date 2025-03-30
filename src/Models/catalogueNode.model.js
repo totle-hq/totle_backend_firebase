@@ -83,6 +83,7 @@ export const CatalogueNode = sequelizeCatalog.define(
     },
   },
   {
+    schema:"catalog",
     tableName: "catalogue_nodes",
     timestamps: true, // adds createdAt and updatedAt
     underscored: true,
