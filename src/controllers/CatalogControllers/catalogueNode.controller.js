@@ -21,6 +21,7 @@ export const createNode = async (req, res) => {
     prices,
     topic_params,
     prerequisites,
+    subtopics
   } = req.body;
 
   // 🧼 Normalize parent_id to null if empty string is sent
@@ -113,7 +114,15 @@ export const createNode = async (req, res) => {
           prices: prices || {},
           topic_params: topic_params || {},
           prerequisites: prerequisites || [],
+          subtopics: subtopics || []
         });
+        
+        if (req.query.subtopics === "true" && topics.length === 1) {
+          const subtopics = topics[0].subtopics || [];
+          return res.json({ data: subtopics.length > 0 ? subtopics : [] });
+        }
+      
+        // break;
         break;
       }
 
