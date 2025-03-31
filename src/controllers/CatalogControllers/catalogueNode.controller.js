@@ -114,7 +114,12 @@ export const createNode = async (req, res) => {
           prices: prices || {},
           topic_params: topic_params || {},
           prerequisites: prerequisites || [],
-          subtopics: subtopics || []
+          subtopics: (subtopics || []).map(name => ({
+            name,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }))
+          
         });
         
         if (req.query.subtopics === "true" && topics.length === 1) {
@@ -274,6 +279,24 @@ export const updateNode = async (req, res) => {
       case "Subject": model = Subject; break;
       case "Topic": model = Topic; break;
       default: return res.status(400).json({ error: "Invalid node_type" });
+    }
+    if (node_type === "Topic" && Array.isArray(rest.subtopics)) {
+      rest.subtopics = rest.subtopics.map((sub) => {
+        if (typeof sub === "string") {
+          // Handle legacy format: just a name
+          return {
+            name: sub,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+        }
+
+        return {
+          ...sub,
+          updatedAt: new Date().toISOString(),
+          createdAt: sub.createdAt || new Date().toISOString()
+        };
+      });
     }
 
     const updated = await model.update(rest, { where: { id } });
