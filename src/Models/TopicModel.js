@@ -61,6 +61,12 @@ const Topic = sequelize1.define('Topic',
     type: DataTypes.ARRAY(DataTypes.JSONB),
     defaultValue: [],
   },
+  subtopics: {
+    type: DataTypes.JSONB,
+    defaultValue: [],
+    allowNull: false,
+  },
+  
   createdAt: {
     type: DataTypes.DATE,
     allowNull: true,
