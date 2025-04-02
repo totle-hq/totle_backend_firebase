@@ -5,6 +5,7 @@ import { Board } from "../../Models/BoardModel.js";
 import { Grade } from "../../Models/GradeModel.js";
 import { Subject } from "../../Models/SubjectModel.js";
 import { Topic } from "../../Models/TopicModel.js";
+import { Subtopic } from "../../Models/SubTopic.Model.js";
 
 export const createNode = async (req, res) => {
   const {
@@ -101,7 +102,7 @@ export const createNode = async (req, res) => {
       case "Topic": {
         const parent = await Subject.findByPk(cleanParentId);
         if (!parent) return res.status(400).json({ error: "Invalid Subject ID" });
-
+      
         createdNode = await Topic.create({
           name,
           description,
@@ -114,20 +115,44 @@ export const createNode = async (req, res) => {
           prices: prices || {},
           topic_params: topic_params || {},
           prerequisites: prerequisites || [],
-          subtopics: (subtopics || []).map(name => ({
-            name,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          }))
-          
         });
-        
-        if (req.query.subtopics === "true" && topics.length === 1) {
-          const subtopics = topics[0].subtopics || [];
-          return res.json({ data: subtopics.length > 0 ? subtopics : [] });
+      
+        const topicId = createdNode.id;
+        const now = new Date();
+      
+        // ✅ SAFELY HANDLE undefined or null subtopics
+        const safeSubtopics = Array.isArray(subtopics) ? subtopics : [];
+      
+        // ✅ This will never throw now
+        const formattedSubtopics = safeSubtopics.map((s) => ({
+          name: typeof s === "string" ? s : s.name,
+          description: s.description || "",
+          parent_id: topicId,
+          createdAt: now,
+          updatedAt: now,
+        }));
+      
+        if (formattedSubtopics.length > 0) {
+          await Subtopic.bulkCreate(formattedSubtopics);
         }
       
-        // break;
+        break;
+      }
+      
+      
+
+      case "Subtopic": {
+        // const { Subtopic } = await import("../../Models/SubTopic.Model.js");
+        const parent = await Topic.findByPk(cleanParentId);
+        if (!parent) return res.status(400).json({ error: "Invalid Topic ID" });
+
+        createdNode = await Subtopic.create({
+          parent_id: cleanParentId,
+          name,
+          description,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
         break;
       }
 
@@ -199,6 +224,20 @@ export const getNodes = async (req, res) => {
           }));
           break;
         }
+
+        case "Topic": {
+          // const { Subtopic } = await import("../../Models/SubTopic.Model.js");
+          const subs = await Subtopic.findAll({ where: { parent_id: parentId } });
+          nodes = subs.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Subtopic",
+            createdAt: n.createdAt,
+            updatedAt: n.updatedAt,
+          }));
+          break;
+        }
+
+
         default:
           return res.status(400).json({ error: "Invalid parent_type provided." });
       }
@@ -226,6 +265,7 @@ export const deleteNode = async (req, res) => {
       { model: Grade, foreignKey: "parent_id" },
       { model: Board, foreignKey: "parent_id" },
       { model: Education, foreignKey: "parent_id" },
+      { model: Subtopic, foreignKey: "parent_id" },
     ];
 
     for (const { model, foreignKey } of childChecks) {
@@ -246,7 +286,8 @@ export const deleteNode = async (req, res) => {
       (await Grade.destroy({ where: { id } })) ||
       (await Board.destroy({ where: { id } })) ||
       (await Education.destroy({ where: { id } })) ||
-      (await Category.destroy({ where: { id } }));
+      (await Category.destroy({ where: { id } }))||
+      (await Subtopic.destroy({ where: { id } }));;
 
     if (!deleted) {
       return res.status(404).json({ error: "Node not found" });
@@ -261,13 +302,9 @@ export const deleteNode = async (req, res) => {
 
 export const updateNode = async (req, res) => {
   const { id } = req.params;
-  const { node_type, ...rest } = req.body;
-
+  const { node_type,subtopics = [], ...rest } = req.body;
   console.log("🔄 Backend received PUT to update:", id, node_type, rest);
-  
-
   console.log("🛠️ UPDATE NODE:", { id, node_type, rest }); 
-
   try {
     let model;
 
@@ -278,30 +315,34 @@ export const updateNode = async (req, res) => {
       case "Grade": model = Grade; break;
       case "Subject": model = Subject; break;
       case "Topic": model = Topic; break;
+      case "Subtopic": model = Subtopic; break;
       default: return res.status(400).json({ error: "Invalid node_type" });
     }
-    if (node_type === "Topic" && Array.isArray(rest.subtopics)) {
-      rest.subtopics = rest.subtopics.map((sub) => {
-        if (typeof sub === "string") {
-          // Handle legacy format: just a name
-          return {
-            name: sub,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-        }
 
-        return {
-          ...sub,
-          updatedAt: new Date().toISOString(),
-          createdAt: sub.createdAt || new Date().toISOString()
-        };
-      });
+    await model.update(rest, { where: { id } });
+
+    if (node_type === "Topic" && Array.isArray(subtopics)) {
+      await Subtopic.destroy({ where: { parent_id: id } }); // Use parent_id
+      const now = new Date();
+      const formattedSubs = subtopics.map((s) => ({
+        name: typeof s === "string" ? s : s.name,
+        parent_id: id,
+        description: "",
+        createdAt: now,
+        updatedAt: now,
+      }));
+      await Subtopic.bulkCreate(formattedSubs);
+    }
+       
+    const updatedNode = await model.findByPk(id);
+
+    // 🧩 If Topic, also fetch its subtopics and attach
+    if (node_type === "Topic") {
+      const updatedSubtopics = await Subtopic.findAll({ where: { parent_id: id } });
+      updatedNode.dataValues.subtopics = updatedSubtopics;
     }
 
-    const updated = await model.update(rest, { where: { id } });
-
-    res.json({ message: "Node updated", updated });
+    res.json({ message: "Node updated successfully", data: updatedNode });
   } catch (error) {
     console.error("Update error:", error);
     res.status(500).json({ error: "Failed to update node" });

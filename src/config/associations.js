@@ -15,6 +15,7 @@ import { Subject } from "../Models/SubjectModel.js";
 import { Topic } from "../Models/TopicModel.js";
 import { Board } from "../Models/BoardModel.js";
 import { Education } from "../Models/EducationModel.js";
+import { Subtopic } from "../Models/SubTopic.Model.js";
 
 
 const defineRelationships = () => {
@@ -79,6 +80,9 @@ const defineRelationships = () => {
   // Define the relationship between Topic and Subject
   Topic.belongsTo(Subject, { foreignKey: 'parent_id' });
   Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
+
+  Subtopic.belongsTo(Topic, { foreignKey: 'parent_id' });
+  Topic.hasMany(Subtopic, { foreignKey: 'parent_id', onDelete: "CASCADE" });
 };
 
 export default defineRelationships;
