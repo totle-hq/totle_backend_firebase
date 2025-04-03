@@ -1,11 +1,11 @@
 // controllers/catalogueNode.controller.js
-import { Category } from "../../Models/CategoryModel.js";
-import { Education } from "../../Models/EducationModel.js";
-import { Board } from "../../Models/BoardModel.js";
-import { Grade } from "../../Models/GradeModel.js";
-import { Subject } from "../../Models/SubjectModel.js";
-import { Topic } from "../../Models/TopicModel.js";
-import { Subtopic } from "../../Models/SubTopic.Model.js";
+import { Category } from "../../Models/CatalogModels/CategoryModel.js";
+import { Education } from "../../Models/CatalogModels/EducationModel.js";
+import { Board } from "../../Models/CatalogModels/BoardModel.js";
+import { Grade } from "../../Models/CatalogModels/GradeModel.js";
+import { Subject } from "../../Models/CatalogModels/SubjectModel.js";
+import { Topic } from "../../Models/CatalogModels/TopicModel.js";
+import { Subtopic } from "../../Models/CatalogModels/SubTopic.Model.js";
 
 export const createNode = async (req, res) => {
   const {
@@ -142,7 +142,7 @@ export const createNode = async (req, res) => {
       
 
       case "Subtopic": {
-        // const { Subtopic } = await import("../../Models/SubTopic.Model.js");
+        // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
         const parent = await Topic.findByPk(cleanParentId);
         if (!parent) return res.status(400).json({ error: "Invalid Topic ID" });
 
@@ -226,7 +226,7 @@ export const getNodes = async (req, res) => {
         }
 
         case "Topic": {
-          // const { Subtopic } = await import("../../Models/SubTopic.Model.js");
+          // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
           const subs = await Subtopic.findAll({ where: { parent_id: parentId } });
           nodes = subs.map((n) => ({
             ...n.toJSON(),

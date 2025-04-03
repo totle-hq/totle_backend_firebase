@@ -1,21 +1,21 @@
 // config/associations.js
-import { Admin } from "../Models/AdminModel.js";
-import { Blog } from "../Models/BlogModel.js";
+import { Admin } from "../Models/UserModels/AdminModel.js";
+import { Blog } from "../Models/SurveyModels/BlogModel.js";
 import { Language } from "../Models/LanguageModel.js";
-import { Responses } from "../Models/ResponsesModel.js";
-import { Survey } from "../Models/SurveyModel.js";
-import { User } from "../Models/UserModel.js";
-import { UserMetrics } from "../Models/UserMetricsModel.js";
-import { Question } from "../Models/QuestionModel.js";
-import { OTP } from "../Models/OtpModel.js";
-import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
-import { Category } from "../Models/CategoryModel.js";
-import { Grade } from "../Models/GradeModel.js";
-import { Subject } from "../Models/SubjectModel.js";
-import { Topic } from "../Models/TopicModel.js";
-import { Board } from "../Models/BoardModel.js";
-import { Education } from "../Models/EducationModel.js";
-import { Subtopic } from "../Models/SubTopic.Model.js";
+import { Responses } from "../Models/SurveyModels/ResponsesModel.js";
+import { Survey } from "../Models/SurveyModels/SurveyModel.js";
+import { User } from "../Models/UserModels/UserModel.js";
+import { UserMetrics } from "../Models/UserModels/UserMetricsModel.js";
+import { Question } from "../Models/SurveyModels/QuestionModel.js";
+import { OTP } from "../Models/UserModels/OtpModel.js";
+import { MarketplaceSuggestion } from "../Models/SurveyModels/MarketplaceModel.js";
+import { Category } from "../Models/CatalogModels/CategoryModel.js";
+import { Grade } from "../Models/CatalogModels/GradeModel.js";
+import { Subject } from "../Models/CatalogModels/SubjectModel.js";
+import { Topic } from "../Models/CatalogModels/TopicModel.js";
+import { Board } from "../Models/CatalogModels/BoardModel.js";
+import { Education } from "../Models/CatalogModels/EducationModel.js";
+import { Subtopic } from "../Models/CatalogModels/SubTopic.Model.js";
 
 
 const defineRelationships = () => {

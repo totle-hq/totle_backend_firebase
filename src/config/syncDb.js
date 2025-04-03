@@ -1,4 +1,4 @@
-import { createSuperAdmin } from '../controllers/superAdmin.controller.js'; // Import SuperAdmin function
+import { createSuperAdmin } from '../controllers/UserControllers/superAdmin.controller.js'; // Import SuperAdmin function
 import { insertLanguages } from '../controllers/language.controller.js'; // Import languages insertion function
 import { Language } from '../Models/LanguageModel.js'; // Import Sequelize models
 import { sequelize1 } from './sequelize.js';
@@ -126,19 +126,19 @@ export async function syncDatabase() {
     console.log("🔄 Syncing tables in the correct order...");
 
     // Step 6: Sync tables in correct order (tables with no dependencies first)
-    const { Admin } = await import("../Models/AdminModel.js");
+    const { Admin } = await import("../Models/UserModels/AdminModel.js");
     await Admin.sync({ alter: true }); // Admin table first, since other tables depend on it
 
-    const { Blog } = await import("../Models/BlogModel.js");
+    const { Blog } = await import("../Models/SurveyModels/BlogModel.js");
     await Blog.sync({ alter: true }); // Now sync Blog after Admin exists
-    const { Survey } = await import("../Models/SurveyModel.js");
+    const { Survey } = await import("../Models/SurveyModels/SurveyModel.js");
     await Survey.sync({ alter: true }); // ✅ Ensure surveys table is created first
 
-    const { Question } = await import("../Models/QuestionModel.js");
+    const { Question } = await import("../Models/SurveyModels/QuestionModel.js");
     await Question.sync({ alter: true }); // ✅ Now sync Questions
 
     await Test.sync({ alter: true }); // ✅ Ensure test table is synced
-    const { CatalogueNode } = await import("../Models/catalogueNode.model.js");
+    const { CatalogueNode } = await import("../Models/CatalogModels/catalogueNode.model.js");
     await CatalogueNode.sync({ alter: true });
 
     // Now sync all remaining tables

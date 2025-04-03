@@ -5,19 +5,19 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 // import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
-import authRoutes from "./routes/auth.routes.js";
-import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
+import authRoutes from "./routes/UserRoutes/auth.routes.js";
+import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user routes
 // import sessionRoutes from "./routes/session.routes.js";
-import adminRoutes from "./routes/admin.routes.js";
+import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
-import topicRoutes from './routes/topic.routes.js';
-import subjectRoutes from './routes/subject.routes.js';
-import catalogueRoutes from './routes/catalogue.routes.js'; // ✅ Catalogue API
+import topicRoutes from './routes/CatalogRoutes/topic.routes.js';
+import subjectRoutes from './routes/CatalogRoutes/subject.routes.js';
+import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
 
-import gradeRoutes from './routes/grade.routes.js';
-import boardRoutes from './routes/board.routes.js';
-import educationRoutes from './routes/education.routes.js';
-import categoryRoutes from './routes/category.routes.js';
+import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
+import boardRoutes from './routes/CatalogRoutes/board.routes.js';
+import educationRoutes from './routes/CatalogRoutes/education.routes.js';
+import categoryRoutes from './routes/CatalogRoutes/category.routes.js';
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";

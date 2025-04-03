@@ -1,5 +1,5 @@
-import { Grade } from "../../Models/GradeModel.js";
-import { Subject } from "../../Models/SubjectModel.js";
+import { Grade } from "../../Models/CatalogModels/GradeModel.js";
+import { Subject } from "../../Models/CatalogModels/SubjectModel.js";
 
 // ✅ Fetch all subjects (excluding soft-deleted ones)
 export const getAllSubjects = async (req, res) => {
