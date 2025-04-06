@@ -1,11 +1,12 @@
 // File: src/controllers/testGenerator.controller.js
 
-import { CatalogueNode } from "../../Models/catalogueNode.model.js";
+import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { getUserLearningMetrics } from "../../services/learnerProfile.service.js";
 import { evaluateDifficulty } from "../../utils/testDifficulty.utils.js";
 import { generateQuestions } from "../../services/questionGenerator.service.js";
 import { isUserEligibleForRetest } from "../../utils/testCooldown.utils.js";
 import { saveTest } from "../../services/testStorage.service.js";
+import { Test } from "../../Models/test.model.js";
 
 /**
  * POST /api/tests/generate
@@ -13,10 +14,11 @@ import { saveTest } from "../../services/testStorage.service.js";
  */
 export const generateTest = async (req, res) => {
   try {
-    const { userId, topicId } = req.body;
-
+    const { topicId } = req.body;
+    const token = req.headers.authorization?.split(" ")[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     // Input validation
-    if (!userId || !topicId) {
+    if (!decoded.id || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
 
@@ -31,21 +33,35 @@ export const generateTest = async (req, res) => {
 
     // 3. Evaluate appropriate difficulty
     const difficulty = evaluateDifficulty(topic.topic_params, learnerProfile);
-
     // 4. Generate questions
-    const questions = await generateQuestions(topicId, difficulty, learnerProfile);
+    const { questions, answers, time_limit_minutes } = await generateQuestions({
+      learnerProfile,
+      topicParams: topic.topic_params,
+      topicName: topic.title,
+      topicId,
+      userId,
+      count: 20,
+    });
+    
 
     // 5. (Optional) Save test to DB or cache
-// 5. Save test to database
-const savedTest = await Test.create({
+  const savedTest = await Test.create({
     user_id: userId,
     topic_id: topicId,
     difficulty,
+    questions, // contains id, text, options
+    answers,   // only if you're storing them (optional)
+    test_settings: {
+      difficulty,
+      time_limit_minutes,
+      retest_wait: 5,
+      fraud_risk_score: 0,
+    },
     status: "generated",
-    questions, // JSON array
     created_at: new Date(),
     updated_at: new Date(),
   });
+
   
   return res.status(200).json({
     success: true,
@@ -54,6 +70,7 @@ const savedTest = await Test.create({
       test_id: savedTest.test_id,
       topicId,
       difficulty,
+      time_limit_minutes,
       questions,
     },
   });
@@ -135,26 +152,37 @@ export const evaluateTest = async (req, res) => {
       return res.status(400).json({ success: false, message: "Only submitted tests can be evaluated" });
     }
 
+    const submittedAnswers = req.body.answers || {};
     const questions = test.questions || [];
     const answers = test.answers || {};
 
+    const correctAnswerMap = {};
+    for (const ans of correctAnswers) {
+      correctAnswerMap[ans.id] = ans.correct_answer;
+    }
+
     const scoredResults = questions.map((question) => {
       const learnerAnswer = answers[question.id];
-      const isCorrect = learnerAnswer === question.correct_answer; // Assumes exact match
+      const correct = correctAnswerMap[question.id];
+      const isCorrect = learnerAnswer === correct; // Assumes exact match
       return {
         question_id: question.id,
+        learnerAnswer,
+        correctAnswer: correct,
         score: isCorrect ? 1 : 0,
         correct: isCorrect,
-        learnerAnswer,
-        correctAnswer: question.correct_answer,
       };
     });
 
     const totalScore = scoredResults.reduce((sum, q) => sum + q.score, 0);
+    const maxScore = questions.length;
+    const percent = Math.round((totalScore / maxScore) * 100);
 
     test.evaluation_result = {
       total_score: totalScore,
-      max_score: questions.length,
+      max_score: maxScore,
+      percentage: percent,
+      passed: percent >= 90,
       details: scoredResults,
     };
     test.status = "evaluated";

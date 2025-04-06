@@ -1,6 +1,6 @@
 // File: src/services/learnerProfile.service.js
 
-import { UserProfile } from "../Models/userProfile.model.js";
+import { UserProfile } from "../Models/UserModels/userProfile.model.js";
 
 /**
  * Retrieves the 33 learning metrics for a specific user.

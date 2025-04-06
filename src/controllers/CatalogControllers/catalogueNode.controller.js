@@ -228,12 +228,15 @@ export const getNodes = async (req, res) => {
         case "Topic": {
           // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
           const subs = await Subtopic.findAll({ where: { parent_id: parentId } });
-          nodes = subs.map((n) => ({
-            ...n.toJSON(),
-            node_type: "Subtopic",
-            createdAt: n.createdAt,
-            updatedAt: n.updatedAt,
-          }));
+          nodes = subs.map((n) => {
+            const topic = n.toJSON();
+            return {
+              ...topic,
+              node_type: "Topic",
+              topic_id: topic.id, // ✅ make it explicit for frontend
+            };
+          });
+          
           break;
         }
 

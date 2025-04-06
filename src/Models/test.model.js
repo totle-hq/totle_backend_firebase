@@ -35,6 +35,11 @@ export const Test = sequelize1.define("Test", {
     allowNull: false,
     comment: "Generated questions with metadata (ID, text, options, answers, etc.)",
   },
+  answers: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    comment: "Correct answers for the test (used for evaluation)",
+  },  
   performance_metrics: {
     type: DataTypes.JSONB,
     allowNull: true,
