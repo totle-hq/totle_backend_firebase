@@ -7,6 +7,7 @@ import { generateQuestions } from "../../services/questionGenerator.service.js";
 import { isUserEligibleForRetest } from "../../utils/testCooldown.utils.js";
 import { saveTest } from "../../services/testStorage.service.js";
 import { Test } from "../../Models/test.model.js";
+import { Topic } from "../../Models/CatalogModels/TopicModel.js";
 
 /**
  * POST /api/tests/generate
@@ -17,13 +18,13 @@ export const generateTest = async (req, res) => {
     const { topicId } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // Input validation
-    if (!decoded.id || !topicId) {
+    const userId = decoded.id;
+    if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
 
     // 1. Fetch topic from catalogue
-    const topic = await CatalogueNode.findByPk(topicId);
+    const topic = await Topic.findByPk(topicId);
     if (!topic || !topic.is_topic) {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
@@ -37,7 +38,7 @@ export const generateTest = async (req, res) => {
     const { questions, answers, time_limit_minutes } = await generateQuestions({
       learnerProfile,
       topicParams: topic.topic_params,
-      topicName: topic.title,
+      topicName: topic.name,
       topicId,
       userId,
       count: 20,
@@ -46,9 +47,16 @@ export const generateTest = async (req, res) => {
 
     // 5. (Optional) Save test to DB or cache
   const savedTest = await Test.create({
-    user_id: userId,
-    topic_id: topicId,
+    user_id: userId,  
+    topic_uuid: topicId,
     difficulty,
+    topics: [{
+      id: topic.id,
+      name: topic.name,
+      description: topic.description,
+      session_count: topic.session_count,
+      prices: topic.prices,
+    }],
     questions, // contains id, text, options
     answers,   // only if you're storing them (optional)
     test_settings: {
@@ -58,8 +66,6 @@ export const generateTest = async (req, res) => {
       fraud_risk_score: 0,
     },
     status: "generated",
-    created_at: new Date(),
-    updated_at: new Date(),
   });
 
   

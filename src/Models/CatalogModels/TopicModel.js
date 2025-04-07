@@ -6,9 +6,10 @@ import { Subject } from './SubjectModel.js';
 const Topic = sequelize1.define('Topic', 
   {
   id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
+    type: DataTypes.UUID,
+    // autoIncrement: true,
     primaryKey: true,
+    defaultValue: DataTypes.UUIDV4,  // Automatically generate a UUID for the primary key
   },
   name: {
     type: DataTypes.STRING,

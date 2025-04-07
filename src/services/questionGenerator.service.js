@@ -36,14 +36,25 @@ export async function generateQuestions({
       temperature: 0.4,
     });
 
-    const raw = response.choices?.[0]?.message?.content || "{}";
-    const parsed = JSON.parse(raw);
+    let raw = response.choices?.[0]?.message?.content || "{}";
+
+    // Strip common markdown wrappers like ```json or ```
+    raw = raw.replace(/```json|```/g, "").trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      console.error("❌ Failed to parse GPT response:\n", raw);
+      throw new Error("Failed to generate questions: Invalid JSON from GPT");
+    }
+
 
     let { questions = [], answers = [], time_limit_minutes = 30 } = parsed;
 
     // Filter out previously asked questions for this user-topic
     const previousTests = await Test.findAll({
-      where: { topic_id: topicId, user_id: userId },
+      where: { topic_uuid: topicId, user_id: userId },
       attributes: ["questions"],
     });
 

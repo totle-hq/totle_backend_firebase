@@ -351,3 +351,91 @@ export const updateNode = async (req, res) => {
     res.status(500).json({ error: "Failed to update node" });
   }
 };
+
+export const bridgerTestNodes = async (req, res) => {
+  const parentId = req.query.parent_id;
+  const parentType = req.query.parent_type;
+
+  try {
+    let nodes = [];
+
+    if (!parentId) {
+      // Top-level nodes → return Categories
+      const categories = await Category.findAll();
+      nodes = categories.map((n) => ({
+        ...n.toJSON(),
+        node_type: "Category",
+      }));
+    } else {
+      switch (parentType) {
+        case "Category": {
+          const education = await Education.findAll({ where: { parent_id: parentId } });
+          nodes = education.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Education",
+          }));
+          break;
+        }
+        case "Education": {
+          const boards = await Board.findAll({ where: { parent_id: parentId } });
+          nodes = boards.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Board",
+          }));
+          break;
+        }
+        case "Board": {
+          const grades = await Grade.findAll({ where: { parent_id: parentId } });
+          nodes = grades.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Grade",
+          }));
+          break;
+        }
+        case "Grade": {
+          const subjects = await Subject.findAll({ where: { parent_id: parentId } });
+          nodes = subjects.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Subject",
+          }));
+          break;
+        }
+        case "Subject": {
+          const topics = await Topic.findAll({ where: { parent_id: parentId } });
+          console.log("📥 Fetched topics:", topics);
+          nodes = topics.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Topic",
+          }));
+          break;
+        }
+
+        case "Topic": {
+          // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
+          const subs = await Subtopic.findAll({ where: { parent_id: parentId } });
+          nodes = subs.map((n) => {
+            const topic = n.toJSON();
+            return {
+              ...topic,
+              node_type: "Topic",
+              topic_id: topic.id, // ✅ make it explicit for frontend
+            };
+          });
+          
+          break;
+        }
+
+
+        default:
+          return res.status(400).json({ error: "Invalid parent_type provided." });
+      }
+    }
+
+    console.log("📤 Fetched nodes:", nodes);
+    console.log("📥 Parent type:", parentType, "Parent ID:", parentId);
+    res.json({ data: nodes });
+  } catch (error) {
+    console.error("❌ Failed to fetch nodes:", error);
+    res.status(500).json({ error: "Failed to fetch nodes" });
+  }
+};

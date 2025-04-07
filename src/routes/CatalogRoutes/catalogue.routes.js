@@ -1,7 +1,7 @@
 // File: src/routes/catalogue.routes.js
 
 import express from "express";
-import { createNode, deleteNode, getNodes, updateNode } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
+import { bridgerTestNodes, createNode, deleteNode, getNodes, updateNode } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
 
@@ -29,6 +29,6 @@ router.delete("/:id", deleteNode);
 // Batch update prices at subject level
 // router.post("/:subject_id/update-subject-prices", updateSubjectPrices);
 
-
+router.get("/", bridgerTestNodes); // <-- Add this at the top
 
 export default router;
