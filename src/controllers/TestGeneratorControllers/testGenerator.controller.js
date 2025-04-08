@@ -8,6 +8,8 @@ import { isUserEligibleForRetest } from "../../utils/testCooldown.utils.js";
 import { saveTest } from "../../services/testStorage.service.js";
 import { Test } from "../../Models/test.model.js";
 import { Topic } from "../../Models/CatalogModels/TopicModel.js";
+import jwt from "jsonwebtoken";
+
 
 /**
  * POST /api/tests/generate
@@ -281,4 +283,31 @@ export const getUserTestHistory = async (req, res) => {
       });
     }
   };
+  
+
+export async function getTestById(req, res) {
+  try {
+    const { testId } = req.params;
+    const test = await Test.findByPk(testId);
+    console.log('test id', testId);
+
+    if (!test) {
+      return res.status(404).json({ success: false, message: "Test not found" });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        test_id: test.test_id,
+        topic_uuid: test.topic_uuid,
+        questions: test.questions,
+        time_limit_minutes: test.test_settings?.time_limit_minutes || 30,
+        created_at: test.createdAt,
+      },
+    });
+  } catch (err) {
+    console.error("❌ getTestById failed:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+}
   

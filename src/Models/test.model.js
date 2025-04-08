@@ -73,6 +73,12 @@ export const Test = sequelize1.define("Test", {
     allowNull: true,
     comment: "Fraud detection flags (suspicious patterns, duplicate attempts, etc.)",
   },
+  submitted_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: "Timestamp when test was submitted",
+  }
+  
 }, {
   tableName: "tests",
   schema: "user",

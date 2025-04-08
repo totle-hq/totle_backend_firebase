@@ -10,7 +10,7 @@ import { UserMetrics } from "../Models/UserModels/UserMetricsModel.js";
  */
 export async function getUserLearningMetrics(userId) {
   try {
-    const profile = await UserMetrics.findOne({ where: { user_id: userId } });
+    const profile = await UserMetrics.findOne({ where: { userId: userId } });
 
     if (!profile) {
       throw new Error(`No user profile found for user_id: ${userId}`);
