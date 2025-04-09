@@ -28,6 +28,19 @@ const Question = sequelize1.define('Question', {
     onDelete: "CASCADE",
     onUpdate: "CASCADE",
   },
+  status: {
+    type: DataTypes.ENUM("active", "archived"),
+    defaultValue: "active",
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
+  },
+  
 }, {
   schema: 'user', // Questions are in the public schema
   tableName: 'questions',

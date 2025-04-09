@@ -328,6 +328,7 @@ export const createOrUpdateSurvey = async (req, res) => {
           // ✅ Update existing question
           existingQuestion.text = q.text;
           existingQuestion.type = q.type;
+          existingQuestion.status = q.status || "active";
           existingQuestion.options = q.type === "text" ? null : Array.isArray(q.options) ? q.options : [];
           await existingQuestion.save();
         } else {
@@ -336,6 +337,7 @@ export const createOrUpdateSurvey = async (req, res) => {
             surveyId,
             text: q.text,
             type: q.type,
+            status: q.status || "active",
             options: q.type === "text" ? null : Array.isArray(q.options) ? q.options : [],
           });
         }
@@ -728,8 +730,7 @@ export const getQuestionsBySurveyId = async (req, res) => {
     // ✅ Fetch questions where surveyId matches
     const questions = await Question.findAll({
       where: { surveyId },
-      as:"questions",
-      attributes: ["id", "text", "type", "options"],
+      attributes: ["id", "text", "type", "options" ,"status"],
     });
 
     if (!questions || questions.length === 0) {
@@ -745,6 +746,34 @@ export const getQuestionsBySurveyId = async (req, res) => {
   }
 };
 
+export const displayQuestionsBySurveyId = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+
+    const surveyTitle = await Survey.findOne({
+      where: { id: surveyId },
+      attributes: ["title"],
+    });
+    let title=surveyTitle.title;
+
+    // ✅ Fetch questions where surveyId matches
+    const questions = await Question.findAll({
+      where: { surveyId, status: "active", },
+      attributes: ["id", "text", "type", "options"],
+    });
+
+    if (!questions || questions.length === 0) {
+      return res.status(404).json({ message: "No questions found for this survey" });
+    }
+
+    // console.log("Fetched Questions:", questions); // ✅ Debugging log
+
+    res.status(200).json({ title, questions });
+  } catch (error) {
+    console.error("❌ Error fetching questions:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
 
 export const deleteSurveyById = async (req, res) => {
   try {
