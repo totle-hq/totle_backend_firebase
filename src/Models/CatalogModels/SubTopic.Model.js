@@ -4,9 +4,9 @@ import { Topic } from "./TopicModel.js";
 
 export const Subtopic = sequelize1.define("Subtopic", {
   id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
+    type: DataTypes.UUID,
     primaryKey: true,
+    defaultValue: DataTypes.UUIDV4
   },
   parent_id: {
     type: DataTypes.UUID,

@@ -5,8 +5,8 @@ import { Grade } from './GradeModel.js';
 
 const Subject = sequelize1.define('Subject', {
   id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
   name: {
@@ -17,7 +17,7 @@ const Subject = sequelize1.define('Subject', {
     type: DataTypes.STRING,  // Optional description of the subject
   },
   parent_id: {  // ✅ Unified Parent ID
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: Grade,
@@ -38,7 +38,7 @@ const Subject = sequelize1.define('Subject', {
   },
   is_topic: {
     type: DataTypes.BOOLEAN,
-    defaultValue: true,
+    defaultValue: false,
   },
   session_count: {
     type: DataTypes.INTEGER,

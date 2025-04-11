@@ -5,8 +5,8 @@ import { Education } from './EducationModel.js';
 
 const Board = sequelize1.define('Board', {
   id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },  
   name: {
@@ -17,7 +17,7 @@ const Board = sequelize1.define('Board', {
     type: DataTypes.STRING,  // Optional description of the board
   },
   parent_id: {  // ✅ Unified Parent ID
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: Education,
@@ -38,7 +38,7 @@ const Board = sequelize1.define('Board', {
   },
   is_topic: {
     type: DataTypes.BOOLEAN,
-    defaultValue: true,
+    defaultValue: false,
   },
   session_count: {
     type: DataTypes.INTEGER,

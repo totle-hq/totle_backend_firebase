@@ -19,7 +19,7 @@ const Topic = sequelize1.define('Topic',
     type: DataTypes.STRING,  // Optional description of the topic
   },
   parent_id: {  // ✅ Unified Parent ID
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: Subject,

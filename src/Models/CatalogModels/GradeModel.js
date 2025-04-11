@@ -4,8 +4,8 @@ import { sequelize1 } from '../../config/sequelize.js';
 import { Board } from './BoardModel.js';
 const Grade = sequelize1.define('Grade', {
   id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
   name: {
@@ -16,7 +16,7 @@ const Grade = sequelize1.define('Grade', {
     type: DataTypes.STRING,  // Optional description of the grade
   },
   parent_id: {  // ✅ Unified Parent ID
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: false,
     references: {
       model: Board,
@@ -33,11 +33,11 @@ const Grade = sequelize1.define('Grade', {
   },
   is_domain: {
     type: DataTypes.BOOLEAN,
-    defaultValue: false,
+    defaultValue: true,
   },
   is_topic: {
     type: DataTypes.BOOLEAN,
-    defaultValue: true,
+    defaultValue: false,
   },
   session_count: {
     type: DataTypes.INTEGER,

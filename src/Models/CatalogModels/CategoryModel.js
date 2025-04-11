@@ -3,12 +3,12 @@ import { sequelize1 } from '../../config/sequelize.js';
 
 const Category = sequelize1.define('Category', {
   id: {
-    type: DataTypes.INTEGER,
-    autoIncrement: true,
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
   parent_id: {  // ✅ Unified Parent ID for hierarchy
-    type: DataTypes.INTEGER,
+    type: DataTypes.UUID,
     allowNull: true, // NULL for top-level categories
   },
   name: {
@@ -28,7 +28,7 @@ const Category = sequelize1.define('Category', {
   },
   is_topic: {
     type: DataTypes.BOOLEAN,
-    defaultValue: true,
+    defaultValue: false,
   },
   session_count: {
     type: DataTypes.INTEGER,
