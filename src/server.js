@@ -26,6 +26,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
+import streamRoutes from "./routes/stream.routes.js";
+
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -84,6 +86,8 @@ app.use("/api/boards", boardRoutes);
 app.use("/api/education", educationRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
+app.use("/api/stream", streamRoutes);
+
 
 
 // Test route

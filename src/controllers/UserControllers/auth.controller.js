@@ -15,6 +15,7 @@ import dotenv from "dotenv";
 import { OTP } from "../../Models/UserModels/OtpModel.js";
 import { Language } from "../../Models/LanguageModel.js";
 import { MarketplaceSuggestion } from "../../Models/SurveyModels/MarketplaceModel.js";
+import { UserMetrics } from "../../Models/UserModels/UserMetricsModel.js";
 
 
 dotenv.config();
@@ -181,7 +182,9 @@ export const otpVerification = async (req, res) => {
         firstName: firstName || "", 
         status: "active",
         updatedAt: new Date(),
-      });
+      }, { returning: true });
+      console.log("Saving UserMetrics for user:", user?.id);
+      await UserMetrics.create({ userId: user.id });
       let betaFlag=false;
       const betaUserCount = await BetaUsers.count();
 

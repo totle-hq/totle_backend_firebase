@@ -58,8 +58,6 @@ const UserMetrics = sequelize1.define(
   }
 );
 
-// ✅ Define Relationships
-UserMetrics.belongsTo(User, { foreignKey: "userId" });
-User.hasOne(UserMetrics, { foreignKey: "userId" });
+
 
 export { UserMetrics };
