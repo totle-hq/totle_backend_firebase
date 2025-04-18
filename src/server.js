@@ -26,7 +26,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
-import streamRoutes from "./routes/stream.routes.js";
+import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 
 
 

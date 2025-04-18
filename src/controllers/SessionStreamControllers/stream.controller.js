@@ -1,9 +1,4 @@
-import { StreamVideoServerClient } from '@stream-io/video-node-sdk';
-
-const streamClient = new StreamVideoServerClient({
-  apiKey: process.env.STREAM_API_KEY,
-  secret: process.env.STREAM_API_SECRET,
-});
+import jwt from "jsonwebtoken";
 
 export const getSessionStreamDetails = async (req, res) => {
   try {
@@ -12,20 +7,22 @@ export const getSessionStreamDetails = async (req, res) => {
       id: req.user.id,
       name: req.user.name,
     };
-    const role = req.user.role || 'learner';
 
-    const call = streamClient.call("default", sessionId);
-    const token = call.getToken(user.id);
+    const token = jwt.sign(
+      { user_id: user.id },
+      process.env.STREAM_API_SECRET,
+      { algorithm: "HS256", expiresIn: "2h" }
+    );
 
-    res.json({
+    return res.json({
       apiKey: process.env.STREAM_API_KEY,
       token,
       user,
       callId: sessionId,
-      role,
+      role: req.user.role || "learner",
     });
   } catch (err) {
-    console.error("Stream session error:", err);
-    res.status(500).json({ error: "Unable to fetch session details" });
+    console.error("Stream token error:", err);
+    res.status(500).json({ error: "Failed to get Stream session token" });
   }
 };
