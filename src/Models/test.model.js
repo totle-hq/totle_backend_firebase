@@ -8,6 +8,24 @@ import { sequelize1 } from "../config/sequelize.js";
  * Stores all metadata related to a generated test
  */
 export const Test = sequelize1.define("Test", {
+  sl_no:{
+    type: DataTypes.INTEGER,
+  },
+  topic_name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    comment: "Name of the topic for the test",
+  },
+  answers: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    comment: "Correct answers for the test (used for evaluation)",
+  }, 
+  answers_submitted: {
+    type: DataTypes.JSONB,
+    allowNull: true,
+    comment: "User's submitted answers before evaluation",
+  },
   test_id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
@@ -34,12 +52,7 @@ export const Test = sequelize1.define("Test", {
     type: DataTypes.JSONB,
     allowNull: false,
     comment: "Generated questions with metadata (ID, text, options, answers, etc.)",
-  },
-  answers: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: "Correct answers for the test (used for evaluation)",
-  },  
+  }, 
   performance_metrics: {
     type: DataTypes.JSONB,
     allowNull: true,

@@ -110,7 +110,9 @@ function buildPrompt(topicName, userParams, topicParams) {
   Topic Parameters (7 total):
   ${formatParams(topicParams)}
 
-  Return the response in this exact JSON format:
+  You MUST return exactly 20 questions and their corresponding answers. Do not generate fewer. Do not include explanations or any extra output.
+  Strictly return this exact JSON format:
+
 
   {
     "questions": [

@@ -6,7 +6,10 @@ import {
   evaluateTest,
   checkRetestEligibility,
   getUserTestHistory,
-  getTestById, // ✅ import it here
+  getTestById,
+  getQualifiedTopics,
+  getTeachStats,
+  getAnswersByTopic, // ✅ import it here
 } from "../controllers/TestGeneratorControllers/testGenerator.controller.js";
 
 const router = express.Router();
@@ -17,6 +20,10 @@ router.post("/submit/:test_id", submitTest);
 router.post("/evaluate/:test_id", evaluateTest);
 router.get("/retest-eligibility/:userId/:topicId", checkRetestEligibility);
 router.get("/user/:userId", getUserTestHistory); // ✅ Add this line
+router.get("/qualified-topics", getQualifiedTopics);
+router.get("/stats", getTeachStats);
+//Todo: Only for the development purpose
+router.get("/answers/:topicId", getAnswersByTopic);
 router.get("/:testId", getTestById);
 
 export default router;

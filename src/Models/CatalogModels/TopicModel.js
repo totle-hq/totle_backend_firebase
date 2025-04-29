@@ -11,6 +11,16 @@ const Topic = sequelize1.define('Topic',
     primaryKey: true,
     defaultValue: DataTypes.UUIDV4,  // Automatically generate a UUID for the primary key
   },
+  qualified_teacher_ids : {
+    type: DataTypes.ARRAY(DataTypes.UUID), // Only works in PostgreSQL
+    allowNull: false,
+    defaultValue: [],
+  },
+  qualified_teacher_names : {
+    type: DataTypes.ARRAY(DataTypes.STRING), // Only works in PostgreSQL
+    allowNull: false,
+    defaultValue: [],
+  },
   name: {
     type: DataTypes.STRING,
     allowNull: false,  // Name of the topic (e.g., "Algebra", "Mechanics")
@@ -78,6 +88,7 @@ const Topic = sequelize1.define('Topic',
     allowNull: true,
     defaultValue: DataTypes.NOW,  // Automatically set the current timestamp on updates
   },
+  
   
 }, {
   schema: 'catalog',
