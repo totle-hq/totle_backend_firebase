@@ -27,6 +27,7 @@ import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
+import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 
 
 
@@ -87,6 +88,7 @@ app.use("/api/education", educationRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
+app.use("/api/payment", paymentRoutes);
 
 
 
