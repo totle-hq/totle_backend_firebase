@@ -405,7 +405,7 @@ export const getBetaUserProfile = async (req, res) => {
       // Fetch user from the database
       const user = await BetaUsers.findOne({
         where: { email: decoded.email },
-        attributes: ['id','firstName'],
+        attributes: ['id'],
       });
       // console.log('user', user)
 
@@ -423,12 +423,25 @@ export const getBetaUserProfile = async (req, res) => {
   }
 };
 
+export const getAllBetaUsers = async (req,res) => {
+  try {
+    const allUsers = await BetaUsers.findAll({
+      attributes: ["id", "firstName"],
+      order: [["createdAt", "ASC"]],
+    });
+
+    res.status(200).json(allUsers);
+  } catch (error) {
+    console.error("Error fetching beta users:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve beta users." });
+  }
+  
+}
+
 export const updateUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     // console.log("Received Auth Header:", authHeader);
-
-    debugger
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
     }
