@@ -405,7 +405,7 @@ export const getBetaUserProfile = async (req, res) => {
       // Fetch user from the database
       const user = await BetaUsers.findOne({
         where: { email: decoded.email },
-        attributes: ['id'],
+        attributes: ['id','firstName'],
       });
       // console.log('user', user)
 
