@@ -137,8 +137,10 @@ export async function syncDatabase() {
     const { Question } = await import("../Models/QuestionModel.js");
     await Question.sync({ alter: true }); // ✅ Now sync Questions
 
+    // await Test.sync({ alter: true }); // ✅ Ensure test table is synced
     await Test.sync({ alter: true }); // ✅ Ensure test table is synced
     const { CatalogueNode } = await import("../Models/catalogueNode.model.js");
+    await CatalogueNode.sync({ alter: true });
     await CatalogueNode.sync({ alter: true });
 
     // Now sync all remaining tables

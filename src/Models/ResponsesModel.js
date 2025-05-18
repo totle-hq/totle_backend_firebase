@@ -32,7 +32,12 @@ const Responses = sequelize1.define(
         model: { schema: "user", tableName: "questions" },
         key: "id",
       },
+      onDelete: 'CASCADE',
     },
+    status: {
+      type: DataTypes.ENUM("active", "archived"),
+      defaultValue: "active",
+    },    
     statusSubmitted:{
       type: DataTypes.ENUM("pending", "submitted"),
       defaultValue: "pending",

@@ -15,31 +15,33 @@ import dotenv from "dotenv";
 import { OTP } from "../Models/OtpModel.js";
 import { Language } from "../Models/LanguageModel.js";
 import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
+import { GetUpdates } from "../Models/GetUpdatesModel.js";
+import cloudinary from "../config/cloudinary.js";
 
 dotenv.config();
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "src/uploads/"); // ✅ Store files in `src/uploads/`
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // ✅ Unique filename
-  },
-});
+// const storage = multer.diskStorage({
+//   destination: (req, file, cb) => {
+//     cb(null, "src/uploads/"); // ✅ Store files in `src/uploads/`
+//   },
+//   filename: (req, file, cb) => {
+//     cb(null, Date.now() + path.extname(file.originalname)); // ✅ Unique filename
+//   },
+// });
 
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Invalid file type. Only JPEG, PNG, JPG, and WEBP are allowed."), false);
-  }
-};
-export const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // ✅ 5MB file size limit
-});
+// const fileFilter = (req, file, cb) => {
+//   const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+//   if (allowedTypes.includes(file.mimetype)) {
+//     cb(null, true);
+//   } else {
+//     cb(new Error("Invalid file type. Only JPEG, PNG, JPG, and WEBP are allowed."), false);
+//   }
+// };
+// export const upload = multer({
+//   storage: storage,
+//   fileFilter: fileFilter,
+//   limits: { fileSize: 5 * 1024 * 1024 }, // ✅ 5MB file size limit
+// });
 // import {serviceAccount} from '../../firebaseAdmin.json'
 
 // admin.initializeApp({
@@ -359,7 +361,7 @@ export const getUserProfile = async (req, res) => {
       // Fetch user from the database
       const user = await User.findOne({
         where: { id: userId },
-        attributes: ['id', 'firstName', 'lastName', 'email', 'dob', 'gender', 'known_language_ids', 'preferred_language_id', 'educational_qualifications', 'status', 'currentOccupation', 'skills', 'years_of_experience', 'location']
+        attributes: ['id', 'firstName', 'lastName', 'email', 'dob', 'gender', 'known_language_ids', 'preferred_language_id', 'educational_qualifications', 'status', 'currentOccupation', 'skills', 'years_of_experience', 'location', 'profilePictureUrl']
       });
       // console.log('user', user)
 
@@ -377,15 +379,69 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-import path from "path";
-import { GetUpdates } from "../Models/GetUpdatesModel.js";
+export const getBetaUserProfile = async (req, res) => {
+  try {
+    console.log('beta user profile')
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+    }
+    // debugger
+    const token = authHeader.split(" ")[1];
+    // console.log('tokenn', token)
+    // console.log('token', process.env.JWT_SECRET)
 
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log('decoded', decoded.id)
+      console.log('profile decode', decoded)
+      const userEmail = decoded.email;
+
+      if (!userEmail) {
+        return res.status(401).json({ error: true, message: "Unauthorized: Not a beta user" });
+      }
+
+      // Fetch user from the database
+      const user = await BetaUsers.findOne({
+        where: { email: decoded.email },
+        attributes: ['id'],
+      });
+      // console.log('user', user)
+
+      if (!user) {
+        return res.status(404).json({ error: true, message: "User not found" });
+      }
+
+      return res.status(200).json({ success: true, user });
+    } catch (error) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+    }
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
+  }
+};
+
+export const getAllBetaUsers = async (req,res) => {
+  try {
+    const allUsers = await BetaUsers.findAll({
+      attributes: ["id", "firstName"],
+      order: [["createdAt", "ASC"]],
+    });
+
+    res.status(200).json(allUsers);
+  } catch (error) {
+    console.error("Error fetching beta users:", error);
+    res.status(500).json({ success: false, message: "Failed to retrieve beta users." });
+  }
+  
+}
 
 export const updateUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     // console.log("Received Auth Header:", authHeader);
-
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
     }
@@ -400,6 +456,7 @@ export const updateUserProfile = async (req, res) => {
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
+      // console.log('decoded update', decoded.id)
     } catch (jwtError) {
       console.error("❌ JWT Verification Error:", jwtError);
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid or expired token" });
@@ -409,6 +466,8 @@ export const updateUserProfile = async (req, res) => {
     if (!userId) {
       return res.status(401).json({ error: true, message: "Unauthorized: Invalid token payload" });
     }
+
+    const updateData = {};
 
     // ✅ Extract and validate input data
     let {
@@ -426,13 +485,17 @@ export const updateUserProfile = async (req, res) => {
       years_of_experience,
       location,
     } = req.body;
-    if (req.file) {
-      const imagePath = path.join("src/uploads", req.file.filename);
-      const imageBuffer = fs.readFileSync(imagePath); // ✅ Read image as buffer
-      updateData.image = imageBuffer; // ✅ Store as Bytes in Prisma
+    console.log('file',req.file)
+    if (req.file && req.file.buffer) {
+      const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+    
+      const result = await cloudinary.uploader.upload(base64Image, {
+        folder: "totle-profile-pics",
+      });
+    
+      updateData.profilePictureUrl = result.secure_url; // or profilePictureUrl
+      console.log("✅ Uploaded to:", result.secure_url);
     }
-
-    const updateData = {};
 
     if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
@@ -478,6 +541,8 @@ export const updateUserProfile = async (req, res) => {
 
     const updatedUser = await User.findOne({ where: { id: userId } });
 
+    console.log("update user", updatedUser)
+
     return res.status(200).json({
       success: true,
       message: "Profile updated successfully.",
@@ -501,6 +566,7 @@ export const getUserCount = async (req, res) => {
 };
 
 export const getWelcome = async(req, res)=> res.status(200).json({hasSeenWelcomeScreen: false});
+
 export const updateWelcome = async(req, res)=>{
   let {hasSeenWelcomeScreen} = req.body;
   if(hasSeenWelcomeScreen){

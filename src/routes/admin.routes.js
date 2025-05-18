@@ -1,6 +1,6 @@
 import express from "express";
 
-import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
+import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../controllers/admin.controller.js";
 import { loginLimiter } from "../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
@@ -36,6 +36,8 @@ router.put("/surveys/:surveyId", createOrUpdateSurvey);
 router.get("/surveys", getAllSurveys);
 router.get("/surveyNames", getSurveyNames)
 router.get("/surveys/questions/:surveyId", getQuestionsBySurveyId);
+router.get("/usersurveys/questions/:surveyId", displayQuestionsBySurveyId);
+
 router.get("/surveys/surveyResults", getSurveyResults);
 router.get("/surveys/surveyResults/:surveyId", getResultsBySurveyId);
 router.post("/surveys/:surveyId/responses", submitSurveyResponse);
