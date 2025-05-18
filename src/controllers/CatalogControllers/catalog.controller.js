@@ -1,9 +1,9 @@
-import { Category } from "../models/CategoryModel.js";
-import { Education } from "../models/EducationModel.js";
-import { Board } from "../models/BoardModel.js";
-import { Grade } from "../models/GradeModel.js";
-import { Subject } from "../models/SubjectModel.js";
-import { Topic } from "../models/TopicModel.js";
+import { Category } from "../../Models/CategoryModel.js";
+import { Education } from "../../Models/EducationModel.js";
+import { Board } from "../../Models/BoardModel.js";
+import { Grade } from "../../Models/GradeModel.js";
+import { Subject } from "../../Models/SubjectModel.js";
+import { Topic } from "../../Models/TopicModel.js";
 
 export class CatalogueController {
   // ✅ Fetch all top-level categories

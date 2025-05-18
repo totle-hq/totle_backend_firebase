@@ -1,13 +1,13 @@
 // src/models/catalogueNode.model.js
 
 import { DataTypes } from "sequelize";
-import sequelizeCatalog from "../config/sequelizeCatalog.js";
+import {sequelize1} from "../config/sequelize.js";
 
 /**
  * CatalogueNode Model
  * Represents a node in the hierarchical catalogue (domain, subject, topic)
  */
-export const CatalogueNode = sequelizeCatalog.define(
+export const CatalogueNode = sequelize1.define(
     "CatalogueNode",
   {
     node_id: {
@@ -83,6 +83,7 @@ export const CatalogueNode = sequelizeCatalog.define(
     },
   },
   {
+    schema:"catalog",
     tableName: "catalogue_nodes",
     timestamps: true, // adds createdAt and updatedAt
     underscored: true,

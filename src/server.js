@@ -27,6 +27,8 @@ import categoryRoutes from './routes/category.routes.js';
 import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
+// import testRoutes from "./routes/test.routes.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,7 +79,7 @@ app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 app.use("/admin", adminRoutes);
 app.use("/api/topics", topicRoutes);
 app.use("/api/subjects", subjectRoutes);
-app.use("/api/catalogue", catalogueRoutes); // ✅ Mount catalogue endpoints
+app.use("/api/catalogue/nodes", catalogueRoutes); // ✅ Mount catalogue endpoints
 
 app.use("/api/grades", gradeRoutes);
 app.use("/api/boards", boardRoutes);

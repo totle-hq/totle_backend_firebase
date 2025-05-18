@@ -8,6 +8,13 @@ const Grade = sequelize1.define('Grade', {
     autoIncrement: true,
     primaryKey: true,
   },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,  // Name of the grade (e.g., "1st Grade", "10th Grade")
+  },
+  description: {
+    type: DataTypes.STRING,  // Optional description of the grade
+  },
   parent_id: {  // ✅ Unified Parent ID
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -16,12 +23,35 @@ const Grade = sequelize1.define('Grade', {
       key: 'id',
     },
   },
-  name: {
+  parent_name: {
     type: DataTypes.STRING,
-    allowNull: false,  // Name of the grade (e.g., "1st Grade", "10th Grade")
+    allowNull: true,
   },
-  description: {
-    type: DataTypes.STRING,  // Optional description of the grade
+  status: {
+    type: DataTypes.ENUM("active", "draft", "archived"),
+    defaultValue: "draft",
+  },
+  is_domain: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  is_topic: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  session_count: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+  },
+  createdAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: DataTypes.NOW,  // Automatically set the current timestamp
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: DataTypes.NOW,  // Automatically set the current timestamp on updates
   },
 }, {
   schema: 'catalog',
