@@ -16,6 +16,10 @@ const BetaUsers = sequelize1.define('BetaUsers', {
         type: DataTypes.STRING,
         allowNull: false,
     },
+    profilePictureUrl: {
+        type: DataTypes.STRING,
+        allowNull: true, // ✅ Optional field
+    },
 
 }, {
   schema: 'user', // Private schema

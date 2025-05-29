@@ -426,7 +426,7 @@ export const getBetaUserProfile = async (req, res) => {
 export const getAllBetaUsers = async (req,res) => {
   try {
     const allUsers = await BetaUsers.findAll({
-      attributes: ["id", "firstName"],
+      attributes: ["id", "firstName","profilePictureUrl"],
       order: [["createdAt", "ASC"]],
     });
 
@@ -486,15 +486,33 @@ export const updateUserProfile = async (req, res) => {
       location,
     } = req.body;
     console.log('file',req.file)
+    const user = await User.findOne({ where: { id: userId } });
     if (req.file && req.file.buffer) {
+      if (user.profile_picture_id) {
+        try {
+          await cloudinary.uploader.destroy(user.profile_picture_id);
+          console.log("🗑️ Old image deleted:", user.profile_picture_id);
+        } catch (err) {
+          console.warn("⚠️ Failed to delete old image:", err);
+        }
+      }
       const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
     
       const result = await cloudinary.uploader.upload(base64Image, {
         folder: "totle-profile-pics",
       });
+      // console.log("Image upload result:", result);
     
       updateData.profilePictureUrl = result.secure_url; // or profilePictureUrl
-      console.log("✅ Uploaded to:", result.secure_url);
+      updateData.profile_picture_id = result.public_id;
+      const betaUser = await BetaUsers.findOne({ where: { email: user.email } });
+      if (betaUser) {
+        await BetaUsers.update(
+          { profilePictureUrl: result.secure_url },
+          { where: { id: betaUser.id } }
+        );
+        console.log("✅ Beta user profile image also updated");
+      }
     }
 
     if (email) updateData.email = email;
@@ -540,8 +558,6 @@ export const updateUserProfile = async (req, res) => {
     }
 
     const updatedUser = await User.findOne({ where: { id: userId } });
-
-    console.log("update user", updatedUser)
 
     return res.status(200).json({
       success: true,

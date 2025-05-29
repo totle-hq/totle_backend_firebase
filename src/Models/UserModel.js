@@ -85,6 +85,10 @@ const User = sequelize1.define('User', {
     type: DataTypes.TEXT,// ✅ Store image as BLOB
     allowNull: true,
   },
+  profile_picture_id: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   isLoggedIn:{
     type: DataTypes.BOOLEAN,
     defaultValue: false,
