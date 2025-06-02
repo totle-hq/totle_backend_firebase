@@ -797,3 +797,58 @@ export const deleteSurveyById = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+export const surveyResponsesAsJsonOrCsv = async (req, res) => {
+  try {
+    const { surveyId } = req.params;
+    const { format = "json" } = req.query;
+
+    const responses = await Responses.findAll({
+      where: { surveyId },
+      include: [
+        {
+          model: Question,
+          attributes: ["text", "type"],
+        },
+        {
+          model: User,
+          attributes: ["firstName", "email"],
+        },
+      ],
+    });
+
+    if (!responses.length) {
+      return res.status(404).json({ message: "No responses found for this survey." });
+    }
+
+    const jsonData = responses.map((resp) => ({
+      userName: resp.User?.firstName || "Unknown",
+      email: resp.User?.email || "N/A",
+      question: resp.Question?.text || "N/A",
+      questionType: resp.Question?.type || "N/A",
+      answer: resp.answer,
+      status: resp.status,
+      statusSubmitted: resp.statusSubmitted,
+      createdOn: resp.createdAt,
+      updatedOn: resp.updatedAt,
+    }));
+
+    if (format === "csv") {
+      const csvData = convertJsonToCsv(jsonData); // Make sure this handles nested values well
+      return res.status(200).json({
+        success: true,
+        message: "Survey responses retrieved as CSV",
+        csvData,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Survey responses retrieved as JSON",
+      jsonData,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching survey responses:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
