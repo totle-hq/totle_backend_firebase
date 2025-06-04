@@ -40,10 +40,10 @@ const Question = sequelize1.define('Question', {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
   },
-  
 }, {
   schema: 'user', // Questions are in the public schema
   tableName: 'questions',
+  timestamps: true,
 });
 
 export {Question};

@@ -10,6 +10,8 @@ import {Responses} from '../Models/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import ExcelJS from "exceljs";
+
 dotenv.config();
 
 
@@ -798,6 +800,7 @@ export const deleteSurveyById = async (req, res) => {
   }
 };
 
+
 export const surveyResponsesAsJsonOrCsv = async (req, res) => {
   try {
     const { surveyId } = req.params;
@@ -806,14 +809,8 @@ export const surveyResponsesAsJsonOrCsv = async (req, res) => {
     const responses = await Responses.findAll({
       where: { surveyId },
       include: [
-        {
-          model: Question,
-          attributes: ["text", "type"],
-        },
-        {
-          model: User,
-          attributes: ["firstName", "email"],
-        },
+        { model: Question, attributes: ["text", "type"] },
+        { model: User, attributes: ["firstName", "email"] },
       ],
     });
 
@@ -826,29 +823,68 @@ export const surveyResponsesAsJsonOrCsv = async (req, res) => {
       email: resp.User?.email || "N/A",
       question: resp.Question?.text || "N/A",
       questionType: resp.Question?.type || "N/A",
-      answer: resp.answer,
+      answer: Array.isArray(resp.answer) ? resp.answer.join(", ") : resp.answer,
       status: resp.status,
       statusSubmitted: resp.statusSubmitted,
       createdOn: resp.createdAt,
       updatedOn: resp.updatedAt,
     }));
 
+    // ✅ CSV Export
+    const convertJsonToCsv = (data) => {
+      const keys = Object.keys(data[0]);
+      const csvRows = [
+        keys.join(","), // Header
+        ...data.map((row) =>
+          keys
+            .map((key) => {
+              const value = row[key];
+              return `"${typeof value === "string" ? value.replace(/"/g, '""') : JSON.stringify(value)}"`;
+            })
+            .join(",")
+        ),
+      ];
+      return csvRows.join("\n");
+    };
+
     if (format === "csv") {
-      const csvData = convertJsonToCsv(jsonData); // Make sure this handles nested values well
-      return res.status(200).json({
-        success: true,
-        message: "Survey responses retrieved as CSV",
-        csvData,
-      });
+      const csv = convertJsonToCsv(jsonData);
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename=survey-${surveyId}.csv`);
+      return res.send(csv);
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Survey responses retrieved as JSON",
-      jsonData,
-    });
+    // ✅ JSON Export
+    if (format === "json") {
+      const jsonString = JSON.stringify(jsonData, null, 2);
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename=survey-${surveyId}.json`);
+      return res.send(jsonString);
+    }
+
+    // ✅ Excel Export
+    if (format === "xlsx") {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Survey Responses");
+
+      worksheet.columns = Object.keys(jsonData[0]).map((key) => ({
+        header: key,
+        key,
+        width: 25,
+      }));
+
+      jsonData.forEach((row) => worksheet.addRow(row));
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=survey-${surveyId}.xlsx`);
+
+      return workbook.xlsx.write(res).then(() => res.end());
+    }
+
+    return res.status(400).json({ message: "Invalid format type." });
   } catch (error) {
-    console.error("❌ Error fetching survey responses:", error);
+    console.error("❌ Error exporting survey responses:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
+

@@ -39,7 +39,7 @@ const defineRelationships = () => {
   // Survey to Response Relationship
   Survey.hasMany(Responses, { foreignKey: 'surveyId' });
   Responses.belongsTo(Survey, { foreignKey: 'surveyId' });
-  Responses.belongsTo(Question, {foreignKey:'questionId', as: "questions" });
+  Responses.belongsTo(Question, {foreignKey:'questionId'});
 
   // Admin to Blog Relationship
   Admin.hasMany(Blog, { foreignKey: 'adminId' });
