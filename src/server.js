@@ -28,7 +28,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
 // import testRoutes from "./routes/test.routes.js";
-
+import ctaRoutes from "./routes/cta.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,7 +85,7 @@ app.use("/api/grades", gradeRoutes);
 app.use("/api/boards", boardRoutes);
 app.use("/api/education", educationRoutes);
 app.use("/api/categories", categoryRoutes);
-
+app.use('/api', ctaRoutes);
 // Test route
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
