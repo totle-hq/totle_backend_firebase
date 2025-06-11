@@ -1,15 +1,15 @@
 import CtaTracking from "../Models/ctaTracking.js";
 
 export const trackCtaClick = async (req, res) => {
-  const { pageName } = req.body;
+  const { pageName , buttonName } = req.body;
 
-  if (!pageName) {
-    return res.status(400).json({ message: 'pageName is required' });
+  if (!pageName || !buttonName) {
+    return res.status(400).json({ message: 'pageName or buttonName is required' });
   }
 
   try {
     const [cta, created] = await CtaTracking.findOrCreate({
-      where: { pageName },
+      where: { pageName , buttonName },
       defaults: { clickCount: 1 },
     });
 
