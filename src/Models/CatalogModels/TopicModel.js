@@ -35,6 +35,7 @@ const Topic = sequelize1.define('Topic',
       model: Subject,
       key: 'id',
     },
+    onDelete: 'CASCADE',  // If the parent subject is deleted, delete this topic
   },
   parent_name: {
     type: DataTypes.STRING,
@@ -93,7 +94,7 @@ const Topic = sequelize1.define('Topic',
 }, {
   schema: 'catalog',
   tableName: 'topic',  // Table name for topics
-  paranoid: true
+  // paranoid: true
 });
 
 

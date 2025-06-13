@@ -78,7 +78,7 @@ export const CatalogueNode = sequelize1.define(
     tableName: "catalogue_nodes",
     timestamps: true, // adds createdAt and updatedAt
     underscored: true,
-    paranoid: false,
+    // paranoid: false,
     indexes: [{ fields: ["parent_id"] }],
     // comment: "Catalogue node table representing hierarchical structure",
   }

@@ -22,6 +22,7 @@ const Grade = sequelize1.define('Grade', {
       model: Board,
       key: 'id',
     },
+    onDelete: 'CASCADE',  // If the parent board is deleted, delete this grade
   },
   parent_name: {
     type: DataTypes.STRING,

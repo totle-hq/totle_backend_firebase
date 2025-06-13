@@ -79,7 +79,7 @@ const defineRelationships = () => {
 
   // Define the relationship between Topic and Subject
   Topic.belongsTo(Subject, { foreignKey: 'parent_id' });
-  Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
+  Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE", hooks: true,  });
 
   Subtopic.belongsTo(Topic, { foreignKey: 'parent_id' });
   Topic.hasMany(Subtopic, { foreignKey: 'parent_id', onDelete: "CASCADE" });

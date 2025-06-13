@@ -23,6 +23,7 @@ const Subject = sequelize1.define('Subject', {
       model: Grade,
       key: 'id',
     },
+    onDelete: 'CASCADE',  // If the parent grade is deleted, delete this subject
   },
   parent_name: {
     type: DataTypes.STRING,

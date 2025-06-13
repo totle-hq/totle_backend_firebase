@@ -15,6 +15,7 @@ export const Subtopic = sequelize1.define("Subtopic", {
         model: Topic,
         key: 'id',
     },
+    onDelete: 'CASCADE', // If the parent topic is deleted, delete this subtopic
   },
   name: {
     type: DataTypes.STRING,
@@ -36,5 +37,5 @@ export const Subtopic = sequelize1.define("Subtopic", {
     schema: "catalog",
     tableName: "subtopics",
     timestamps: true, // enables createdAt & updatedAt
-    paranoid: true, // enables deletedAt for soft deletes
+    // paranoid: true, // enables deletedAt for soft deletes
 });

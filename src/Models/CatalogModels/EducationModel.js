@@ -24,6 +24,7 @@ const Education = sequelize1.define('Education', {
       model: Category,
       key: 'id',
     },
+    onDelete: 'CASCADE',  // If the parent category is deleted, delete this college
   },
   parent_name: {
     type: DataTypes.STRING,
