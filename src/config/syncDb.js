@@ -156,7 +156,7 @@ export async function syncDatabase() {
     // console.log("✅ Foreign key constraints re-enabled!");
 
     // Check if admin schema exists and run super admin function
-    await createSuperAdminIfNeeded(sequelize1);
+    // await createSuperAdminIfNeeded(sequelize1);
 
     // Insert languages if they don't exist
     await insertLanguagesIfNeeded();

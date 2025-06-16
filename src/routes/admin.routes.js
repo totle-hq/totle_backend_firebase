@@ -1,6 +1,6 @@
 import express from "express";
 
-import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, surveyResponsesAsJsonOrCsv, updateBlog, uploadImage } from "../controllers/admin.controller.js";
+import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, loginNucleusAdmin, submitSurveyResponse, surveyResponsesAsJsonOrCsv, updateBlog, uploadImage } from "../controllers/admin.controller.js";
 import { loginLimiter } from "../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
 const router = express.Router();
@@ -45,6 +45,8 @@ router.post("/surveys/:surveyId/responses", submitSurveyResponse);
 router.get("/getSuggestions", getAllSuggestionsForAdmin);
 router.delete("/surveys/:surveyId", deleteSurveyById);
 
+// Nucleus admin
+router.post("/nucleus",loginNucleusAdmin)
 export default router;
 
 

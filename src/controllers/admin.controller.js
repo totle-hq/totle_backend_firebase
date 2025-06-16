@@ -888,3 +888,42 @@ export const surveyResponsesAsJsonOrCsv = async (req, res) => {
   }
 };
 
+export const loginNucleusAdmin = async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    // Find admin by email
+    const admin = await Admin.findOne({ where: { email } });
+    if (!admin) {
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
+
+    // Check password
+    const passwordMatch = await bcrypt.compare(password, admin.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ message: 'Invalid email or password.' });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: admin.id, email: admin.email },
+      process.env.JWT_SECRET || 'default_secret',
+      { expiresIn: '1d' }
+    );
+
+    // Prepare admin object for frontend mapping
+    const responseAdmin = {
+      id: admin.id,
+      name: admin.name,
+      email: admin.email,
+      role: admin.global_role || 'None',
+      department: admin.departments?.[0] || 'Unknown',
+    };
+
+    return res.json({ token, admin: responseAdmin });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({ message: 'Internal server error.' });
+  }
+};
