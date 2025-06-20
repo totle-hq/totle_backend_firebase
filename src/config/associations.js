@@ -20,7 +20,7 @@ import { Subtopic } from "../Models/CatalogModels/SubTopic.Model.js";
 
 const defineRelationships = () => {
   // User to Response Relationship
-  User.hasMany(Responses, { foreignKey: 'userId' });
+  User.hasMany(Responses, { foreignKey: 'userId', onDelete: 'CASCADE' });
   Responses.belongsTo(User, { foreignKey: 'userId' });
 
   // User to Preferred Language Relationship
@@ -29,7 +29,7 @@ const defineRelationships = () => {
 
 
   // User to UserMetrics Relationship
-  User.hasOne(UserMetrics, { foreignKey: 'userId' });
+  User.hasOne(UserMetrics, { foreignKey: 'userId', onDelete: 'CASCADE' });
   UserMetrics.belongsTo(User, { foreignKey: 'userId' });
 
   // Survey to Question Relationship
@@ -52,7 +52,7 @@ const defineRelationships = () => {
   User.hasMany(OTP, { foreignKey: 'userId', onDelete: 'CASCADE' });
   OTP.belongsTo(User, { foreignKey: 'userId' });
 
-  User.hasMany(MarketplaceSuggestion, { foreignKey: "userId" });
+  User.hasMany(MarketplaceSuggestion, { foreignKey: "userId", onDelete: 'CASCADE' });
   MarketplaceSuggestion.belongsTo(User, { foreignKey: "userId" });
 
   // ✅ Admin Access to Marketplace Suggestions (Indirect Access)

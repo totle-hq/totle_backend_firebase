@@ -1,6 +1,6 @@
 import express from "express";
 
-import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
+import { adminLogin, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, unblockUserByAdmin, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 const router = express.Router();
@@ -41,6 +41,9 @@ router.get("/surveys/surveyResults/:surveyId", getResultsBySurveyId);
 router.post("/surveys/:surveyId/responses", submitSurveyResponse);
 router.get("/getSuggestions", getAllSuggestionsForAdmin);
 router.delete("/surveys/:surveyId", deleteSurveyById);
+router.post("/block/:userId", blockUserByAdmin);
+router.post("/unblock/:userId", unblockUserByAdmin);
+router.delete("/deleteUser/:userId", deleteUserByAdmin);
 
 export default router;
 

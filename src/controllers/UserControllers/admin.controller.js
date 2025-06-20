@@ -236,6 +236,7 @@ import path, { format } from "path";
 import fs from "fs";
 import { MarketplaceSuggestion } from '../../Models/SurveyModels/MarketplaceModel.js';
 import { type } from 'os';
+import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
 
 // Ensure uploads folder exists
 const uploadDir = "src/uploads";
@@ -766,5 +767,79 @@ export const deleteSurveyById = async (req, res) => {
   } catch (error) {
     console.error("❌ Error deleting survey:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const blockUserByAdmin = async (req, res) => {
+  try {
+    const token = req.header("Authorization");
+    if (!token) return res.status(401).json({ message: "Unauthorized: No token provided" });
+
+    const decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
+    const admin = await Admin.findByPk(decoded.id);
+    if (!admin || admin.status !== "active") {
+      return res.status(403).json({ message: "Access denied: Invalid admin" });
+    }
+
+    const { userId } = req.params;
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await user.update({ status: "blocked" });
+
+    res.status(200).json({ message: "User has been blocked successfully." });
+  } catch (error) {
+    console.error("❌ Error blocking user:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const unblockUserByAdmin = async (req, res) => {
+  try {
+    const token = req.header("Authorization");
+    if (!token) return res.status(401).json({ message: "Unauthorized: No token provided" });
+
+    const decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
+    const admin = await Admin.findByPk(decoded.id);
+    if (!admin || admin.status !== "active") {
+      return res.status(403).json({ message: "Access denied: Invalid admin" });
+    }
+
+    const { userId } = req.params;
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    await user.update({ status: "Inactive" });
+
+    res.status(200).json({ message: "User has been blocked successfully." });
+  } catch (error) {
+    console.error("❌ Error blocking user:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const deleteUserByAdmin = async (req, res) => {
+  try {
+    const token = req.header("Authorization");
+    if (!token) return res.status(401).json({ message: "Unauthorized: No token provided" });
+
+    const decoded = jwt.verify(token.replace("Bearer ", ""), process.env.JWT_SECRET);
+    const admin = await Admin.findByPk(decoded.id);
+    if (!admin || admin.status !== "active") {
+      return res.status(403).json({ message: "Access denied: Invalid admin" });
+    }
+
+    const { userId } = req.params;
+    const user = await User.findByPk(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    
+    let email= user.email;
+    await user.destroy();
+    await BetaUsers.destroy({ where: { email } });
+
+    res.status(200).json({ message: "User deleted successfully." });
+  } catch (error) {
+    console.error("❌ Error deleting user:", error);
+    res.status(500).json({ message: "Server error", error });
   }
 };
