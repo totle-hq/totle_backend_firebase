@@ -1,4 +1,4 @@
-import { Category } from "../../Models/CategoryModel.js";
+import { Category } from "../../Models/CatalogModels/CategoryModel.js";
 
 // ✅ Fetch all categories (excluding soft-deleted ones)
 export const getAllCategories = async (req, res) => {

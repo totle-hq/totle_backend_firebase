@@ -1,5 +1,5 @@
-import { Subject } from "../../Models/SubjectModel.js";
-import { Topic } from "../../Models/TopicModel.js";
+import { Subject } from "../../Models/CatalogModels/SubjectModel.js";
+import { Topic } from "../../Models/CatalogModels/TopicModel.js";
 
 
 // ✅ Fetch all topics (excluding soft-deleted ones)

@@ -1,5 +1,5 @@
-import { Board } from "../../Models/BoardModel.js";
-import { Grade } from "../../Models/GradeModel.js";
+import { Board } from "../../Models/CatalogModels/BoardModel.js";
+import { Grade } from "../../Models/CatalogModels/GradeModel.js";
 
 // ✅ Fetch all grades (excluding soft-deleted ones)
 export const getAllGrades = async (req, res) => {

@@ -21,6 +21,7 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^6.3.1",
+    "@stream-io/video-react-sdk": "^1.14.2",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.6.1",
     "compression": "^1.7.5",
@@ -30,6 +31,7 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "firebase-admin": "^13.1.0",
+    "getstream": "^8.8.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
@@ -38,7 +40,9 @@
     "openai": "^4.89.1",
     "passport": "^0.7.0",
     "pg": "^8.13.1",
+    "razorpay": "^2.9.6",
     "sequelize": "^6.37.5",
+    "shortid": "^2.2.17",
     "socket.io": "^4.8.1",
     "twilio": "^5.4.3"
   },

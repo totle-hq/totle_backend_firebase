@@ -1,11 +1,11 @@
 // controllers/catalogueNode.controller.js
-import { Category } from "../../Models/CategoryModel.js";
-import { Education } from "../../Models/EducationModel.js";
-import { Board } from "../../Models/BoardModel.js";
-import { Grade } from "../../Models/GradeModel.js";
-import { Subject } from "../../Models/SubjectModel.js";
-import { Topic } from "../../Models/TopicModel.js";
-import { Subtopic } from "../../Models/SubTopic.Model.js";
+import { Category } from "../../Models/CatalogModels/CategoryModel.js";
+import { Education } from "../../Models/CatalogModels/EducationModel.js";
+import { Board } from "../../Models/CatalogModels/BoardModel.js";
+import { Grade } from "../../Models/CatalogModels/GradeModel.js";
+import { Subject } from "../../Models/CatalogModels/SubjectModel.js";
+import { Topic } from "../../Models/CatalogModels/TopicModel.js";
+import { Subtopic } from "../../Models/CatalogModels/SubTopic.Model.js";
 
 export const createNode = async (req, res) => {
   const {
@@ -142,7 +142,7 @@ export const createNode = async (req, res) => {
       
 
       case "Subtopic": {
-        // const { Subtopic } = await import("../../Models/SubTopic.Model.js");
+        // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
         const parent = await Topic.findByPk(cleanParentId);
         if (!parent) return res.status(400).json({ error: "Invalid Topic ID" });
 
@@ -226,14 +226,17 @@ export const getNodes = async (req, res) => {
         }
 
         case "Topic": {
-          // const { Subtopic } = await import("../../Models/SubTopic.Model.js");
+          // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
           const subs = await Subtopic.findAll({ where: { parent_id: parentId } });
-          nodes = subs.map((n) => ({
-            ...n.toJSON(),
-            node_type: "Subtopic",
-            createdAt: n.createdAt,
-            updatedAt: n.updatedAt,
-          }));
+          nodes = subs.map((n) => {
+            const topic = n.toJSON();
+            return {
+              ...topic,
+              node_type: "Topic",
+              topic_id: topic.id, // ✅ make it explicit for frontend
+            };
+          });
+          
           break;
         }
 
@@ -346,5 +349,93 @@ export const updateNode = async (req, res) => {
   } catch (error) {
     console.error("Update error:", error);
     res.status(500).json({ error: "Failed to update node" });
+  }
+};
+
+export const bridgerTestNodes = async (req, res) => {
+  const parentId = req.query.parent_id;
+  const parentType = req.query.parent_type;
+
+  try {
+    let nodes = [];
+
+    if (!parentId) {
+      // Top-level nodes → return Categories
+      const categories = await Category.findAll();
+      nodes = categories.map((n) => ({
+        ...n.toJSON(),
+        node_type: "Category",
+      }));
+    } else {
+      switch (parentType) {
+        case "Category": {
+          const education = await Education.findAll({ where: { parent_id: parentId } });
+          nodes = education.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Education",
+          }));
+          break;
+        }
+        case "Education": {
+          const boards = await Board.findAll({ where: { parent_id: parentId } });
+          nodes = boards.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Board",
+          }));
+          break;
+        }
+        case "Board": {
+          const grades = await Grade.findAll({ where: { parent_id: parentId } });
+          nodes = grades.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Grade",
+          }));
+          break;
+        }
+        case "Grade": {
+          const subjects = await Subject.findAll({ where: { parent_id: parentId } });
+          nodes = subjects.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Subject",
+          }));
+          break;
+        }
+        case "Subject": {
+          const topics = await Topic.findAll({ where: { parent_id: parentId } });
+          console.log("📥 Fetched topics:", topics);
+          nodes = topics.map((n) => ({
+            ...n.toJSON(),
+            node_type: "Topic",
+          }));
+          break;
+        }
+
+        case "Topic": {
+          // const { Subtopic } = await import("../../Models/CatalogModels/SubTopic.Model.js");
+          const subs = await Subtopic.findAll({ where: { parent_id: parentId } });
+          nodes = subs.map((n) => {
+            const topic = n.toJSON();
+            return {
+              ...topic,
+              node_type: "Topic",
+              topic_id: topic.id, // ✅ make it explicit for frontend
+            };
+          });
+          
+          break;
+        }
+
+
+        default:
+          return res.status(400).json({ error: "Invalid parent_type provided." });
+      }
+    }
+
+    console.log("📤 Fetched nodes:", nodes);
+    console.log("📥 Parent type:", parentType, "Parent ID:", parentId);
+    res.json({ data: nodes });
+  } catch (error) {
+    console.error("❌ Failed to fetch nodes:", error);
+    res.status(500).json({ error: "Failed to fetch nodes" });
   }
 };
