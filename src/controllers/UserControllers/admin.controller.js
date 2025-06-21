@@ -50,6 +50,8 @@ export const adminLogin = async (req, res) => {
     const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
     res.status(200).json({message: "Successfully Logged in!", token, admin:{name: admin.name, email: admin.email, id: admin.id} });
+    io.emit("userLoginStatus", { userId: admin.id, isLoggedIn: true });
+
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
@@ -905,6 +907,8 @@ export const blockUserByAdmin = async (req, res) => {
     await user.update({ status: "blocked" });
 
     res.status(200).json({ message: "User has been blocked successfully." });
+    io.emit("userLoginStatus", { userId, isLoggedIn: false });
+
   } catch (error) {
     console.error("❌ Error blocking user:", error);
     res.status(500).json({ message: "Server error", error });
@@ -967,6 +971,7 @@ export const unblockUserByAdmin = async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     await user.update({ status: "Inactive" });
+    io.emit("userLoginStatus", { userId, isLoggedIn: true });
 
     res.status(200).json({ message: "User has been blocked successfully." });
   } catch (error) {
@@ -995,6 +1000,8 @@ export const deleteUserByAdmin = async (req, res) => {
     await BetaUsers.destroy({ where: { email } });
 
     res.status(200).json({ message: "User deleted successfully." });
+    io.emit("userLoginStatus", { userId, isLoggedIn: false, deleted: true });
+
   } catch (error) {
     console.error("❌ Error deleting user:", error);
     res.status(500).json({ message: "Server error", error });
