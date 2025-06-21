@@ -30,6 +30,8 @@ import {syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
+import http from "http";
+import { Server } from "socket.io";
 
 
 
@@ -122,7 +124,30 @@ const startServer = async () => {
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    const server = http.createServer(app);
+    const io = new Server(server, {
+      cors: {
+        origin: [
+          'totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co',
+          'https://mail.google.com','http://localhost:3001','http://localhost:3000'
+        ],
+        credentials: true,
+        allowedHeaders: ["Authorization", "Content-Type"]
+      }
+    });
+    global.io = io;
+
+    io.on("connection", (socket) => {
+      console.log("🔌 WebSocket connected:", socket.id);
+
+      socket.on("disconnect", () => {
+        console.log("❌ WebSocket disconnected:", socket.id);
+        // Optionally: emit isLoggedIn: false if user mapping is added
+      });
+    });
+
+    server.listen(PORT, () => console.log(`🚀 Server running with WebSocket on port ${PORT}`));
+
   } catch (error) {
     console.error("❌ Error during database setup or server start:", error);
   }
