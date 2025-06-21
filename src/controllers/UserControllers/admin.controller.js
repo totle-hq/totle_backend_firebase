@@ -801,7 +801,6 @@ export const deleteSurveyById = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD:src/controllers/admin.controller.js
 
 export const surveyResponsesAsJsonOrCsv = async (req, res) => {
   try {
@@ -886,7 +885,8 @@ export const surveyResponsesAsJsonOrCsv = async (req, res) => {
     return res.status(400).json({ message: "Invalid format type." });
   } catch (error) {
     console.error("❌ Error exporting survey responses:", error);
-=======
+  }
+}
 export const blockUserByAdmin = async (req, res) => {
   try {
     const token = req.header("Authorization");
@@ -907,12 +907,10 @@ export const blockUserByAdmin = async (req, res) => {
     res.status(200).json({ message: "User has been blocked successfully." });
   } catch (error) {
     console.error("❌ Error blocking user:", error);
->>>>>>> sequelize_trail:src/controllers/UserControllers/admin.controller.js
     res.status(500).json({ message: "Server error", error });
   }
 };
 
-<<<<<<< HEAD:src/controllers/admin.controller.js
 export const loginNucleusAdmin = async (req, res) => {
   const { email, password } = req.body;
 
@@ -950,7 +948,9 @@ export const loginNucleusAdmin = async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     return res.status(500).json({ message: 'Internal server error.' });
-=======
+  }
+}
+
 export const unblockUserByAdmin = async (req, res) => {
   try {
     const token = req.header("Authorization");
@@ -998,6 +998,5 @@ export const deleteUserByAdmin = async (req, res) => {
   } catch (error) {
     console.error("❌ Error deleting user:", error);
     res.status(500).json({ message: "Server error", error });
->>>>>>> sequelize_trail:src/controllers/UserControllers/admin.controller.js
   }
-};
+}
