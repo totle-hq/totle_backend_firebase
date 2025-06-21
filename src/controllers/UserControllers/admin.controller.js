@@ -10,7 +10,7 @@ import {Responses} from '../../Models/SurveyModels/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import ExcelJS from "exceljs";
+// import ExcelJS from "exceljs";
 
 dotenv.config();
 
@@ -864,23 +864,23 @@ export const surveyResponsesAsJsonOrCsv = async (req, res) => {
     }
 
     // ✅ Excel Export
-    if (format === "xlsx") {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Survey Responses");
+    // if (format === "xlsx") {
+    //   const workbook = new ExcelJS.Workbook();
+    //   const worksheet = workbook.addWorksheet("Survey Responses");
 
-      worksheet.columns = Object.keys(jsonData[0]).map((key) => ({
-        header: key,
-        key,
-        width: 25,
-      }));
+    //   worksheet.columns = Object.keys(jsonData[0]).map((key) => ({
+    //     header: key,
+    //     key,
+    //     width: 25,
+    //   }));
 
-      jsonData.forEach((row) => worksheet.addRow(row));
+    //   jsonData.forEach((row) => worksheet.addRow(row));
 
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename=survey-${surveyId}.xlsx`);
+    //   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    //   res.setHeader("Content-Disposition", `attachment; filename=survey-${surveyId}.xlsx`);
 
-      return workbook.xlsx.write(res).then(() => res.end());
-    }
+    //   return workbook.xlsx.write(res).then(() => res.end());
+    // }
 
     return res.status(400).json({ message: "Invalid format type." });
   } catch (error) {

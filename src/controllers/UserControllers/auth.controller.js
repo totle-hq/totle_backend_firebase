@@ -12,19 +12,13 @@ import {User} from "../../Models/UserModels/UserModel.js";
 import { BetaUsers } from "../../Models/UserModels/BetaUsersModel.js";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
-<<<<<<< HEAD:src/controllers/auth.controller.js
-import { OTP } from "../Models/OtpModel.js";
-import { Language } from "../Models/LanguageModel.js";
-import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
-import { GetUpdates } from "../Models/GetUpdatesModel.js";
-import cloudinary from "../config/cloudinary.js";
-=======
+import { GetUpdates } from "../../Models/SurveyModels/GetUpdatesModel.js";
+import cloudinary from "../../config/cloudinary.js";
 import { OTP } from "../../Models/UserModels/OtpModel.js";
 import { Language } from "../../Models/LanguageModel.js";
 import { MarketplaceSuggestion } from "../../Models/SurveyModels/MarketplaceModel.js";
 import { UserMetrics } from "../../Models/UserModels/UserMetricsModel.js";
 
->>>>>>> sequelize_trail:src/controllers/UserControllers/auth.controller.js
 
 dotenv.config();
 
@@ -389,7 +383,6 @@ export const getUserProfile = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD:src/controllers/auth.controller.js
 export const getBetaUserProfile = async (req, res) => {
   try {
     console.log('beta user profile')
@@ -402,10 +395,6 @@ export const getBetaUserProfile = async (req, res) => {
     const token = authHeader.split(" ")[1];
     // console.log('tokenn', token)
     // console.log('token', process.env.JWT_SECRET)
-=======
-import path from "path";
-import { GetUpdates } from "../../Models/SurveyModels/GetUpdatesModel.js";
->>>>>>> sequelize_trail:src/controllers/UserControllers/auth.controller.js
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);

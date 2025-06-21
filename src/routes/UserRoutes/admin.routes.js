@@ -1,14 +1,8 @@
 import express from "express";
 
-<<<<<<< HEAD:src/routes/admin.routes.js
-import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, loginNucleusAdmin, submitSurveyResponse, surveyResponsesAsJsonOrCsv, updateBlog, uploadImage } from "../controllers/admin.controller.js";
-import { loginLimiter } from "../middlewares/rateLimiter.js";
-import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
-=======
-import { adminLogin, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, submitSurveyResponse, unblockUserByAdmin, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
-import { loginLimiter } from "../../middlewares/rateLimiter.js";
+import { adminLogin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, loginNucleusAdmin, submitSurveyResponse, surveyResponsesAsJsonOrCsv, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
->>>>>>> sequelize_trail:src/routes/UserRoutes/admin.routes.js
+import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
 import multer from "multer";
 import path from "path";

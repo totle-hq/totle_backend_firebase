@@ -1,14 +1,8 @@
 import express from "express";
-<<<<<<< HEAD:src/routes/auth.routes.js
-import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile } from "../controllers/auth.controller.js";
-import { loginLimiter, signupLimiter } from "../middlewares/rateLimiter.js";
-import authMiddleware from "../middlewares/authMiddleware.js";
-import upload from "../middlewares/multer.js";
-=======
-import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, upload, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates } from "../../controllers/UserControllers/auth.controller.js";
+import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile } from "../../controllers/UserControllers/auth.controller.js";
+import upload from "../../middlewares/multer.js";
 import { loginLimiter, signupLimiter } from "../../middlewares/rateLimiter.js";
 import authMiddleware from "../../middlewares/authMiddleware.js";
->>>>>>> sequelize_trail:src/routes/UserRoutes/auth.routes.js
 
 const router = express.Router();
 /**
