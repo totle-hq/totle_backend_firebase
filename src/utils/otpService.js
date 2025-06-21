@@ -4,7 +4,7 @@ import nodemailer from "nodemailer";
 import twilio from "twilio";
 // import { userDb } from "../config/prismaClient.js";
 import { fileURLToPath } from "url";
-import {OTP} from "../Models/OtpModel.js";
+import {OTP} from "../Models/UserModels/OtpModel.js";
 import { Sequelize } from "sequelize";
 
 const __filename = fileURLToPath(import.meta.url);

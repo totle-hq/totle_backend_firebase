@@ -1,26 +1,26 @@
 // config/associations.js
-import { Admin } from "../Models/AdminModel.js";
-import { Blog } from "../Models/BlogModel.js";
+import { Admin } from "../Models/UserModels/AdminModel.js";
+import { Blog } from "../Models/SurveyModels/BlogModel.js";
 import { Language } from "../Models/LanguageModel.js";
-import { Responses } from "../Models/ResponsesModel.js";
-import { Survey } from "../Models/SurveyModel.js";
-import { User } from "../Models/UserModel.js";
-import { UserMetrics } from "../Models/UserMetricsModel.js";
-import { Question } from "../Models/QuestionModel.js";
-import { OTP } from "../Models/OtpModel.js";
-import { MarketplaceSuggestion } from "../Models/MarketplaceModel.js";
-import { Category } from "../Models/CategoryModel.js";
-import { Grade } from "../Models/GradeModel.js";
-import { Subject } from "../Models/SubjectModel.js";
-import { Topic } from "../Models/TopicModel.js";
-import { Board } from "../Models/BoardModel.js";
-import { Education } from "../Models/EducationModel.js";
-import { Subtopic } from "../Models/SubTopic.Model.js";
+import { Responses } from "../Models/SurveyModels/ResponsesModel.js";
+import { Survey } from "../Models/SurveyModels/SurveyModel.js";
+import { User } from "../Models/UserModels/UserModel.js";
+import { UserMetrics } from "../Models/UserModels/UserMetricsModel.js";
+import { Question } from "../Models/SurveyModels/QuestionModel.js";
+import { OTP } from "../Models/UserModels/OtpModel.js";
+import { MarketplaceSuggestion } from "../Models/SurveyModels/MarketplaceModel.js";
+import { Category } from "../Models/CatalogModels/CategoryModel.js";
+import { Grade } from "../Models/CatalogModels/GradeModel.js";
+import { Subject } from "../Models/CatalogModels/SubjectModel.js";
+import { Topic } from "../Models/CatalogModels/TopicModel.js";
+import { Board } from "../Models/CatalogModels/BoardModel.js";
+import { Education } from "../Models/CatalogModels/EducationModel.js";
+import { Subtopic } from "../Models/CatalogModels/SubTopic.Model.js";
 
 
 const defineRelationships = () => {
   // User to Response Relationship
-  User.hasMany(Responses, { foreignKey: 'userId' });
+  User.hasMany(Responses, { foreignKey: 'userId', onDelete: 'CASCADE' });
   Responses.belongsTo(User, { foreignKey: 'userId' });
 
   // User to Preferred Language Relationship
@@ -29,7 +29,7 @@ const defineRelationships = () => {
 
 
   // User to UserMetrics Relationship
-  User.hasOne(UserMetrics, { foreignKey: 'userId' });
+  User.hasOne(UserMetrics, { foreignKey: 'userId', onDelete: 'CASCADE' });
   UserMetrics.belongsTo(User, { foreignKey: 'userId' });
 
   // Survey to Question Relationship
@@ -39,7 +39,7 @@ const defineRelationships = () => {
   // Survey to Response Relationship
   Survey.hasMany(Responses, { foreignKey: 'surveyId' });
   Responses.belongsTo(Survey, { foreignKey: 'surveyId' });
-  Responses.belongsTo(Question, {foreignKey:'questionId', as: "questions" });
+  Responses.belongsTo(Question, {foreignKey:'questionId'});
 
   // Admin to Blog Relationship
   Admin.hasMany(Blog, { foreignKey: 'adminId' });
@@ -52,7 +52,7 @@ const defineRelationships = () => {
   User.hasMany(OTP, { foreignKey: 'userId', onDelete: 'CASCADE' });
   OTP.belongsTo(User, { foreignKey: 'userId' });
 
-  User.hasMany(MarketplaceSuggestion, { foreignKey: "userId" });
+  User.hasMany(MarketplaceSuggestion, { foreignKey: "userId", onDelete: 'CASCADE' });
   MarketplaceSuggestion.belongsTo(User, { foreignKey: "userId" });
 
   // ✅ Admin Access to Marketplace Suggestions (Indirect Access)
@@ -79,7 +79,7 @@ const defineRelationships = () => {
 
   // Define the relationship between Topic and Subject
   Topic.belongsTo(Subject, { foreignKey: 'parent_id' });
-  Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
+  Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE", hooks: true,  });
 
   Subtopic.belongsTo(Topic, { foreignKey: 'parent_id' });
   Topic.hasMany(Subtopic, { foreignKey: 'parent_id', onDelete: "CASCADE" });

@@ -7,19 +7,19 @@ import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
 // import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
-import authRoutes from "./routes/auth.routes.js";
-import userRoutes from "./routes/user.routes.js"; // ✅ Import user routes
+import authRoutes from "./routes/UserRoutes/auth.routes.js";
+import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user routes
 // import sessionRoutes from "./routes/session.routes.js";
-import adminRoutes from "./routes/admin.routes.js";
+import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
-import topicRoutes from './routes/topic.routes.js';
-import subjectRoutes from './routes/subject.routes.js';
-import catalogueRoutes from './routes/catalogue.routes.js'; // ✅ Catalogue API
+import topicRoutes from './routes/CatalogRoutes/topic.routes.js';
+import subjectRoutes from './routes/CatalogRoutes/subject.routes.js';
+import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
 
-import gradeRoutes from './routes/grade.routes.js';
-import boardRoutes from './routes/board.routes.js';
-import educationRoutes from './routes/education.routes.js';
-import categoryRoutes from './routes/category.routes.js';
+import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
+import boardRoutes from './routes/CatalogRoutes/board.routes.js';
+import educationRoutes from './routes/CatalogRoutes/education.routes.js';
+import categoryRoutes from './routes/CatalogRoutes/category.routes.js';
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
@@ -27,7 +27,10 @@ import categoryRoutes from './routes/category.routes.js';
 import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
-// import testRoutes from "./routes/test.routes.js";
+import testRoutes from "./routes/test.routes.js";
+import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
+import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
+
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -85,6 +88,11 @@ app.use("/api/grades", gradeRoutes);
 app.use("/api/boards", boardRoutes);
 app.use("/api/education", educationRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/tests", testRoutes); // ✅ expose test endpoints
+app.use("/api/stream", streamRoutes);
+app.use("/api/payment", paymentRoutes);
+
+
 
 // Test route
 app.get("/", (req, res) => {

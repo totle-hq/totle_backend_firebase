@@ -1,5 +1,5 @@
-import { Board } from "../../Models/BoardModel.js";
-import { Education } from "../../Models/EducationModel.js";
+import { Board } from "../../Models/CatalogModels/BoardModel.js";
+import { Education } from "../../Models/CatalogModels/EducationModel.js";
 
 
 // ✅ Fetch all boards (excluding soft-deleted ones)

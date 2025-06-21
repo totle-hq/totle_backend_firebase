@@ -1,5 +1,5 @@
-import { Category } from "../../Models/CategoryModel.js";
-import { Education } from "../../Models/EducationModel.js";
+import { Category } from "../../Models/CatalogModels/CategoryModel.js";
+import { Education } from "../../Models/CatalogModels/EducationModel.js";
 
 
 // ✅ Fetch all education institutions (excluding soft-deleted ones)
