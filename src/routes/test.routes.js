@@ -11,14 +11,14 @@ import {
   getTeachStats,
   getAnswersByTopic, // ✅ import it here
 } from "../controllers/TestGeneratorControllers/testGenerator.controller.js";
-
+import authMiddleware from "../middlewares/authMiddleware.js";
 const router = express.Router();
 
 router.post("/generate", generateTest);
 router.post("/start/:test_id", startTest);
 router.post("/submit/:test_id", submitTest);
 router.post("/evaluate/:test_id", evaluateTest);
-router.get("/retest-eligibility/:userId/:topicId", checkRetestEligibility);
+router.get("/retest-eligibility/:id",authMiddleware, checkRetestEligibility);
 router.get("/user/:userId", getUserTestHistory); // ✅ Add this line
 router.get("/qualified-topics", getQualifiedTopics);
 router.get("/stats", getTeachStats);

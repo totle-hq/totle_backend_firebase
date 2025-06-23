@@ -11,35 +11,44 @@ import { Test } from "../Models/test.model.js";
  * @returns {Promise<{ eligible: boolean, waitTimeInMinutes?: number }>}
  */
 export const isUserEligibleForRetest = async (userId, topicId) => {
-  // Define cooldown period in minutes (e.g., 24 hours = 1440 minutes)
-  const cooldownMinutes = 1440;
+  const cooldownMinutes = 1440; // 24 hours
 
-  // Find the most recent submitted or evaluated test for this user-topic
   const recentTest = await Test.findOne({
     where: {
       user_id: userId,
-      topic_id: topicId,
+      topic_uuid: topicId,
       status: ["submitted", "evaluated"],
     },
     order: [["submitted_at", "DESC"]],
   });
 
   if (!recentTest || !recentTest.submitted_at) {
-    return { eligible: true }; // No past test = eligible
+    return { eligible: true };
   }
 
   const now = new Date();
   const lastSubmitted = new Date(recentTest.submitted_at);
   const diffMs = now - lastSubmitted;
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
 
-  if (diffMinutes >= cooldownMinutes) {
+  const cooldownMs = cooldownMinutes * 60 * 1000;
+  const remainingMs = cooldownMs - diffMs;
+
+  if (remainingMs <= 0) {
     return { eligible: true };
   }
 
-  const waitTimeInMinutes = cooldownMinutes - diffMinutes;
+  const hours = Math.floor(remainingMs / (1000 * 60 * 60));
+  const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+
   return {
     eligible: false,
-    waitTimeInMinutes,
+    waitTime: {
+      hours,
+      minutes,
+      seconds,
+    },
+    waitTimeMinutes: Math.floor(remainingMs / (1000 * 60)), // optional raw minutes
   };
 };
+

@@ -16,6 +16,9 @@ import { Topic } from "../Models/CatalogModels/TopicModel.js";
 import { Board } from "../Models/CatalogModels/BoardModel.js";
 import { Education } from "../Models/CatalogModels/EducationModel.js";
 import { Subtopic } from "../Models/CatalogModels/SubTopic.Model.js";
+import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
+import { ModerationFlag } from "../Models/moderatonflagsModel.js";
+import { Session } from "../Models/SessionModel.js";
 
 
 const defineRelationships = () => {
@@ -61,6 +64,22 @@ const defineRelationships = () => {
   // Define the relationship between College and Category
   Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
   Category.hasMany(Education, { foreignKey: 'parent_id' });
+
+// Define the relationship between the topic and teachertopic stat
+Teachertopicstats.belongsTo(Topic, { foreignKey: 'topicId' });
+Topic.hasMany(Teachertopicstats, { foreignKey: 'topicId' });
+
+// Define the relationship between the topic and session
+Session.belongsTo(Topic, { foreignKey: 'topic_id' });
+Topic.hasMany(Session, { foreignKey: 'topic_id' });
+
+// session → flags
+Session.hasMany(ModerationFlag, { foreignKey: "session_id" });
+ModerationFlag.belongsTo(Session, { foreignKey: "session_id" });
+
+// user → flags
+User.hasMany(ModerationFlag, { foreignKey: "reporter_id" });
+ModerationFlag.belongsTo(User, { foreignKey: "reporter_id" });
 
   // Define the relationship between Board and School
   Board.belongsTo(Education, { foreignKey: 'parent_id' });

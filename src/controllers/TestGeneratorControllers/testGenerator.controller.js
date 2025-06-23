@@ -13,6 +13,7 @@ import { Op } from "sequelize";
 import { Session } from "../../Models/SessionModel.js";
 import { Review } from "../../Models/ReviewModel.js";
 import { User } from "../../Models/UserModels/UserModel.js";
+import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
 
 
 /**
@@ -28,7 +29,6 @@ export const generateTest = async (req, res) => {
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
-
     // 1. Fetch topic from catalogue
     const topic = await Topic.findByPk(topicId);
     // console.log('topic', topic);
@@ -230,7 +230,24 @@ export const evaluateTest = async (req, res) => {
     
       const topicId = test.topic_uuid;
       const topic = await Topic.findByPk(topicId);
-    
+
+  const teacherId = test.user_id;
+
+  const statExists = await Teachertopicstats.findOne({
+    where: { teacherId, topicId }
+  });
+
+  if (!statExists) {
+    await Teachertopicstats.create({
+      teacherId,
+      topicId,
+      tier: 'Bridger',
+      sessionCount: 0,
+      rating: 0
+    });
+    console.log("✅ Created Teachertopicstats for teacher");
+  }
+
       if (topic) {
         const currentTeacherIds = Array.isArray(topic.qualified_teacher_ids) ? topic.qualified_teacher_ids : [];
         const currentTeacherNames = Array.isArray(topic.qualified_teacher_names) ? topic.qualified_teacher_names : [];
@@ -281,10 +298,14 @@ export const evaluateTest = async (req, res) => {
  */
 export const checkUserTestEligibility = async (req, res) => {
   try {
-    const { userId, topicId } = req.query;
-
-    if (!userId || !topicId) {
-      return res.status(400).json({ success: false, message: "Missing userId or topicId" });
+    const {  topicId } = req.params.id;
+const userId=req.user.id;
+console.log(topicId,userId);
+    if (!userId ) {
+      return res.status(400).json({ success: false, message: "Missing userId " });
+    }
+    if(!topicId){
+       return res.status(400).json({ success: false, message: "Missing topicId" });
     }
 
     const { eligible, waitTimeMinutes } = await isUserEligibleForRetest(userId, topicId);
@@ -299,20 +320,22 @@ export const checkUserTestEligibility = async (req, res) => {
 // ✅ Check if user is eligible to retake a test for a topic (based on cooldown)
 export const checkRetestEligibility = async (req, res) => {
     try {
-      const { userId, topicId } = req.query;
-  
+      const  topicId = req.params.id;
+  const userId=req.user.id;
+  console.log(userId,topicId)
       if (!userId || !topicId) {
         return res.status(400).json({ success: false, message: "Missing userId or topicId" });
       }
   
-      const eligible = await isUserEligibleForRetest(userId, topicId);
+      const {eligible ,waitTime,waitTimeInMinutes} = await isUserEligibleForRetest(userId, topicId);
   
       return res.status(200).json({
         success: true,
         eligible,
         message: eligible
           ? "User is eligible to retake the test."
-          : "User is currently on cooldown. Retest not allowed yet.",
+      
+          : `User is currently on cooldown. Retest not allowed yet. try in ${waitTime.hours}h :${waitTime.minutes}m : ${waitTime.seconds}s`,
       });
     } catch (error) {
       console.error("❌ Error checking test eligibility:", error);
