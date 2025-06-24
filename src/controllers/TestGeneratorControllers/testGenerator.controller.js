@@ -25,6 +25,15 @@ export const generateTest = async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
+    // ✅ Enforce cooldown before allowing test generation
+    const { eligible, waitTimeInMinutes } = await isUserEligibleForRetest(userId, topicId);
+    if (!eligible) {
+      return res.status(403).json({
+        success: false,
+        message: `You must wait ${waitTimeInMinutes} more minutes before retaking this test.`,
+      });
+    }
+
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
@@ -319,11 +328,20 @@ export const checkRetestEligibility = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing userId or topicId" });
     }
 
-    const eligible = await isUserEligibleForRetest(userId, topicId);
+    const { eligible, waitTimeInMinutes } = await isUserEligibleForRetest(userId, topicId);
+
+    // ⏳ Calculate when cooldown ends (optional)
+    let cooldownEndsAt = null;
+    if (!eligible && waitTimeInMinutes) {
+      const now = new Date();
+      cooldownEndsAt = new Date(now.getTime() + waitTimeInMinutes * 60000);
+    }
 
     return res.status(200).json({
       success: true,
       eligible,
+      waitTimeInMinutes,
+      cooldownEndsAt,
       message: eligible
         ? "User is eligible to retake the test."
         : "User is currently on cooldown. Retest not allowed yet.",
@@ -337,6 +355,7 @@ export const checkRetestEligibility = async (req, res) => {
     });
   }
 };
+
   
   // ✅ Get all tests for a user (test history)
 export const getUserTestHistory = async (req, res) => {
