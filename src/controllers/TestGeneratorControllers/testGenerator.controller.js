@@ -225,10 +225,13 @@ export const evaluateTest = async (req, res) => {
     test.status = "evaluated";
 
     // ✅ Set cooling period based on score
-    let cooling_period = 14; // default 2 weeks
+    let cooling_period = 0; // default 0 weeks
     if (percentage >= 80 && percentage < 90) {
       cooling_period = 7;
+    } else if(percentage < 80) {
+      cooling_period = 14;
     }
+    
     test.cooling_period = cooling_period;
 
 
