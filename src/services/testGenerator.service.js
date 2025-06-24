@@ -78,8 +78,14 @@ export const TestGeneratorService = {
  * @param {string} topicId - The ID of the topic being tested
  * @returns {Promise<{ canRetake: boolean, cooldownEndsAt: Date | null }>}
  */
-export const checkRetestEligibility = async (userId, topicId) => {
+export const checkRetestEligibility = async (req, res) => {
   try {
+    const { userId, topicId } = req.query;
+
+    if (!userId || !topicId) {
+      return res.status(400).json({ success: false, message: "Missing userId or topicId" });
+    }
+
     const latestTest = await Test.findOne({
       where: {
         user_id: userId,
@@ -90,24 +96,41 @@ export const checkRetestEligibility = async (userId, topicId) => {
     });
 
     if (!latestTest) {
-      return { canRetake: true, cooldownEndsAt: null };
+      return res.status(200).json({
+        success: true,
+        eligible: true,
+        message: "User has not taken a test yet.",
+        cooldownEndsAt: null,
+        cooling_period_days: null,
+        remainingTimeMinutes: 0,
+      });
     }
 
+    const coolingDays = latestTest.cooling_period || 14;
+    const cooldownMs = coolingDays * 24 * 60 * 60 * 1000;
     const lastAttempt = new Date(latestTest.updated_at);
-    const cooldownPeriod = 5 * 24 * 60 * 60 * 1000; // 5 days
-    const cooldownEndsAt = new Date(lastAttempt.getTime() + cooldownPeriod);
+    const cooldownEndsAt = new Date(lastAttempt.getTime() + cooldownMs);
     const now = new Date();
 
     const canRetake = now >= cooldownEndsAt;
+    const remainingTimeMinutes = canRetake ? 0 : Math.round((cooldownEndsAt - now) / 60000);
 
-    if (latestTest.result && latestTest.result.score >= 80) {
-      latestTest.eligible_for_bridger = true;
-      await latestTest.save();
-    }
-
-    return { canRetake, cooldownEndsAt };
+    return res.status(200).json({
+      success: true,
+      eligible: canRetake,
+      message: canRetake
+        ? "User is eligible to retake the test."
+        : "User is currently in cooling period.",
+      cooldownEndsAt,
+      cooling_period_days: coolingDays,
+      remainingTimeMinutes,
+    });
   } catch (error) {
-    console.error("❌ Error checking retest eligibility:", error);
-    throw new Error("Internal error checking test eligibility.");
+    console.error("❌ Error checking test eligibility:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check eligibility",
+      error: error.message,
+    });
   }
 };

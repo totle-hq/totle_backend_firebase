@@ -224,6 +224,14 @@ export const evaluateTest = async (req, res) => {
 
     test.status = "evaluated";
 
+    // ✅ Set cooling period based on score
+    let cooling_period = 14; // default 2 weeks
+    if (percentage >= 80 && percentage < 90) {
+      cooling_period = 7;
+    }
+    test.cooling_period = cooling_period;
+
+
     // ✅ If passed, add this topic to qualified topics
     if (passed) {
       test.eligible_for_bridger = true;
@@ -267,7 +275,10 @@ export const evaluateTest = async (req, res) => {
       success: true,
       message: "Test evaluated",
       evaluation: test.evaluation_result,
+      cooling_period_days: test.cooling_period, 
+      eligible_for_bridger: test.eligible_for_bridger,
     });
+
   } catch (error) {
     console.error("❌ Error evaluating test:", error);
     return res.status(500).json({ success: false, message: "Failed to evaluate test", error: error.message });
@@ -298,31 +309,31 @@ export const checkUserTestEligibility = async (req, res) => {
 
 // ✅ Check if user is eligible to retake a test for a topic (based on cooldown)
 export const checkRetestEligibility = async (req, res) => {
-    try {
-      const { userId, topicId } = req.query;
-  
-      if (!userId || !topicId) {
-        return res.status(400).json({ success: false, message: "Missing userId or topicId" });
-      }
-  
-      const eligible = await isUserEligibleForRetest(userId, topicId);
-  
-      return res.status(200).json({
-        success: true,
-        eligible,
-        message: eligible
-          ? "User is eligible to retake the test."
-          : "User is currently on cooldown. Retest not allowed yet.",
-      });
-    } catch (error) {
-      console.error("❌ Error checking test eligibility:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to check eligibility",
-        error: error.message,
-      });
+  try {
+    const { userId, topicId } = req.query;
+
+    if (!userId || !topicId) {
+      return res.status(400).json({ success: false, message: "Missing userId or topicId" });
     }
-  };
+
+    const eligible = await isUserEligibleForRetest(userId, topicId);
+
+    return res.status(200).json({
+      success: true,
+      eligible,
+      message: eligible
+        ? "User is eligible to retake the test."
+        : "User is currently on cooldown. Retest not allowed yet.",
+    });
+  } catch (error) {
+    console.error("❌ Error checking test eligibility:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check eligibility",
+      error: error.message,
+    });
+  }
+};
   
   // ✅ Get all tests for a user (test history)
 export const getUserTestHistory = async (req, res) => {

@@ -86,6 +86,12 @@ export const Test = sequelize1.define("Test", {
     allowNull: true,
     comment: "Fraud detection flags (suspicious patterns, duplicate attempts, etc.)",
   },
+  cooling_period: {
+    type: DataTypes.INTEGER, // store number of days
+    allowNull: true,
+    comment: "Cooling period in days based on test performance",
+  },
+
   submitted_at: {
     type: DataTypes.DATE,
     allowNull: true,

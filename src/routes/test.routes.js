@@ -18,7 +18,7 @@ router.post("/generate", generateTest);
 router.post("/start/:test_id", startTest);
 router.post("/submit/:test_id", submitTest);
 router.post("/evaluate/:test_id", evaluateTest);
-router.get("/retest-eligibility/:userId/:topicId", checkRetestEligibility);
+router.get("/checkRetestEligibility", checkRetestEligibility); // ✅ Matches frontend query params
 router.get("/user/:userId", getUserTestHistory); // ✅ Add this line
 router.get("/qualified-topics", getQualifiedTopics);
 router.get("/stats", getTeachStats);
