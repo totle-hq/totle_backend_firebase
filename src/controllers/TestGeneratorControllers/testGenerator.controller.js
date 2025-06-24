@@ -332,10 +332,11 @@ export const checkRetestEligibility = async (req, res) => {
       return res.status(200).json({
         success: true,
         eligible,
+        waitTime,
         message: eligible
           ? "User is eligible to retake the test."
       
-          : `User is currently on cooldown. Retest not allowed yet. try in ${waitTime.hours}h :${waitTime.minutes}m : ${waitTime.seconds}s`,
+          : `User is currently on cooldown. Retest not allowed yet. try in ${waitTime.days}d: ${waitTime.hours}h :${waitTime.minutes}m : ${waitTime.seconds}s`,
       });
     } catch (error) {
       console.error("❌ Error checking test eligibility:", error);

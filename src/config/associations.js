@@ -65,6 +65,11 @@ const defineRelationships = () => {
   Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
   Category.hasMany(Education, { foreignKey: 'parent_id' });
 
+  // Define the realtionship between session and user
+Session.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
+User.hasMany(Session, { foreignKey: "teacher_id", as: "sessions" });
+Session.belongsTo(User, { foreignKey: "student_id", as: "student" });
+User.hasMany(Session, { foreignKey: "student_id", as: "learningSessions" });
 // Define the relationship between the topic and teachertopic stat
 Teachertopicstats.belongsTo(Topic, { foreignKey: 'topicId' });
 Topic.hasMany(Teachertopicstats, { foreignKey: 'topicId' });

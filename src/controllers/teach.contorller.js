@@ -33,56 +33,33 @@ return res.status(400).json({message:"no session found ", success:false})
 export const offerSlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
-    const { topic_id, scheduled_at, completed_at } = req.body;
+    const { topic_id, date, timeRange } = req.body;
 
-    // 1. Validation
-    if (!topic_id || !scheduled_at || !completed_at) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!topic_id || !date || !timeRange) {
+      return res.status(400).json({ error: "Missing topicId, date or time range" });
     }
 
-    // 2. Optional: validate topic exists
-    const topic = await Topic.findByPk(topic_id);
-    if (!topic) {
-      return res.status(404).json({ error: "Invalid topicId" });
-    }
+    const [startTimeStr, endTimeStr] = timeRange.split(" - ");
 
-    // 3. Optional: check for time conflicts
-    const conflict = await Session.findOne({
-      where: {
-        teacher_id,
-        [Op.or]: [
-          {
-            completed_at: { [Op.between]: [scheduled_at, completed_at] }
-          },
-          {
-            completed_at: { [Op.between]: [scheduled_at, completed_at] }
-          }
-        ]
-      }
-    });
+    const scheduled_at = new Date(`${date} ${startTimeStr}`);
+    const completed_at = new Date(`${date} ${endTimeStr}`);
 
-    if (conflict) {
-      return res.status(409).json({ error: "Time slot conflicts with another session" });
-    }
-
-    // 4. Create the session with status = available
     const session = await Session.create({
       teacher_id,
       topic_id,
       scheduled_at,
       completed_at,
-      status: "available" // offered but not booked
+      status: "available"
     });
 
-    return res.status(201).json({
-      message: "Slot offered successfully",
-      session
-    });
+    return res.status(201).json({ message: "Slot offered successfully", session });
+
   } catch (err) {
     console.error("Offer slot error:", err);
-    res.status(500).json({ error: "SERVER_ERROR" });
+    return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
 export const bookSlot = async (req, res) => {
   try {
     const student_id = req.user.id;
@@ -201,6 +178,46 @@ export const reportSession = async (req, res) => {
   } catch (err) {
     console.error("Report session error:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+export const getAvailableSlotsForLearners = async (req, res) => {
+  try {
+    const { topicId } = req.query;
+    const now = new Date();
+
+    const whereClause = {
+      status: "available",
+      scheduled_at: { [Op.gt]: now }
+    };
+
+    if (topicId) {
+      whereClause.topic_id = topicId;
+    }
+
+    const slots = await Session.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: "teacher",
+          attributes: ["id", "firstName", "lastName"]
+        },
+        {
+          model: Topic,
+          attributes: ["id", "name"]
+        }
+      ],
+      order: [["scheduled_at", "ASC"]]
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: slots
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching available slots:", err);
+    return res.status(500).json({ success: false, message: "SERVER_ERROR" });
   }
 };
 
