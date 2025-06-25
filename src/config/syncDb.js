@@ -112,10 +112,6 @@ export async function syncDatabase() {
     defineRelationships.default();
 
     console.log("✅ Model associations defined!");
-
-    // Step 5: Disable foreign key constraints to avoid order issues
-    //await sequelize1.query("SET session_replication_role = 'replica';");
-    // await sequelize2.query("SET session_replication_role = 'replica';");
     try {
       console.log("🔄 Syncing tables in defaultdb...");
       await sequelize1.sync({ alter: true }); // Only creates tables, does NOT create a DB
@@ -141,7 +137,6 @@ export async function syncDatabase() {
     await Test.sync({ alter: true }); // ✅ Ensure test table is synced
     const { CatalogueNode } = await import("../Models/CatalogModels/catalogueNode.model.js");
     await CatalogueNode.sync({ alter: true });
-    await CatalogueNode.sync({ alter: true });
 
     // Now sync all remaining tables
     await sequelize1.sync({ alter: true });
@@ -149,11 +144,6 @@ export async function syncDatabase() {
 
     console.log("✅ All tables synced successfully!");
 
-    // Step 7: Re-enable foreign key constraints after syncing
-    // await sequelize1.query("SET session_replication_role = 'origin';");
-    // await sequelize2.query("SET session_replication_role = 'origin';");
-
-    // console.log("✅ Foreign key constraints re-enabled!");
 
     // Check if admin schema exists and run super admin function
     // await createSuperAdminIfNeeded(sequelize1);

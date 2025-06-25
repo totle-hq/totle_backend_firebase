@@ -1,20 +1,15 @@
-// src/models/catalogueNode.model.js
+// src/models/CatalogModels/catalogueNode.model.js
 
 import { DataTypes } from "sequelize";
-import {sequelize1} from "../../config/sequelize.js";
+import { sequelize1 } from "../../config/sequelize.js";
 
-/**
- * CatalogueNode Model
- * Represents a node in the hierarchical catalogue (domain, subject, topic)
- */
 export const CatalogueNode = sequelize1.define(
-    "CatalogueNode",
+  "CatalogueNode",
   {
     node_id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
-      allowNull: false,
     },
     parent_id: {
       type: DataTypes.UUID,
@@ -26,60 +21,55 @@ export const CatalogueNode = sequelize1.define(
     },
     description: {
       type: DataTypes.STRING(512),
-      allowNull: false,
+      allowNull: true,
     },
-    is_domain: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
+    node_level: {
+      type: DataTypes.STRING(64),
+      allowNull: true, // e.g., 'level_1', 'level_2' or 'root', 'branch', etc.
     },
     is_topic: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
-    prices: {
-      type: DataTypes.JSONB,
-      allowNull: false,
-      defaultValue: {
-        beginner: 0,
-        intermediate: 0,
-        advanced: 0,
-        expert: 0,
-      },
+    is_domain: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    status: {
+      type: DataTypes.ENUM("active", "draft", "archived"),
+      defaultValue: "draft",
     },
     session_count: {
       type: DataTypes.INTEGER,
-      allowNull: false,
       defaultValue: 1,
     },
-    average_session_count: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-    },
-    status: {
-      type: DataTypes.ENUM("draft", "active", "archived"),
-      allowNull: false,
-      defaultValue: "draft",
-    //   comment: "Current publishing status",
-    },
-    topic_params: {
+    prices: {
       type: DataTypes.JSONB,
-      allowNull: true,
-      // comment: "Optional topic metadata (only for is_topic)",
+      defaultValue: {},
     },
-    prerequisites: {
+    metadata: {
       type: DataTypes.JSONB,
-      allowNull: false,
-      defaultValue: [],
-      // comment: "Array of prerequisite objects (type + value)",
+      defaultValue: {},
     },
   },
   {
-    schema:"catalog",
+    schema: "catalog",
     tableName: "catalogue_nodes",
-    timestamps: true, // adds createdAt and updatedAt
+    timestamps: true,
     underscored: true,
-    // paranoid: false,
-    indexes: [{ fields: ["parent_id"] }],
-    // comment: "Catalogue node table representing hierarchical structure",
+    indexes: [
+      { fields: ["parent_id"] },
+      { fields: ["node_level"] },
+    ],
   }
 );
+
+// Self-referencing parent-child
+CatalogueNode.hasMany(CatalogueNode, {
+  foreignKey: "parent_id",
+  as: "children",
+});
+CatalogueNode.belongsTo(CatalogueNode, {
+  foreignKey: "parent_id",
+  as: "parent",
+});

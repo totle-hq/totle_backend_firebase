@@ -1,34 +1,47 @@
-// File: src/routes/catalogue.routes.js
+// src/routes/catalogue.routes.js
 
 import express from "express";
-import { bridgerTestNodes, createNode, deleteNode, getNodes, updateNode } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
+import {
+  createNode,
+  getNodeById,
+  getChildren,
+  updateNode,
+  deleteNode,
+  getBreadcrumb,
+  addSubtopics,
+  getSubtopics,
+  updateSubtopic,
+  deleteSubtopic,
+} from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
 
-router.get("/", getNodes); // <-- Add this at the top
+// 🟢 Create a node
+router.post("/nodes", createNode);
+
+// 🟢 Get node by ID
+router.get("/nodes/:id", getNodeById);
+
+// 🟢 Get children of a node (parent_id query param)
+router.get("/nodes", getChildren);
+
+// 🟡 Update node
+router.put("/nodes/:id", updateNode);
+
+// 🔴 Delete node (only if no children)
+router.delete("/nodes/:id", deleteNode);
+
+// 🧭 Breadcrumb path to a node
+router.get("/breadcrumbs/:id", getBreadcrumb);
+
+router.post("/nodes/:id/subtopics", addSubtopics);
+
+router.get("/nodes/:id/subtopics", getSubtopics);
+
+router.put("/nodes/:id/subtopics/:subtopic_id", updateSubtopic);
+
+router.delete("/nodes/:id/subtopics/:subtopic_id", deleteSubtopic);
 
 
-// Create a new catalogue node
-router.post("/", createNode);
-
-// Get a node by its ID
-// router.get("/:id", getCatalogueNodeById);
-
-// Update a node by ID
-router.put("/:id", updateNode);
-
-// Delete a node by ID
-router.delete("/:id", deleteNode);
-
-// Get all nodes by type and optional parentId (e.g., /api/catalogue/subject?parentId=xyz)
-// router.get("/type/:type", listCatalogueNodesByTypeAndParent);
-
-// Batch update prices at domain level
-// router.post("/:domain_id/update-domain-prices", updateDomainPrices);
-
-// Batch update prices at subject level
-// router.post("/:subject_id/update-subject-prices", updateSubjectPrices);
-
-router.get("/", bridgerTestNodes); // <-- Add this at the top
 
 export default router;
