@@ -42,6 +42,7 @@ export const createNode = async (req, res) => {
     await cacheDel(`catalogue:children:${node.parent_id}*`);
     return res.status(201).json(node);
   } catch (err) {
+    console.error("Error creating node:", err, err.message);
     return res.status(400).json({ error: err.message });
   }
 };
@@ -119,7 +120,6 @@ export const getBreadcrumb = async (req, res) => {
   try {
     const trail = [];
     let current = await CatalogueNode.findByPk(req.params.id);
-
     while (current) {
       trail.unshift(current);
       if (!current.parent_id) break;
