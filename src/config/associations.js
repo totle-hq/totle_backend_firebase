@@ -19,6 +19,7 @@ import { Subtopic } from "../Models/CatalogModels/SubTopic.Model.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
+import { TeachResource } from "../Models/TeachResourceModel.js";
 
 
 const defineRelationships = () => {
@@ -78,6 +79,16 @@ Topic.hasMany(Teachertopicstats, { foreignKey: 'topicId' });
 Session.belongsTo(Topic, { foreignKey: 'topic_id' });
 Topic.hasMany(Session, { foreignKey: 'topic_id' });
 
+// TeachResource → Topic
+TeachResource.belongsTo(Topic, { foreignKey: "topic_id" });
+Topic.hasMany(TeachResource, { foreignKey: "topic_id" });
+// TeachResource → User
+// TeacherTopicStats → belongs to a User (teacher)
+Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
+User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
+
+TeachResource.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
+User.hasMany(TeachResource, { foreignKey: 'teacher_id', as: 'resources' });
 // session → flags
 Session.hasMany(ModerationFlag, { foreignKey: "session_id" });
 ModerationFlag.belongsTo(Session, { foreignKey: "session_id" });

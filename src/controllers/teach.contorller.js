@@ -5,6 +5,8 @@ import { Topic } from "../Models/CatalogModels/TopicModel.js";
 import { User } from "../Models/UserModels/UserModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
+import cloudinary from "../config/cloudinary.js";
+import { TeachResource } from "../Models/TeachResourceModel.js";
 export const getupcommingsessions=async (req,res) => {
       
     try
@@ -59,7 +61,125 @@ export const offerSlot = async (req, res) => {
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+export const uploadResource = async (req, res) => {
+  try {
+    const { title, topic_id } = req.body;
+    const teacher_id = req.user.id;
 
+    // ✅ Check if file is attached
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No file uploaded" });
+    }
+    
+const teacherexist=await Teachertopicstats.findOne({teacherId:teacher_id});
+if(!teacherexist){
+  return res.status(404).json({success:false,message:"you are not a teacher you cant upload it "})
+}
+    // ✅ Validate required fields
+    if (!title || !topic_id) {
+      return res.status(400).json({ success: false, message: "Missing title or topic_id" });
+    }
+const mimetype = req.file.mimetype;
+    let type;
+    if (mimetype.startsWith("image")) type = "image";
+    else if (mimetype.startsWith("video")) type = "video";
+    else if (mimetype === "application/pdf") type = "pdf";
+    else type = "other";
+    // ✅ Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      resource_type: type,
+      folder: "teach-resources",
+    });
+    console.log(result);
+const public_id=result.public_id;
+    // ✅ Auto-determine type
+    
+
+    // ✅ Save to DB
+    const resource = await TeachResource.create({
+      teacher_id,
+      topic_id,
+      title,
+      type,
+      url: result.secure_url,
+      public_id
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Resource uploaded successfully",
+      data: resource,
+    });
+
+  } catch (err) {
+    console.error("Upload error:", err);
+    res.status(500).json({ success: false, message: "SERVER_ERROR" });
+  }
+};
+
+
+// controllers/resource.controller.js
+
+
+export const getResources = async (req, res) => {
+  try {
+    const resources = await TeachResource.findAll({
+      include: [
+        {
+          model: User,
+          as: "teacher",
+          attributes: ["id", "firstName", "lastName", "email"]
+        }
+      ],
+      order: [["createdAt", "DESC"]]
+    });
+
+    res.status(200).json({ success: true, resources });
+  } catch (err) {
+    console.error("❌ Error fetching resources:", err);
+    res.status(500).json({ success: false, message: "SERVER_ERROR" });
+  }
+};
+
+export const deleteResource = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const teacherId = req.user.id;
+
+    const resource = await TeachResource.findByPk(id);
+
+    if (!resource) {
+      return res.status(404).json({ success: false, message: "Resource not found" });
+    }
+
+    // Make sure only owner can delete
+    if (resource.teacher_id !== teacherId) {
+      return res.status(403).json({ success: false, message: "Unauthorized" });
+    }
+
+    // Delete from Cloudinary
+    const publicId = resource.public_id
+   const result = await cloudinary.uploader.destroy(publicId, {
+  resource_type: resource.type, // or "video", "raw" depending on file type
+});
+
+console.log(result);
+if (result.result === "ok") {
+  console.log("✅ File deleted successfully from Cloudinary");
+} else if (result.result === "not found") {
+  console.log("⚠️ File was already missing from Cloudinary");
+} else {
+  console.log("❌ Failed to delete file:", result);
+}
+    // Delete from DB
+    await resource.destroy();
+
+    return res.status(200).json({ success: true, message: "Resource deleted" });
+  } catch (err) {
+    console.error("❌ Delete resource error:", err);
+    res.status(500).json({ success: false, message: "SERVER_ERROR" });
+  }
+};
 export const bookSlot = async (req, res) => {
   try {
     const student_id = req.user.id;
@@ -247,7 +367,9 @@ export const validateSessionTime = async (req, res) => {
     return res.status(500).json({ joinAllowed: false, reason: 'Internal server error' });
   }
 };
-
+export const uploadResources=async (req,res) => {
+  
+}
 export const submitSessionSummary = async (req, res) => {
   try {
     const teacher_id = req.user.id;

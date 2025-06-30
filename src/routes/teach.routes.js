@@ -1,6 +1,7 @@
 import express from "express";
-import { addTeacherTopicStat, bookSlot, cancelSlot, getAvailableSlotsForLearners, getFeedbackSummary, getMyProgression, getMyTopics, getSessionSummary, getupcommingsessions, joinSession, offerSlot, reportSession, submitFeedback, submitSessionSummary, validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
+import { addTeacherTopicStat, bookSlot, cancelSlot, deleteResource, getAvailableSlotsForLearners, getFeedbackSummary, getMyProgression, getMyTopics, getResources, getSessionSummary, getupcommingsessions, joinSession, offerSlot, reportSession, submitFeedback, submitSessionSummary, uploadResource, validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
+import { upload } from "../middlewares/multerMiddleware.js";
 
 const router=express.Router();
 router.post("/offer-slot",authMiddleware,offerSlot);
@@ -19,6 +20,9 @@ router.get("/available-slots",authMiddleware,getAvailableSlotsForLearners);
  router.get("/feedback/teacher/summary",authMiddleware,getFeedbackSummary);
  router.get("/session/:id/join",authMiddleware,joinSession);
  router.post("/report-session",authMiddleware,reportSession);
+ router.post("/upload",authMiddleware,upload.single("file"),uploadResource);
+ router.delete("/resource/:id",authMiddleware,deleteResource);
+ router.get("/resources",authMiddleware,getResources);
  //Todo: Only for the development purpose
   router.post("/topic",authMiddleware,addTeacherTopicStat);
 export default router;
