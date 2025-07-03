@@ -1,14 +1,14 @@
 import passport from "passport";
 import { hashPassword, comparePassword } from "../../utils/hashUtils.js";
-import {  verifyOtp } from "../../utils/otpService.js";
-import { sendOtp,sendWelcomeEmail } from "../../utils/otpService.js"; // ✅ Utility for OTP sending
+import { verifyOtp } from "../../utils/otpService.js";
+import { sendOtp, sendWelcomeEmail } from "../../utils/otpService.js"; // ✅ Utility for OTP sending
 // import { userDb } from "../config/prismaClient.js";
 // import admin from 'firebase-admin';
 import jwt from "jsonwebtoken";
 import { generateToken } from "../../generateToken.js";
-import multer from 'multer';
+import multer from "multer";
 import fs from "fs"; // ✅ Import file system to read the image
-import {User} from "../../Models/UserModels/UserModel.js";
+import { User } from "../../Models/UserModels/UserModel.js";
 import { BetaUsers } from "../../Models/UserModels/BetaUsersModel.js";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
@@ -18,7 +18,7 @@ import { OTP } from "../../Models/UserModels/OtpModel.js";
 import { Language } from "../../Models/LanguageModel.js";
 import { MarketplaceSuggestion } from "../../Models/SurveyModels/MarketplaceModel.js";
 import { UserMetrics } from "../../Models/UserModels/UserMetricsModel.js";
-
+import { UAParser } from "ua-parser-js";
 
 dotenv.config();
 
@@ -53,7 +53,11 @@ dotenv.config();
 const googleAuth = (req, res, next) => {
   const isNewUser = req.query.isNew === "true";
   const prompt = isNewUser ? "consent select_account" : "select_account";
-  passport.authenticate("google", { scope: ["profile", "email"], prompt })(req, res, next);
+  passport.authenticate("google", { scope: ["profile", "email"], prompt })(
+    req,
+    res,
+    next
+  );
 };
 
 const googleCallback = (req, res, next) => {
@@ -78,29 +82,34 @@ const logout = async (req, res) => {
   try {
     const token = req.header("Authorization")?.replace("Bearer ", "");
     if (!token) {
-      return res.status(401).json({ error: true, message: "Unauthorized: No token provided" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: No token provided" });
     }
-    const decoded =await verifyToken(token);
+    const decoded = await verifyToken(token);
     // console.log("Decoded in Logout:", decoded); // ✅ Debugging
 
     if (!decoded) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token" });
     }
     const userId = decoded.id; // ✅ Ensure `id` is an integer
     if (!userId) {
-      return res.status(400).json({ error: true, message: "Invalid token: Missing user ID" });
+      return res
+        .status(400)
+        .json({ error: true, message: "Invalid token: Missing user ID" });
     }
     // ✅ Update `isLoggedIn` using `id`
-    await User.update({ isLoggedIn: false },
-      {where: { id: userId }});
+    await User.update({ isLoggedIn: false }, { where: { id: userId } });
     return res.status(200).json({ error: false, message: "Logout successful" });
   } catch (error) {
     console.error("Error during logout: ", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
-
-
 
 const verifyToken = async (token) => {
   try {
@@ -111,8 +120,7 @@ const verifyToken = async (token) => {
     console.error("Error verifying token:", error);
     return null;
   }
-}
-
+};
 
 export const signupUserAndSendOtp = async (req, res) => {
   const { email } = req.body;
@@ -126,125 +134,196 @@ export const signupUserAndSendOtp = async (req, res) => {
 
   try {
     console.log("Checking if user exists...");
-    const existingUser = await User.findOne({  where: { email } });
+    const existingUser = await User.findOne({ where: { email } });
     const existingBetaUser = await BetaUsers.findOne({ where: { email } });
 
     if (existingUser || existingBetaUser) {
-      return res.status(403).json({ error: true, message: "User with this email already exists"  });
+      return res
+        .status(403)
+        .json({ error: true, message: "User with this email already exists" });
     }
 
     console.log("Sending OTP...");
     const otpResponse = await sendOtp(email);
 
     if (otpResponse.error) {
-      return res.status(400).json({ error: true, message: otpResponse.message });
+      return res
+        .status(400)
+        .json({ error: true, message: otpResponse.message });
     }
 
     return res.status(200).json({ error: false, message: otpResponse.message });
   } catch (error) {
     console.error("🔥 ERROR during signup: ", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error", details: error.message });
+    return res
+      .status(500)
+      .json({
+        error: true,
+        message: "Internal Server Error",
+        details: error.message,
+      });
   }
 };
 
-
 export const otpVerification = async (req, res) => {
-    const { email, password, firstName } = req.body;
-    console.log(req.body);
-    let otp = parseInt(req.body.otp, 10);
-    if (isNaN(otp)) {
-      return { error: true, message: "Invalid OTP format." };
-    }
-  
-    if (!firstName) {
-      return res.status(400).json({ error: true, message: "Firstname is required" });
-    }
-    if ((!email) || !otp) {
-      return res.status(400).json({ error: true, message: "Email and OTP are required" });
-    }
-  
-    try {
-      const result = await verifyOtp(email, otp);
-      if (result.error) {
-        return res.status(400).json({ error: true, message: result.message });
-      }
+  const { email, password, firstName } = req.body;
+  console.log(req.body);
+  let otp = parseInt(req.body.otp, 10);
+  if (isNaN(otp)) {
+    return { error: true, message: "Invalid OTP format." };
+  }
 
-      if (email && !password) {
-        return res.status(400).json({ error: true, message: "Password is required for email signup" });
-      }
-  
-      const hashedPassword = password ? await hashPassword(password) : null;
-  
-      // Save the verified user to the database
-      const [user, created] = await User.upsert({
+  if (!firstName) {
+    return res
+      .status(400)
+      .json({ error: true, message: "Firstname is required" });
+  }
+  if (!email || !otp) {
+    return res
+      .status(400)
+      .json({ error: true, message: "Email and OTP are required" });
+  }
+
+  try {
+    const result = await verifyOtp(email, otp);
+    if (result.error) {
+      return res.status(400).json({ error: true, message: result.message });
+    }
+
+    if (email && !password) {
+      return res
+        .status(400)
+        .json({
+          error: true,
+          message: "Password is required for email signup",
+        });
+    }
+
+    const hashedPassword = password ? await hashPassword(password) : null;
+
+    // Save the verified user to the database
+    const [user, created] = await User.upsert(
+      {
         email: email || null,
         mobile: null,
-        password: email ? hashedPassword : null,  // ✅ Store password if email-based signup
+        password: email ? hashedPassword : null, // ✅ Store password if email-based signup
         isVerified: true,
-        firstName: firstName || "", 
+        firstName: firstName || "",
         status: "active",
         updatedAt: new Date(),
-      }, { returning: true });
-      console.log("Saving UserMetrics for user:", user?.id);
-      await UserMetrics.create({ userId: user.id });
-      let betaFlag=false;
-      const betaUserCount = await BetaUsers.count();
+      },
+      { returning: true }
+    );
+    console.log("Saving UserMetrics for user:", user?.id);
+    await UserMetrics.create({ userId: user.id });
+    let betaFlag = false;
+    const betaUserCount = await BetaUsers.count();
 
-      if (betaUserCount < 1001) {
-        betaFlag = true;
-        try {
-          await BetaUsers.create({ email, firstName });
-          console.log("✅ Successfully inserted into BetaUsers");
-        } catch (err) {
-          console.error("❌ Error inserting into BetaUsers:", err);
-        }
-        
-      } else {
-        betaFlag = false;
+    if (betaUserCount < 1001) {
+      betaFlag = true;
+      try {
+        await BetaUsers.create({ email, firstName });
+        console.log("✅ Successfully inserted into BetaUsers");
+      } catch (err) {
+        console.error("❌ Error inserting into BetaUsers:", err);
       }
-
-      await OTP.update(
-        { isVerified: true },
-        { where: { email: email, otp: otp } }
-      );
-      if (email) {
-        await sendWelcomeEmail(email, firstName);
-      }
-  
-      return res.status(200).json({ error: false, message: "OTP verified successfully ✅", betaFlag: betaFlag });
-    } catch (error) {
-      console.error("Error during OTP verification:", error);
-      return res.status(500).json({ error: true, message: "Internal server error." });
+    } else {
+      betaFlag = false;
     }
+
+    await OTP.update(
+      { isVerified: true },
+      { where: { email: email, otp: otp } }
+    );
+    if (email) {
+      await sendWelcomeEmail(email, firstName);
+    }
+
+    return res
+      .status(200)
+      .json({
+        error: false,
+        message: "OTP verified successfully ✅",
+        betaFlag: betaFlag,
+      });
+  } catch (error) {
+    console.error("Error during OTP verification:", error);
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal server error." });
+  }
 };
-  
 
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email) return res.status(400).json({ error: true, message: "Please enter your email" });
-  if (!password) return res.status(400).json({ error: true, message: "Please enter your password" });
+  if (!email)
+    return res
+      .status(400)
+      .json({ error: true, message: "Please enter your email" });
+  if (!password)
+    return res
+      .status(400)
+      .json({ error: true, message: "Please enter your password" });
 
   try {
     const user = await User.findOne({ where: { email } });
     const betaUser = await BetaUsers.findOne({ where: { email } });
     // console.log("User Found:", user);
-    
+
     if (!user && !betaUser) {
-      return res.status(400).json({ error: true, message: "User doesn't exist, please register" });
+      return res
+        .status(400)
+        .json({ error: true, message: "User doesn't exist, please register" });
     }
-    
-    let userToken={id: user.id, email: user.email, userName: user.firstName};
+
+    let userToken = {
+      id: user.id,
+      email: user.email,
+      userName: user.firstName,
+    };
     const match = await comparePassword(password, user.password);
     if (!match) {
       return res.status(401).json({ error: true, message: "Invalid Password" });
     }
 
-    await User.update( { isLoggedIn: true },{where: {id: user.id}});
+    await User.update({ isLoggedIn: true }, { where: { id: user.id } });
+    //  ip during login
 
-    const tokenResponse =await generateToken(userToken);
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0] ||
+      req.connection?.remoteAddress ||
+      req.socket?.remoteAddress ||
+      null;
+    // await User.update(
+    //     { ipAddress: ip },
+    //     { where: { id: user.id } }  // ✅ Add this line
+    //     );
+
+    //  os, browsertype,
+
+    const parser = new UAParser(req.headers["user-agent"]);
+    const browser = `${parser.getBrowser().name} ${parser.getBrowser().version}`;
+    const os = `${parser.getOS().name} ${parser.getOS().version}`;
+
+    console.log("✅ Login Metadata:", { ip, browser, os });
+
+    // ✅ Update user login metadata
+    await User.update(
+      {
+        isLoggedIn: true,
+        ipAddress: ip,
+        browser,
+        os,
+      },
+      { where: { id: user.id } }
+    );
+
+    const tokenResponse = await generateToken(userToken);
     if (tokenResponse.error) {
-      return res.status(500).json({ error: true, message: "Failed to generate token" });
+      return res
+        .status(500)
+        .json({ error: true, message: "Failed to generate token" });
     }
 
     return res.status(200).json({
@@ -258,87 +337,103 @@ export const loginUser = async (req, res) => {
         email: user.email,
         // preferredLanguage,
         // knownLanguages,
+        // ipAddress: user.ip
       },
-      hasSeenWelcomeScreen: false
+      hasSeenWelcomeScreen: false,
     });
   } catch (error) {
     console.error("Error during login: ", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
 
 export const resetUser = async (req, res) => {
-    const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: true, message: "Email is required" });
-    }
-    try {
-      const otpRecord = await User.findOne({ where: { email } });
-  
-      if (otpRecord) {
-        const timeRemaining = Math.round((otpRecord.expiry - new Date()) / 1000);
-        const minutes = Math.floor(timeRemaining / 60);
-        const seconds = timeRemaining % 60;
-  
-        if (new Date() < otpRecord.expiry) {
-          return res.status(200).json({
-            error: false,
-            message: `Your OTP is still valid for ${minutes}m ${seconds}s.`,
-          });
-        }
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: true, message: "Email is required" });
+  }
+  try {
+    const otpRecord = await User.findOne({ where: { email } });
+
+    if (otpRecord) {
+      const timeRemaining = Math.round((otpRecord.expiry - new Date()) / 1000);
+      const minutes = Math.floor(timeRemaining / 60);
+      const seconds = timeRemaining % 60;
+
+      if (new Date() < otpRecord.expiry) {
+        return res.status(200).json({
+          error: false,
+          message: `Your OTP is still valid for ${minutes}m ${seconds}s.`,
+        });
       }
-  
-      const result = await sendOtp(email);
-      if (result.error) {
-        return res.status(500).json({ error: true, message: result.message });
-      }
-  
-      return res.status(200).json({ error: false, message: result.message });
-    } catch (error) {
-      console.error("Error during OTP reset: ", error);
-      return res.status(500).json({ error: true, message: "Internal Server Error" });
     }
+
+    const result = await sendOtp(email);
+    if (result.error) {
+      return res.status(500).json({ error: true, message: result.message });
+    }
+
+    return res.status(200).json({ error: false, message: result.message });
+  } catch (error) {
+    console.error("Error during OTP reset: ", error);
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
+  }
 };
 
 export const verifyResetOtp = async (req, res) => {
-    const { email, otp } = req.body;
-    if (!email || !otp) {
-      return res.status(400).json({ error: true, message: "Email and OTP are required" });
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res
+      .status(400)
+      .json({ error: true, message: "Email and OTP are required" });
+  }
+  try {
+    const result = await verifyOtp(email, otp);
+    if (result.error) {
+      return res.status(400).json({ error: true, message: result.message });
     }
-    try {
-      const result = await verifyOtp(email, otp);
-      if (result.error) {
-        return res.status(400).json({ error: true, message: result.message });
-      }
-      
-      return res.status(200).json({ error: false, message: "OTP verified successfully" });
 
-    } catch (error) {
-      console.error("Error verifying OTP:", error);
-      return res.status(500).json({ error: true, message: "Internal Server Error" });
-    }
-}
+    return res
+      .status(200)
+      .json({ error: false, message: "OTP verified successfully" });
+  } catch (error) {
+    console.error("Error verifying OTP:", error);
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
+  }
+};
 
 export const resetPassword = async (req, res) => {
-    const { email, otp, newPassword } = req.body;
-    if (!email || !newPassword || !otp) {
-      return res.status(400).json({ error: true, message: "Email and new password are required" });
+  const { email, otp, newPassword } = req.body;
+  if (!email || !newPassword || !otp) {
+    return res
+      .status(400)
+      .json({ error: true, message: "Email and new password are required" });
+  }
+
+  try {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      return res.status(404).json({ error: true, message: "User not found" });
     }
-  
-    try {
-      const user = await User.findOne({ where: { email } });
-      if (!user) {
-        return res.status(404).json({ error: true, message: "User not found" });
-      }
-  
-      const hashedPassword = await hashPassword(newPassword);
-      await User.update({ password: hashedPassword }, {where: { email }});
-  
-      return res.status(200).json({ message: "Password has been reset successfully" });
-    } catch (error) {
-      console.error("Error resetting password:", error);
-      return res.status(500).json({ error: true, message: "Internal Server Error" });
-    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    await User.update({ password: hashedPassword }, { where: { email } });
+
+    return res
+      .status(200)
+      .json({ message: "Password has been reset successfully" });
+  } catch (error) {
+    console.error("Error resetting password:", error);
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
+  }
 };
 
 export const getUserProfile = async (req, res) => {
@@ -346,26 +441,46 @@ export const getUserProfile = async (req, res) => {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Missing token" });
     }
-    
+
     const token = authHeader.split(" ")[1];
     // console.log('tokenn', token)
     // console.log('token', process.env.JWT_SECRET)
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log('decoded', decoded.id)
+      console.log("decoded", decoded.id);
       const userId = decoded.id;
 
       if (!userId) {
-        return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+        return res
+          .status(401)
+          .json({ error: true, message: "Unauthorized: Invalid token" });
       }
 
       // Fetch user from the database
       const user = await User.findOne({
         where: { id: userId },
-        attributes: ['id', 'firstName', 'lastName', 'email', 'dob', 'gender', 'known_language_ids', 'preferred_language_id', 'educational_qualifications', 'status', 'currentOccupation', 'skills', 'years_of_experience', 'location', 'profilePictureUrl']
+        attributes: [
+          "id",
+          "firstName",
+          "lastName",
+          "email",
+          "dob",
+          "gender",
+          "known_language_ids",
+          "preferred_language_id",
+          "educational_qualifications",
+          "status",
+          "currentOccupation",
+          "skills",
+          "years_of_experience",
+          "location",
+          "profilePictureUrl",
+        ],
       });
       // console.log('user', user)
 
@@ -373,23 +488,64 @@ export const getUserProfile = async (req, res) => {
         return res.status(404).json({ error: true, message: "User not found" });
       }
 
-      return res.status(200).json({ success: true, user, hasSeenWelcomeScreen: false });
+      return res
+        .status(200)
+        .json({ success: true, user, hasSeenWelcomeScreen: false });
     } catch (error) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token" });
     }
   } catch (error) {
     console.error("Error fetching user profile:", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
+  }
+};
+
+export const updateProfileMeta = async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+    const { profileTimezone, deviceType } = req.body;
+
+    const user = await User.findByPk(userId);
+
+    const updatePayload = {};
+
+    if (profileTimezone) {
+      updatePayload.profileTimezone = profileTimezone;
+    }
+
+    if (deviceType && !user.deviceType) {
+      updatePayload.deviceType = deviceType;
+    }
+
+    if (Object.keys(updatePayload).length > 0) {
+      await User.update(updatePayload, { where: { id: userId } });
+      console.log("✅ Updated fields:", updatePayload);
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error("❌ Error updating metadata:", error);
+    return res.status(500).json({ success: false });
   }
 };
 
 export const getBetaUserProfile = async (req, res) => {
   try {
-    console.log('beta user profile')
+    console.log("beta user profile");
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Missing token" });
     }
     // debugger
     const token = authHeader.split(" ")[1];
@@ -398,18 +554,20 @@ export const getBetaUserProfile = async (req, res) => {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      console.log('decoded', decoded.id)
-      console.log('profile decode', decoded)
+      console.log("decoded", decoded.id);
+      console.log("profile decode", decoded);
       const userEmail = decoded.email;
 
       if (!userEmail) {
-        return res.status(401).json({ error: true, message: "Unauthorized: Not a beta user" });
+        return res
+          .status(401)
+          .json({ error: true, message: "Unauthorized: Not a beta user" });
       }
 
       // Fetch user from the database
       const user = await BetaUsers.findOne({
         where: { email: decoded.email },
-        attributes: ['id'],
+        attributes: ["id"],
       });
       // console.log('user', user)
 
@@ -419,42 +577,51 @@ export const getBetaUserProfile = async (req, res) => {
 
       return res.status(200).json({ success: true, user });
     } catch (error) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token" });
     }
   } catch (error) {
     console.error("Error fetching user profile:", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
 
-export const getAllBetaUsers = async (req,res) => {
+export const getAllBetaUsers = async (req, res) => {
   try {
     const allUsers = await BetaUsers.findAll({
-      attributes: ["id", "firstName","profilePictureUrl"],
+      attributes: ["id", "firstName", "profilePictureUrl"],
       order: [["createdAt", "ASC"]],
     });
 
     res.status(200).json(allUsers);
   } catch (error) {
     console.error("Error fetching beta users:", error);
-    res.status(500).json({ success: false, message: "Failed to retrieve beta users." });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to retrieve beta users." });
   }
-  
-}
+};
 
 export const updateUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     // console.log("Received Auth Header:", authHeader);
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Missing token" });
     }
 
     const token = authHeader.split(" ")[1];
 
     // ✅ Validate JWT format
     if (!token || token.split(".").length !== 3) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Malformed token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Malformed token" });
     }
 
     let decoded;
@@ -463,12 +630,19 @@ export const updateUserProfile = async (req, res) => {
       // console.log('decoded update', decoded.id)
     } catch (jwtError) {
       console.error("❌ JWT Verification Error:", jwtError);
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid or expired token" });
+      return res
+        .status(401)
+        .json({
+          error: true,
+          message: "Unauthorized: Invalid or expired token",
+        });
     }
 
     const userId = decoded.id || decoded.userId || decoded.uid;
     if (!userId) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token payload" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token payload" });
     }
 
     const updateData = {};
@@ -489,7 +663,7 @@ export const updateUserProfile = async (req, res) => {
       years_of_experience,
       location,
     } = req.body;
-    console.log('file',req.file)
+    console.log("file", req.file);
     const user = await User.findOne({ where: { id: userId } });
     if (req.file && req.file.buffer) {
       if (user.profile_picture_id) {
@@ -501,15 +675,17 @@ export const updateUserProfile = async (req, res) => {
         }
       }
       const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
-    
+
       const result = await cloudinary.uploader.upload(base64Image, {
         folder: "totle-profile-pics",
       });
       // console.log("Image upload result:", result);
-    
+
       updateData.profilePictureUrl = result.secure_url; // or profilePictureUrl
       updateData.profile_picture_id = result.public_id;
-      const betaUser = await BetaUsers.findOne({ where: { email: user.email } });
+      const betaUser = await BetaUsers.findOne({
+        where: { email: user.email },
+      });
       if (betaUser) {
         await BetaUsers.update(
           { profilePictureUrl: result.secure_url },
@@ -522,43 +698,162 @@ export const updateUserProfile = async (req, res) => {
     if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
-    if (dob) updateData.dob = dob ? new Date(dob).toISOString() : null;
-    if (gender) updateData.gender = gender;
-    if (qualification) updateData.educational_qualifications = Array.isArray(qualification) ? qualification : [qualification];
+    // if (dob) updateData.dob = dob ? new Date(dob).toISOString() : null;
+    // if (gender) updateData.gender = gender;
+    // if (dob && !user.dob) {
+    //   updateData.dob = new Date(dob).toISOString();
+    // } else if (dob && user.dob) {
+    //   return res.status(400).json({ error: true, message: "Date of Birth cannot be changed once set." });
+    // }
+    if (dob) {
+      const existingDob = user.dob
+        ? new Date(user.dob).toISOString().split("T")[0]
+        : null;
+      const newDob = new Date(dob).toISOString().split("T")[0];
+
+      if (!existingDob) {
+        updateData.dob = newDob;
+      } else if (existingDob !== newDob) {
+        return res
+          .status(400)
+          .json({
+            error: true,
+            message: "Date of Birth cannot be changed once set.",
+          });
+      }
+    }
+
+    // if (gender && !user.gender) {
+    //   updateData.gender = gender;
+    // } else if (gender && user.gender) {
+    //   return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
+    // }
+    // if (gender) {
+    //   if (!user.gender) {
+    //     updateData.gender = gender;
+    //   } else if (user.gender !== gender) {
+    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
+    //   }
+    // }
+    // if (gender) {
+    //   if (!user.gender) {
+    //     updateData.gender = gender;
+    //   } else if (user.gender !== gender) {
+    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
+    //   }
+    // }
+
+    // if (gender) {
+    //   const validGenders = ["Male", "Female", "Other"];
+    //   if (!validGenders.includes(gender)) {
+    //     return res.status(400).json({ error: true, message: "Invalid gender value." });
+    //   }
+
+    //   if (user.gender === null || user.gender === "" || user.gender === "null") {
+    //     updateData.gender = gender;
+    //   } else if (user.gender !== gender) {
+    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
+    //   }
+    // }
+    try {
+      if (gender) {
+        const validGenders = ["Male", "Female", "Other"];
+        if (!validGenders.includes(gender)) {
+          return res
+            .status(400)
+            .json({ error: true, message: "Invalid gender value." });
+        }
+
+        if (
+          user.gender === null ||
+          user.gender === "" ||
+          user.gender === "null"
+        ) {
+          updateData.gender = gender.toLowerCase();
+        } else if (user.gender !== gender) {
+          return res
+            .status(400)
+            .json({
+              error: true,
+              message: "Gender cannot be changed once set.",
+            });
+        }
+      }
+    } catch (error) {
+      console.error("🔥 Gender update error:", error);
+      return res.status(500).json({
+        error: true,
+        message: "Something went wrong while updating gender.",
+      });
+    }
+
+    console.log("Existing gender:", user.gender);
+    console.log("Incoming gender:", gender);
+    console.log("Gender set in updateData:", updateData.gender);
+
+    if (qualification)
+      updateData.educational_qualifications = Array.isArray(qualification)
+        ? qualification
+        : [qualification];
     if (status) updateData.status = status;
     if (currentOccupation) updateData.currentOccupation = currentOccupation;
     if (skills) updateData.skills = Array.isArray(skills) ? skills : [];
     if (location) updateData.location = location;
 
     // ✅ Fix years_of_experience to always be an integer
-    updateData.years_of_experience = !isNaN(parseInt(years_of_experience, 10)) ? parseInt(years_of_experience, 10) : 0;
+    updateData.years_of_experience = !isNaN(parseInt(years_of_experience, 10))
+      ? parseInt(years_of_experience, 10)
+      : 0;
 
     // ✅ Ensure language IDs are valid numbers
     if (preferredLanguage) {
       preferredLanguage = Number(preferredLanguage);
       if (!isNaN(preferredLanguage) && preferredLanguage > 0) {
-        const prefLanguage = await Language.findOne({ where: { language_id: preferredLanguage } });
-        if (prefLanguage) updateData.preferred_language_id = prefLanguage.language_id;
+        const prefLanguage = await Language.findOne({
+          where: { language_id: preferredLanguage },
+        });
+        if (prefLanguage)
+          updateData.preferred_language_id = prefLanguage.language_id;
       }
     }
 
     if (knownLanguages) {
-      knownLanguages = Array.isArray(knownLanguages) ? knownLanguages.map((lang) => Number(lang)).filter((lang) => !isNaN(lang)) : [];
+      knownLanguages = Array.isArray(knownLanguages)
+        ? knownLanguages
+            .map((lang) => Number(lang))
+            .filter((lang) => !isNaN(lang))
+        : [];
       if (knownLanguages.length > 0) {
-        const knownLanguagesList = await Language.findAll({ where: { language_id: knownLanguages }, attributes: ["language_id"] });
-        if (knownLanguagesList.length > 0) updateData.known_language_ids = knownLanguagesList.map((lang) => lang.language_id);
+        const knownLanguagesList = await Language.findAll({
+          where: { language_id: knownLanguages },
+          attributes: ["language_id"],
+        });
+        if (knownLanguagesList.length > 0)
+          updateData.known_language_ids = knownLanguagesList.map(
+            (lang) => lang.language_id
+          );
       }
     }
 
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ error: true, message: "No valid fields provided for update." });
+      return res
+        .status(400)
+        .json({ error: true, message: "No valid fields provided for update." });
     }
 
     // ✅ Update user in the database
-    const [updatedRowCount] = await User.update(updateData, { where: { id: userId }, returning: true });
+    const [updatedRowCount] = await User.update(updateData, {
+      where: { id: userId },
+      returning: true,
+    });
 
     if (updatedRowCount === 0) {
-      return res.status(404).json({ error: true, message: "User not found or no changes detected." });
+      return res
+        .status(404)
+        .json({
+          error: true,
+          message: "User not found or no changes detected.",
+        });
     }
 
     const updatedUser = await User.findOne({ where: { id: userId } });
@@ -570,38 +865,46 @@ export const updateUserProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error updating user profile:", error);
-    return res.status(500).json({ error: true, message: "Internal server error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal server error" });
   }
 };
 
 export const getUserCount = async (req, res) => {
   try {
     const count = await BetaUsers.count(); // Count all users in the database
-    console.log('counting',count)
+    console.log("counting", count);
     return res.status(200).json({ count });
   } catch (error) {
     console.error("Error fetching user count:", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
 
-export const getWelcome = async(req, res)=> res.status(200).json({hasSeenWelcomeScreen: false});
+export const getWelcome = async (req, res) =>
+  res.status(200).json({ hasSeenWelcomeScreen: false });
 
-export const updateWelcome = async(req, res)=>{
-  let {hasSeenWelcomeScreen} = req.body;
-  if(hasSeenWelcomeScreen){
-    return res.status(200).json({ success: true, message: "Welcome status updated" });
-  }else{
+export const updateWelcome = async (req, res) => {
+  let { hasSeenWelcomeScreen } = req.body;
+  if (hasSeenWelcomeScreen) {
+    return res
+      .status(200)
+      .json({ success: true, message: "Welcome status updated" });
+  } else {
     return res.status(500).json({ error: "Internal Server Error" });
   }
-}
-
+};
 
 export const sendContactEmail = async (req, res) => {
   const { name, email, message } = req.body;
 
   if (!name || !email || !message) {
-    return res.status(400).json({ error: true, message: "All fields are required!" });
+    return res
+      .status(400)
+      .json({ error: true, message: "All fields are required!" });
   }
 
   try {
@@ -632,13 +935,22 @@ export const sendContactEmail = async (req, res) => {
     await transporter.sendMail(mailOptions);
 
     console.log("✅ Contact Email Sent!");
-    return res.status(200).json({ error: false, message: "Message sent successfully! We will get back to you soon." });
+    return res
+      .status(200)
+      .json({
+        error: false,
+        message: "Message sent successfully! We will get back to you soon.",
+      });
   } catch (error) {
     console.error("❌ Error sending contact email:", error);
-    return res.status(500).json({ error: true, message: "Error sending email. Please try again later." });
+    return res
+      .status(500)
+      .json({
+        error: true,
+        message: "Error sending email. Please try again later.",
+      });
   }
 };
-
 
 export const submitSuggestion = async (req, res) => {
   try {
@@ -646,7 +958,9 @@ export const submitSuggestion = async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1]; // Format: "Bearer <token>"
 
     if (!token) {
-      return res.status(401).json({ error: true, message: "Unauthorized: No token provided." });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: No token provided." });
     }
 
     // ✅ Verify Token and Extract User Data
@@ -655,12 +969,16 @@ export const submitSuggestion = async (req, res) => {
     const userName = decoded.userName || decoded.name; // Adjust based on token payload
 
     if (!userId || !userName) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token data." });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token data." });
     }
 
-    const { interest,teach, learn } = req.body;
+    const { interest, teach, learn } = req.body;
     if (!interest) {
-      return res.status(400).json({ error: true, message: "Interest is required." });
+      return res
+        .status(400)
+        .json({ error: true, message: "Interest is required." });
     }
 
     // ✅ Save Suggestion to Database
@@ -687,7 +1005,9 @@ export const getUpdates = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Missing token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Missing token" });
     }
 
     const token = authHeader.split(" ")[1];
@@ -696,17 +1016,23 @@ export const getUpdates = async (req, res) => {
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (err) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token" });
     }
 
     const userId = decoded.id || decoded.userId || decoded.uid;
     if (!userId) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token payload" });
+      return res
+        .status(401)
+        .json({ error: true, message: "Unauthorized: Invalid token payload" });
     }
 
     const user = await User.findOne({ where: { id: userId } });
     if (!user || !user.email) {
-      return res.status(404).json({ error: true, message: "User not found or email missing" });
+      return res
+        .status(404)
+        .json({ error: true, message: "User not found or email missing" });
     }
 
     const { teach, learn, endeavour } = req.body;
@@ -730,16 +1056,23 @@ export const getUpdates = async (req, res) => {
     if (!created) {
       // Already exists — update interests only if they were newly selected
       await existing.update(updateFields);
-      return res.status(200).json({ error: false, message: "✅ Preferences updated successfully!" });
+      return res
+        .status(200)
+        .json({
+          error: false,
+          message: "✅ Preferences updated successfully!",
+        });
     }
 
-    return res.status(200).json({ error: false, message: "✅ Thanks! You'll get updates soon." });
+    return res
+      .status(200)
+      .json({ error: false, message: "✅ Thanks! You'll get updates soon." });
   } catch (error) {
     console.error("❌ Error in getUpdates:", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
-
-
 
 export { googleAuth, googleCallback, logout, verifyToken };
