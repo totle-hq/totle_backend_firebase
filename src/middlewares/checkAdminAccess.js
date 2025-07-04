@@ -1,6 +1,6 @@
 // middleware/checkAdminAccess.js
-import { UserDepartment } from '../models/UserDepartment.js';
-import { Admin } from '../models/AdminModel.js';
+import { UserDepartment } from '../Models/UserModels/UserDepartment.js';
+import { Admin } from '../Models/UserModels/AdminModel.js';
 
 /**
  * Middleware to check if the current admin is allowed to perform an action.

@@ -1,7 +1,7 @@
 // utils/get-admin-context.js
-import { Admin } from '../models/admin.model.js';
-import { UserDepartment } from '../models/user-department.model.js';
-import { Department } from '../models/department.model.js';
+import { Admin } from '../Models/UserModels/AdminModel.js';
+import { UserDepartment } from '../Models/UserModels/UserDepartment.js';
+import { Department } from '../Models/UserModels/Department.js';
 
 export async function getAdminContext(adminId) {
   const admin = await Admin.findByPk(adminId);
