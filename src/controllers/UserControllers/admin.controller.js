@@ -10,6 +10,34 @@ import {Responses} from '../../Models/SurveyModels/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+
+import multer from "multer";
+import path, { format } from "path";
+import fs from "fs";
+import { MarketplaceSuggestion } from '../../Models/SurveyModels/MarketplaceModel.js';
+import { type } from 'os';
+import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
+import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
+import { getAdminContext } from '../../utils/getAdminContext.js';
+
+// Ensure uploads folder exists
+const uploadDir = "src/uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "src/uploads/"); // Store in backend
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename
+  },
+});
+
+const upload = multer({ storage });
+
 // import ExcelJS from "exceljs";
 
 dotenv.config();
@@ -233,32 +261,6 @@ export const deleteBlog = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
-
-
-import multer from "multer";
-import path, { format } from "path";
-import fs from "fs";
-import { MarketplaceSuggestion } from '../../Models/SurveyModels/MarketplaceModel.js';
-import { type } from 'os';
-import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
-
-// Ensure uploads folder exists
-const uploadDir = "src/uploads";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Multer Storage Configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "src/uploads/"); // Store in backend
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename
-  },
-});
-
-const upload = multer({ storage });
 
 // ✅ Upload Route (Backend API)
 export const uploadImage= (req, res) => {
@@ -1007,3 +1009,142 @@ export const deleteUserByAdmin = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 }
+
+export const assignRoleAndTags = async (req, res) => {
+  const { targetUserId, departmentCode, roleType, tags = [] } = req.body;
+  const adminId = req.user?.id;
+
+  try {
+    const department = await Department.findOne({ where: { code: departmentCode } });
+    if (!department) return res.status(404).json({ message: 'Department not found' });
+
+    const [record, created] = await UserDepartment.upsert({
+      userId: targetUserId,
+      departmentId: department.id,
+      roleType,
+      tags,
+    }, {
+      returning: true,
+      conflictFields: ['userId', 'departmentId'],
+    });
+
+    await RoleAssignmentLog.create({
+      userId: targetUserId,
+      departmentId: department.id,
+      assignedBy: adminId,
+      roleType,
+      tags,
+      actionType: created ? 'assigned' : 'modified',
+      timestamp: new Date(),
+    });
+
+    await AdminActionLog.create({
+      performedBy: adminId,
+      actionType: 'assign_role',
+      objectType: 'user',
+      objectId: targetUserId,
+      notes: `Assigned ${roleType} role in ${departmentCode} with tags: ${tags.join(', ')}`,
+    });
+
+    return res.status(200).json({ message: 'Role and tags assigned successfully' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Error assigning role/tags' });
+  }
+};
+
+export const revokeRoleAndTags = async (req, res) => {
+  const { targetUserId, departmentCode } = req.body;
+  const adminId = req.user?.id;
+
+  try {
+    const department = await Department.findOne({ where: { code: departmentCode } });
+    if (!department) return res.status(404).json({ message: 'Department not found' });
+
+    const deleted = await UserDepartment.destroy({
+      where: { userId: targetUserId, departmentId: department.id },
+    });
+
+    if (deleted) {
+      await RoleAssignmentLog.create({
+        userId: targetUserId,
+        departmentId: department.id,
+        assignedBy: adminId,
+        roleType: null,
+        tags: [],
+        actionType: 'revoked',
+        timestamp: new Date(),
+      });
+
+      await AdminActionLog.create({
+        performedBy: adminId,
+        actionType: 'revoke_role',
+        objectType: 'user',
+        objectId: targetUserId,
+        notes: `Revoked all roles/tags in ${departmentCode}`,
+      });
+    }
+
+    return res.status(200).json({ message: 'Role and tags revoked' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Error revoking role/tags' });
+  }
+};
+
+
+export const getAdminActionLogs = async (req, res) => {
+  const { departmentId, objectType, actionType, limit = 50 } = req.query;
+  const requesterId = req.user.id;
+
+  try {
+    const isFounderOrSuperadmin = await Admin.findOne({
+      where: {
+        id: requesterId,
+        global_role: { [Op.in]: ['Founder', 'Superadmin'] },
+      },
+    });
+
+    const whereClause = {};
+    if (objectType) whereClause.objectType = objectType;
+    if (actionType) whereClause.actionType = actionType;
+
+    // Department filter (if needed for scoped logs)
+    if (departmentId && !isFounderOrSuperadmin) {
+      whereClause.notes = { [Op.iLike]: `%${departmentId}%` }; // crude filter unless you normalize department
+    }
+
+    const logs = await AdminActionLog.findAll({
+      where: whereClause,
+      order: [['timestamp', 'DESC']],
+      limit: parseInt(limit),
+    });
+
+    return res.status(200).json({ logs });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Failed to retrieve admin logs' });
+  }
+};
+
+
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const adminId = req.user?.id;
+    const context = await getAdminContext(adminId);
+
+    return res.status(200).json({
+      id: context.adminId,
+      name: context.name,
+      email: context.email,
+      globalRole: context.globalRole,
+      isFounder: context.isFounder,
+      isSuperadmin: context.isSuperadmin,
+      departments: context.departments, // Array of { id, name, code, roleType, tags }
+    });
+  } catch (err) {
+    console.error('Error fetching admin profile:', err);
+    return res.status(500).json({ message: 'Failed to load profile' });
+  }
+};

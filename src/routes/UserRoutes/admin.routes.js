@@ -1,12 +1,13 @@
 import express from "express";
 
-import { adminLogin, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, loginNucleusAdmin, submitSurveyResponse, surveyResponsesAsJsonOrCsv, unblockUserByAdmin, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
+import { adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, loginNucleusAdmin, revokeRoleAndTags, submitSurveyResponse, surveyResponsesAsJsonOrCsv, unblockUserByAdmin, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
 import multer from "multer";
 import path from "path";
 import { create } from "domain";
+import { checkAdminAccess } from "../../middlewares/checkAdminAccess.js";
 
 // Setup Multer storage
 const storage = multer.diskStorage({
@@ -22,7 +23,7 @@ const upload = multer({ storage });
 
 
 router.post("/login", adminLogin);
-router.get("/auth/me", getAdminDetails);
+router.get("/auth/me", getAdminProfile);
 router.post("/blogs", authenticateAdmin, createBlog);       // Create a blog (Admin only)
 router.get("/blogs", getAllBlogs);                          // Get all blogs (Public)
 router.get("/blogs/:id", getBlogById);                      // Get a single blog (Public)
@@ -47,6 +48,24 @@ router.delete("/surveys/:surveyId", deleteSurveyById);
 router.post("/block/:userId", blockUserByAdmin);
 router.post("/unblock/:userId", unblockUserByAdmin);
 router.delete("/deleteUser/:userId", deleteUserByAdmin);
+
+router.post(
+  '/assign',
+  checkAdminAccess({ requiredRole: 'manage' }), // Founder/Superadmin override handled inside
+  assignRoleAndTags
+);
+
+router.post(
+  '/revoke',
+  checkAdminAccess({ requiredRole: 'manage' }),
+  revokeRoleAndTags
+);
+
+router.get(
+  '/',
+  checkAdminAccess({ requiredRole: 'manage' }),
+  getAdminActionLogs
+);
 
 // Nucleus admin
 router.post("/nucleus",loginNucleusAdmin)

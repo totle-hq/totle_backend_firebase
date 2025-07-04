@@ -9,6 +9,9 @@ import { UserMetrics } from "../Models/UserModels/UserMetricsModel.js";
 import { Question } from "../Models/SurveyModels/QuestionModel.js";
 import { OTP } from "../Models/UserModels/OtpModel.js";
 import { MarketplaceSuggestion } from "../Models/SurveyModels/MarketplaceModel.js";
+import { UserDepartment } from "../Models/UserModels/UserDepartment.js";
+import { RoleAssignmentLog } from "../Models/UserModels/RoleAssignmentLog.js";
+import { Department } from "../Models/UserModels/Department.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -57,6 +60,16 @@ const defineRelationships = () => {
 
   // ✅ Admin Access to Marketplace Suggestions (Indirect Access)
   Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
+
+  Admin.hasMany(UserDepartment, { foreignKey: 'userId' });
+  UserDepartment.belongsTo(Admin, { foreignKey: 'userId' });
+
+  Admin.hasMany(RoleAssignmentLog, { foreignKey: 'userId' });
+  RoleAssignmentLog.belongsTo(Admin, { foreignKey: 'userId' });
+
+  Department.hasMany(UserDepartment, { foreignKey: 'departmentId' });
+  UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
+
 
   // Define the relationship between College and Category
   // Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });

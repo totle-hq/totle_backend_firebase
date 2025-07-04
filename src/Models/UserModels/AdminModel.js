@@ -26,14 +26,6 @@ const Admin = sequelize1.define('Admin', {
     type: DataTypes.ENUM('Founder', 'Superadmin', 'None'),
     defaultValue: 'None',
   },
-  departments: {
-    type: DataTypes.ARRAY(DataTypes.STRING), // e.g., ['Helix', 'Tenjiku']
-    defaultValue: [],
-  },
-  roles: {
-    type: DataTypes.JSONB, // e.g., { Helix: 'Project Manager', Tenjiku: 'Contributor' }
-    defaultValue: {},
-  },
   tags: {
     type: DataTypes.ARRAY(DataTypes.STRING), // e.g., ['Test Gatekeeper', 'Moderator']
     defaultValue: [],
@@ -47,6 +39,10 @@ const Admin = sequelize1.define('Admin', {
     allowNull: true,
   },
   intern_expiry: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  lastLogin: {
     type: DataTypes.DATE,
     allowNull: true,
   },
