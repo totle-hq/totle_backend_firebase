@@ -3,6 +3,7 @@ import { getUserCount, getUserProfile, loginUser, logout, otpVerification, reset
 import upload from "../../middlewares/multer.js";
 import { loginLimiter, signupLimiter } from "../../middlewares/rateLimiter.js";
 import authMiddleware from "../../middlewares/authMiddleware.js";
+import { SupportQueryForUser } from "../../controllers/SupportQueriesController/SupportQueryController.js";
 
 const router = express.Router();
 /**
@@ -46,5 +47,6 @@ router.get("/allBetaUsers",getAllBetaUsers);
 router.put("/user/updateUser", upload.single("dp"), updateUserProfile)
 // router.get("/:userId", getUserById);
 // router.put("/:userId", updateUser);
+router.post("/query",SupportQueryForUser);
 
 export default router;
