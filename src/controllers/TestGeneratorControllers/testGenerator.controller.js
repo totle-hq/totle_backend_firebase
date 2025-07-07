@@ -272,7 +272,7 @@ export const evaluateTest = async (req, res) => {
       sessionCount: 0,
       rating: 0
     });
-    console.log("✅ Created Teachertopicstats for teacher");
+    console.log("Created Teachertopicstats for teacher");
   }
 
       if (topic) {
@@ -280,7 +280,7 @@ export const evaluateTest = async (req, res) => {
         const currentTeacherNames = Array.isArray(topic.qualified_teacher_names) ? topic.qualified_teacher_names : [];
     
         if (!currentTeacherIds.includes(test.user_id)) {
-          console.log("✅ Adding user to qualified_teachers:", test.user_id);
+          console.log(" Adding user to qualified_teachers:", test.user_id);
 
           const user = await User.findByPk(test.user_id, { attributes: ["id", "firstName"] });
           if (user) {
