@@ -1,5 +1,5 @@
 import express from "express";
-import { addTeacherTopicStat, bookSlot, cancelSlot, deleteResource, getAvailableSlotsForLearners, getFeedbackSummary, getMyProgression, getMyTopics, getResources, getSessionSummary, getupcommingsessions, joinSession, offerSlot, reportSession, submitFeedback, submitSessionSummary, uploadResource, validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
+import { addTeacherTopicStat, bookSlot, cancelSlot, deleteResource, getAvailableSlotsForLearners, getFeedbackSummary, getMyProgression, getMySlots, getMyTopics, getResources, getSessionSummary, getupcommingsessions, joinSession, offerSlot, reportSession, submitFeedback, submitSessionSummary, uploadResource, validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 import { upload } from "../middlewares/multerMiddleware.js";
 
@@ -15,6 +15,7 @@ router.delete("/cancel-slot",authMiddleware,cancelSlot);
 router.get("/available-slots",authMiddleware,getAvailableSlotsForLearners);
  router.post("/validate-eligibility",authMiddleware,validateEligibility);
  router.get("/my-progression",authMiddleware,getMyProgression);
+ router.get("my-slot",authMiddleware,getMySlots);
 //  router.get("/payment-status",authMiddleware,getPaymentEligibilityStatus);
  router.post("/session/:id/feedback",authMiddleware,submitFeedback);
  router.get("/feedback/teacher/summary",authMiddleware,getFeedbackSummary);

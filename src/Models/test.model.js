@@ -33,6 +33,12 @@ export const Test = sequelize1.define("Test", {
     allowNull: false,
     comment: "Unique identifier for the test",
   },
+  question_timings: {
+  type: DataTypes.JSONB,
+  allowNull: true,
+  comment: "Start and end timestamps for each question",
+}
+,
   user_id: {
     type: DataTypes.UUID,
     allowNull: false,

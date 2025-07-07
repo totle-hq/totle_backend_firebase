@@ -9,7 +9,13 @@ import {
   getTestById,
   getQualifiedTopics,
   getTeachStats,
-  getAnswersByTopic, // ✅ import it here
+  getAnswersByTopic,
+  logCheatEvent,
+  getCheatLogs,
+ 
+  getTestReview,
+  reportTest,
+  // ✅ import it here
 } from "../controllers/TestGeneratorControllers/testGenerator.controller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 const router = express.Router();
@@ -22,6 +28,10 @@ router.get("/retest-eligibility/:id",authMiddleware, checkRetestEligibility);
 router.get("/user/:userId", getUserTestHistory); // ✅ Add this line
 router.get("/qualified-topics", getQualifiedTopics);
 router.get("/stats", getTeachStats);
+router.post("/cheat", authMiddleware, logCheatEvent);
+router.get("/detail",authMiddleware,getCheatLogs);
+router.post("/report",authMiddleware,reportTest);
+router.get('/:testId/review', authMiddleware, getTestReview);
 //Todo: Only for the development purpose
 router.get("/answers/:topicId", getAnswersByTopic);
 router.get("/:testId", getTestById);

@@ -20,6 +20,9 @@ import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { TeachResource } from "../Models/TeachResourceModel.js";
+import { TabSwitchEvent } from "../Models/TabswitchModel.js";
+import { Test } from "../Models/test.model.js";
+import { TestFlag } from "../Models/TestflagModel.js";
 
 
 const defineRelationships = () => {
@@ -65,6 +68,15 @@ const defineRelationships = () => {
   // Define the relationship between College and Category
   Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
   Category.hasMany(Education, { foreignKey: 'parent_id' });
+// tabswitch to test
+TabSwitchEvent.belongsTo(User, { foreignKey: "user_id" });
+TabSwitchEvent.belongsTo(Test, { foreignKey: "test_id" });
+
+TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
+
+TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
+Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
 
   // Define the realtionship between session and user
 Session.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
@@ -72,8 +84,8 @@ User.hasMany(Session, { foreignKey: "teacher_id", as: "sessions" });
 Session.belongsTo(User, { foreignKey: "student_id", as: "student" });
 User.hasMany(Session, { foreignKey: "student_id", as: "learningSessions" });
 // Define the relationship between the topic and teachertopic stat
-Teachertopicstats.belongsTo(Topic, { foreignKey: 'topicId' });
-Topic.hasMany(Teachertopicstats, { foreignKey: 'topicId' });
+Teachertopicstats.belongsTo(Topic, { foreignKey: 'topicId', as:"Topic" });
+Topic.hasMany(Teachertopicstats, { foreignKey: 'topicId',as:"Topic" });
 
 // Define the relationship between the topic and session
 Session.belongsTo(Topic, { foreignKey: 'topic_id' });
@@ -86,6 +98,7 @@ Topic.hasMany(TeachResource, { foreignKey: "topic_id" });
 // TeacherTopicStats → belongs to a User (teacher)
 Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
 User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
+
 
 TeachResource.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
 User.hasMany(TeachResource, { foreignKey: 'teacher_id', as: 'resources' });

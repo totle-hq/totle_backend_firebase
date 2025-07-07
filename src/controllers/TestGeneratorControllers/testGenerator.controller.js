@@ -14,55 +14,75 @@ import { Session } from "../../Models/SessionModel.js";
 import { Review } from "../../Models/ReviewModel.js";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
+import { TabSwitchEvent } from "../../Models/TabswitchModel.js";
+import { TestFlag } from "../../Models/TestflagModel.js";
 
 
 /**
  * POST /api/tests/generate
  * Request Body: { userId: string, topicId: string }
  */
+
+
+
 export const generateTest = async (req, res) => {
   try {
     const { topicId } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
+
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
-    // 1. Fetch topic from catalogue
+
     const topic = await Topic.findByPk(topicId);
-    // console.log('topic', topic);
     if (!topic || !topic.is_topic) {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
 
-    // 2. Get user metrics
     const learnerProfile = await getUserLearningMetrics(userId);
-
-    // 3. Evaluate appropriate difficulty
     const difficulty = evaluateDifficulty(topic.topic_params, learnerProfile);
 
-    let questionsCount = 20;
-    // 4. Generate questions
-    const { questions, answers } = await generateQuestions({
-      learnerProfile,
-      topicParams: topic.topic_params,
-      topicName: topic.name,
-      topicId,
-      userId,
-      count: questionsCount,
-    });
-    console.log('questions');
-    console.log('questions', questions.length);
-    const time_limit_minutes = (questions.length * 1.5);
-    
-    let count = await Test.count()+1;
+    const seenTexts = new Set();
+    let finalQuestions = [];
+    let finalAnswers = [];
+    let attempts = 0;
 
-    // 5. (Optional) Save test to DB or cache
+    // Retry until we collect 20 unique questions
+    while (finalQuestions.length < 20 && attempts < 5) {
+      const { questions, answers } = await generateQuestions({
+        learnerProfile,
+        topicParams: topic.topic_params,
+        topicName: topic.name,
+        topicId,
+        userId,
+        count: 20,
+      });
+
+      for (const q of questions) {
+        if (!seenTexts.has(q.text) && finalQuestions.length < 20) {
+          seenTexts.add(q.text);
+          finalQuestions.push({ text: q.text, options: q.options });
+          const ans = answers.find(a => a.id === q.id);
+          finalAnswers.push({ correct_answer: ans?.correct_answer });
+        }
+      }
+
+      attempts++;
+    }
+
+    // Assign clean IDs 1–20
+    finalQuestions = finalQuestions.map((q, i) => ({ id: i + 1, ...q }));
+    finalAnswers = finalAnswers.map((a, i) => ({ id: i + 1, correct_answer: a.correct_answer }));
+
+    const time_limit_minutes = 30;
+    const count = await Test.count() + 1;
+
     const savedTest = await Test.create({
       sl_no: count,
       topic_name: topic.name,
-      user_id: userId,  
+      user_id: userId,
       topic_uuid: topicId,
       difficulty,
       topics: [{
@@ -72,8 +92,8 @@ export const generateTest = async (req, res) => {
         session_count: topic.session_count,
         prices: topic.prices,
       }],
-      questions, // contains id, text, options
-      answers,   // only if you're storing them (optional)
+      questions: finalQuestions,
+      answers: finalAnswers,
       test_settings: {
         difficulty,
         time_limit_minutes,
@@ -83,7 +103,6 @@ export const generateTest = async (req, res) => {
       status: "generated",
     });
 
-  
     return res.status(200).json({
       success: true,
       message: "Test generated successfully.",
@@ -92,15 +111,21 @@ export const generateTest = async (req, res) => {
         topicId,
         difficulty,
         time_limit_minutes,
-        questions,
+        questions: finalQuestions,
       },
     });
-    
+
   } catch (error) {
     console.error("❌ Error generating test:", error);
-    return res.status(500).json({ success: false, message: "Failed to generate test.", error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate test.",
+      error: error.message,
+    });
   }
 };
+
+
 
 // ✅ Start a Test
 export const startTest = async (req, res) => {
@@ -132,6 +157,7 @@ export const submitTest = async (req, res) => {
   try {
     const { test_id } = req.params;
     const submittedAnswers = req.body.answers || {};
+    const question_timings=req.body.timing||{}
     // Check if the test exists
     const test = await Test.findByPk(test_id);
     if (!test) {
@@ -148,6 +174,7 @@ export const submitTest = async (req, res) => {
     test.answers_submitted = submittedAnswers; // You must have this column in your model
     test.status = "submitted";
     test.submitted_at = new Date();
+    test.question_timings=question_timings;
 
     await test.save();
 
@@ -514,4 +541,164 @@ export const getAnswersByTopic = async (req, res) => {
     });
   }
 };
+// to post the cheat detail like:reload or switch the ta on the time of test
+export const logCheatEvent = async (req, res) => {
+  try {
+    const { test_id, type } = req.body;
+    const user_id = req.user.id;
+
+    if (!test_id || !type) {
+      return res.status(400).json({ success: false, message: "Missing test_id or event type" });
+    }
+
+    const event = await TabSwitchEvent.create({ test_id, user_id, type });
+
+    return res.status(201).json({ success: true, event });
+  } catch (err) {
+    console.error("❌ Error logging cheat event:", err);
+    res.status(500).json({ success: false, message: "SERVER_ERROR" });
+  }
+};
+//
+// to get test detail from tabswitchevent model
+export const getCheatLogs = async (req, res) => {
+  try {
+    const { test_id } = req.query;
+    const logs = await TabSwitchEvent.findAll({ where: { test_id } });
+
+    return res.status(200).json({ success: true, data: logs });
+  } catch (err) {
+    console.error("❌ Error fetching logs:", err);
+    res.status(500).json({ success: false });
+  }
+};
+
+export const reportQuestion = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { testId, questionId, reason } = req.body;
+
+    // Basic validation
+    if (!testId || !questionId || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: "testId, questionId, and reason are required.",
+      });
+    }
+
+    // Verify test belongs to user
+    const test = await Test.findOne({
+      where: { test_id: testId, user_id: userId },
+    });
+
+    if (!test) {
+      return res.status(403).json({
+        success: false,
+        message: "Test not found or access denied.",
+      });
+    }
+
+    // Check if question exists in the test
+    const questionExists = test.questions?.some(
+      (q) => q.id === questionId
+    );
+
+    if (!questionExists) {
+      return res.status(404).json({
+        success: false,
+        message: "Question not found in the test.",
+      });
+    }
+
+    // Save flag to DB
+    const flag = await TestFlag.create({
+      user_id: userId,
+      test_id: testId,
+      question_id: questionId,
+      reason,
+      status: "pending",
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Question flagged successfully.",
+      data: flag,
+    });
+  } catch (err) {
+    console.error("❌ Error reporting question:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+export const reportTest = async (req, res) => {
+  try {
+    const { testId, reason } = req.body;
+    const userId = req.user.id;
+
+    const test = await Test.findByPk(testId);
+    if (!test) return res.status(404).json({ success: false, message: "Test not found" });
+
+    const report = await TestFlag.create({
+      test_id: testId,
+      user_id: userId,
+      reason,
+    
+      status: "open",
+    });
+
+    return res.status(201).json({ success: true, message: "Test reported", data: report });
+  } catch (err) {
+    console.error("❌ Error reporting test:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getTestReview = async (req, res) => {
+  try {
+    const { testId } = req.params;
+
+    const test = await Test.findByPk(testId);
+
+    if (!test) {
+      return res.status(404).json({ success: false, message: "Test not found" });
+    }
+
+    if (test.status !== "evaluated") {
+      return res.status(400).json({ success: false, message: "Test has not been evaluated yet" });
+    }
+
+    const questions = test.questions || [];
+    const submittedAnswers = test.answers_submitted || {};
+    const correctAnswersArray = test.answers || [];
+
+    const correctAnswerMap = {};
+    for (const item of correctAnswersArray) {
+      correctAnswerMap[item.id] = item.correct_answer;
+    }
+
+    const reviewData = questions.map((q) => {
+      const submitted = submittedAnswers[q.id];
+      const correct = correctAnswerMap[q.id];
+
+      return {
+        question_id: q.id,
+        question_text: q.text,
+        selected_option: submitted || null,
+        correct_answer: correct || null,
+        is_correct: submitted === correct,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: reviewData,
+    });
+  } catch (err) {
+    console.error("❌ Error in test review:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 

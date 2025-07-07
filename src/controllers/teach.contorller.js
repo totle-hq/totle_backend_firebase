@@ -37,14 +37,33 @@ export const offerSlot = async (req, res) => {
     const teacher_id = req.user.id;
     const { topic_id, date, timeRange } = req.body;
 
-    if (!topic_id || !date || !timeRange) {
-      return res.status(400).json({ error: "Missing topicId, date or time range" });
+    if (!topic_id || !date || !timeRange || !timeRange.includes(" - ")) {
+      return res.status(400).json({ error: "Missing or invalid topicId, date or time range" });
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split(" - ");
 
-    const scheduled_at = new Date(`${date} ${startTimeStr}`);
-    const completed_at = new Date(`${date} ${endTimeStr}`);
+    const scheduled_at = new Date(`${date}T${startTimeStr}:00`);
+    const completed_at = new Date(`${date}T${endTimeStr}:00`);
+
+    // Optional: Prevent overlapping slots
+    const conflict = await Session.findOne({
+      where: {
+        teacher_id,
+        [Op.or]: [
+          {
+            scheduled_at: { [Op.between]: [scheduled_at, completed_at] },
+          },
+          {
+            completed_at: { [Op.between]: [scheduled_at, completed_at] },
+          }
+        ]
+      }
+    });
+
+    if (conflict) {
+      return res.status(409).json({ error: "You already have a slot overlapping this time." });
+    }
 
     const session = await Session.create({
       teacher_id,
@@ -61,6 +80,50 @@ export const offerSlot = async (req, res) => {
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
+// GET /api/teach/my-slots
+export const getMySlots = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    const sessions = await Session.findAll({
+      where: {
+        teacher_id: teacherId,
+        scheduled_at: { [Op.gt]: new Date() } // upcoming slots only
+      },
+      order: [['scheduled_at', 'ASC']]
+    });
+
+    const grouped = {};
+
+    for (const session of sessions) {
+      const dateKey = session.scheduled_at.toISOString().split('T')[0]; // yyyy-mm-dd
+
+      const startTime = new Date(session.scheduled_at).toLocaleTimeString("en-GB", {
+        hour: "2-digit", minute: "2-digit"
+      });
+
+      const endTime = new Date(session.completed_at).toLocaleTimeString("en-GB", {
+        hour: "2-digit", minute: "2-digit"
+      });
+
+      if (!grouped[dateKey]) grouped[dateKey] = [];
+
+      grouped[dateKey].push({
+        id: session.id,
+        start_time: startTime,
+        end_time: endTime,
+        status: session.status
+      });
+    }
+
+    return res.status(200).json({ success: true, data: grouped });
+  } catch (err) {
+    console.error("❌ Error fetching teacher slots:", err);
+    return res.status(500).json({ success: false, message: "SERVER_ERROR" });
+  }
+};
+
 export const uploadResource = async (req, res) => {
   try {
     const { title, topic_id } = req.body;
@@ -407,11 +470,20 @@ export const getMyTopics = async (req, res) => {
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
-      include: [{
-        model: Topic,
-        attributes: ['id', 'name']
-      }]
+      include: [
+        {
+          model: Topic,
+          as: "Topic",
+          attributes: ['id', 'name']
+        },
+        {
+          model: User,
+          as: "teacher",
+          attributes: ['id', 'location']
+        }
+      ]
     });
+    console.log(stats)
 
     const topics = stats.map(stat => ({
       topicId: stat.topicId,
@@ -547,7 +619,18 @@ export const getMyProgression = async (req, res) => {
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
-      include: [{ model: Topic, attributes: ['id', 'name'] }]
+ include: [
+        {
+          model: Topic,
+          as: "Topic",
+          attributes: ['id', 'name',"parent_id"]
+        },
+        {
+          model: User,
+          as: "teacher",
+          attributes: ['id', 'location']
+        }
+      ]
     });
 
     const result = stats.map(stat => {
@@ -556,7 +639,7 @@ export const getMyProgression = async (req, res) => {
       const topicName = stat.Topic?.name || "Unknown";
 
       const progression = tierProgression[tier];
-
+console.log(stats)
       if (!progression) {
         return {
           topicId,
