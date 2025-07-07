@@ -35,6 +35,10 @@ export const CatalogueNode = sequelize1.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    is_subject:{
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     status: {
       type: DataTypes.ENUM("active", "draft", "archived"),
       defaultValue: "draft",
