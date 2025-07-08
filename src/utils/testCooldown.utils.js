@@ -38,7 +38,7 @@ if(recentTest.result.passed===true){
   const lastSubmitted = new Date(recentTest.submitted_at);
 
   const cooldownDays = recentTest.cooling_period || 1;
-  const cooldownMinutes = cooldownDays * 24 * 60;
+  cooldownMinutes = cooldownDays * 24 * 60;
 
   const diffMs = now - lastSubmitted;
 
