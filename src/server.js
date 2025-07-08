@@ -33,6 +33,7 @@ import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 import http from "http";
 import { Server } from "socket.io";
 
+import teachRoutes from "./routes/teach.routes.js"
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -94,6 +95,8 @@ app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
+
+app.use("/api/teach",teachRoutes);
 
 
 

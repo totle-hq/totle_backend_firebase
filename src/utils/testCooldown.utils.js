@@ -11,10 +11,8 @@ import { Test } from "../Models/test.model.js";
  * @returns {Promise<{ eligible: boolean, waitTimeInMinutes?: number }>}
  */
 export const isUserEligibleForRetest = async (userId, topicId) => {
-  // Define cooldown period in minutes (e.g., 24 hours = 1440 minutes)
-  // const cooldownMinutes = 1440;
+  let cooldownMinutes=0  // 24 hours
 
-  // Find the most recent submitted or evaluated test for this user-topic
   const recentTest = await Test.findOne({
     where: {
       user_id: userId,
@@ -25,9 +23,17 @@ export const isUserEligibleForRetest = async (userId, topicId) => {
   });
 
   if (!recentTest || !recentTest.submitted_at) {
-    return { eligible: true }; // No past test = eligible
+    return { eligible: true };
   }
-
+if(recentTest.result.percentage>=80 && recentTest.result.passed===false){
+cooldownMinutes=1440 // 24hours
+}
+if(recentTest.result.percentage<80 && recentTest.result.passed===false){
+  cooldownMinutes=10800 // 1 week
+}
+if(recentTest.result.passed===true){
+  return { eligible:true};
+}
   const now = new Date();
   const lastSubmitted = new Date(recentTest.submitted_at);
 
@@ -35,15 +41,28 @@ export const isUserEligibleForRetest = async (userId, topicId) => {
   const cooldownMinutes = cooldownDays * 24 * 60;
 
   const diffMs = now - lastSubmitted;
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
 
-  if (diffMinutes >= cooldownMinutes) {
+  const cooldownMs = cooldownMinutes * 60 * 1000;
+  const remainingMs = cooldownMs - diffMs;
+
+  if (remainingMs <= 0) {
     return { eligible: true };
   }
-
-  const waitTimeInMinutes = cooldownMinutes - diffMinutes;
+ const totalSeconds = Math.floor(remainingMs / 1000);
+  const days = Math.floor(totalSeconds / (24 * 3600));
+  const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+console.log(hours,minutes,seconds);
   return {
     eligible: false,
-    waitTimeInMinutes,
+    waitTime: {
+      days,
+      hours,
+      minutes,
+      seconds,
+    },
+    waitTimeMinutes: Math.floor(remainingMs / (1000 * 60)), // optional raw minutes
   };
 };
+
