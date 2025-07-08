@@ -1,20 +1,19 @@
 import { SupportQueryMaster } from "../Models/SupportModels/SupportQueriesMaster.js";
 
-export const SupportQueriesMasterSeeder = async(req, res)=>{
+export const SupportQueriesMasterSeeder = async()=>{
     try{
         await SupportQueryMaster.bulkCreate([
-            {  name: "Technical Issue" },
-            {  name: "Test-related" },
-            {  name: "Session / Booking" },
-            {  name: "Payments" },
-            {  name: "Suggestions" },
-            {  name: "Other" },
+            { id:1, name: "Technical Issue" },
+            { id:2, name: "Test-related" },
+            { id:3, name: "Session / Booking" },
+            { id:4, name: "Payments" },
+            { id:5, name: "Suggestions" },
+            { id:6, name: "Other" },
         ],{
             ignoreDuplicates: true
         });
-        return res.status(201).json({ message: "Support queries master data seeded successfully" });
+        console.log( "Support queries master data seeded successfully" );
     } catch (error) {
         console.error("Error seeding support queries master data:", error);
-        return res.status(500).json({ message: "Failed to seed support queries master data", error });
     }
 }

@@ -9,6 +9,7 @@ export const SupportQueryForUser = async (req, res) => {
       description,
     } = req.body;
 
+    console.log("Received support query:", req.body);
     if (!query_id || !short_text) {
       return res.status(400).json({ error: "query_id and short_text are required." });
     }
