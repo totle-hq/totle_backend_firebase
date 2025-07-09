@@ -30,7 +30,7 @@ export const SupportQueriesModel = sequelize1.define(
         allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM("open", "in_progress", "resolved", "closed"),
+        type: DataTypes.ENUM("pending","inProgress", "resolved"),
         defaultValue: "closed",
     },
     priority: {

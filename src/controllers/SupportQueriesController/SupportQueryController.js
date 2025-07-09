@@ -2,6 +2,7 @@ import { SupportQueryMaster } from "../../Models/SupportModels/SupportQueriesMas
 import { SupportQueriesModel } from "../../Models/SupportModels/SupportQueriesModel.js";
 import jwt from "jsonwebtoken";
 import { User } from "../../Models/UserModels/UserModel.js";
+import { Sequelize } from "sequelize";
 
 export const SupportQueryForUser = async (req, res) => {
   try {
@@ -37,7 +38,7 @@ export const SupportQueryForUser = async (req, res) => {
       short_text,
       description,
       priority: priority ?? null, // explicit null if not provided
-      status: "open",
+      status: "pending",
     });
 
     res
@@ -52,14 +53,7 @@ export const SupportQueryForUser = async (req, res) => {
 
 export const getSupportQueries = async (req, res) => {
   try {
-    const { query_id } = req.query;
-
-    if (!query_id) {
-      return res.status(400).json({ error: "query_id is required" });
-    }
-
     const queries = await SupportQueriesModel.findAll({
-      where: { query_id },
       include: [
         {
           model: User,
@@ -97,3 +91,63 @@ export const getQueriesList = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 }
+
+export const updateQueryStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const { id } = req.params;
+
+    if (!id || !status) {
+      return res.status(400).json({ error: "queryId and status are required." });
+    }
+
+    const validStatuses = ["pending","inProgress", "resolved"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status value." });
+    }
+
+    const query = await SupportQueriesModel.findByPk(id);
+    if (!query) {
+      return res.status(404).json({ error: "Query not found." });
+    }
+    query.status = status;
+    await query.save();
+    res.status(200).json({ message: "Query status updated successfully", query });
+  } catch (err) {
+    console.error("Failed to update query status:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const countQueriesByStatus = async (req, res) => {
+  try {
+    const counts = await SupportQueriesModel.findAll({
+      attributes: [
+        'status',
+        [Sequelize.fn('COUNT', Sequelize.col('id')), 'count']
+      ],
+      group: 'status',
+      raw: true
+    });
+
+    // Convert to summary format
+    const summary = {
+      total: 0,
+      pending: 0,
+      inProgress: 0,
+      resolved: 0,
+    };
+
+    for (const row of counts) {
+      summary.total += parseInt(row.count, 10);
+      if (row.status === 'pending') summary.pending = parseInt(row.count, 10);
+      if (row.status === 'inProgress') summary.inProgress = parseInt(row.count, 10);
+      if (row.status === 'resolved') summary.resolved = parseInt(row.count, 10);
+    }
+
+    res.status(200).json(summary);
+  } catch (err) {
+    console.error("Failed to count queries by status:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
