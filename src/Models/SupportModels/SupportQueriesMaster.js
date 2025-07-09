@@ -10,11 +10,11 @@ export const SupportQueryMaster = sequelize1.define(
       primaryKey: true,
       autoIncrement: true,
     },
-    // order:{
-    //     type: DataTypes.INTEGER,
-    //     allowNull: false,
-    //     defaultValue: 0, // Default order value
-    // },
+    order:{
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0, // Default order value
+    },
     name: {
       type: DataTypes.STRING(255),
       allowNull: false,

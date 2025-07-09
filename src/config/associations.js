@@ -12,6 +12,7 @@ import { MarketplaceSuggestion } from "../Models/SurveyModels/MarketplaceModel.j
 import { UserDepartment } from "../Models/UserModels/UserDepartment.js";
 import { RoleAssignmentLog } from "../Models/UserModels/RoleAssignmentLog.js";
 import { Department } from "../Models/UserModels/Department.js";
+import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -69,6 +70,10 @@ const defineRelationships = () => {
 
   Department.hasMany(UserDepartment, { foreignKey: 'departmentId' });
   UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
+
+  SupportQueriesModel.belongsTo(User, {foreignKey: "user_id",});
+  User.hasMany(SupportQueriesModel, {foreignKey: "user_id", onDelete: "CASCADE"});
+
 
 
   // Define the relationship between College and Category

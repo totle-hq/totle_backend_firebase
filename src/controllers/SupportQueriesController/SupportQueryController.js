@@ -1,6 +1,7 @@
 import { SupportQueryMaster } from "../../Models/SupportModels/SupportQueriesMaster.js";
 import { SupportQueriesModel } from "../../Models/SupportModels/SupportQueriesModel.js";
 import jwt from "jsonwebtoken";
+import { User } from "../../Models/UserModels/UserModel.js";
 
 export const SupportQueryForUser = async (req, res) => {
   try {
@@ -47,3 +48,52 @@ export const SupportQueryForUser = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
+export const getSupportQueries = async (req, res) => {
+  try {
+    const { query_id } = req.query;
+
+    if (!query_id) {
+      return res.status(400).json({ error: "query_id is required" });
+    }
+
+    const queries = await SupportQueriesModel.findAll({
+      where: { query_id },
+      include: [
+        {
+          model: User,
+          attributes: ["id", "firstName", "email"], // adjust fields as needed
+        },
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    if (!queries || queries.length === 0) {
+      return res.status(404).json({ message: "No support queries found." });
+    }
+
+    res.status(200).json(queries);
+  } catch (err) {
+    console.error("Failed to fetch support queries:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getQueriesList = async (req, res) => {
+  try {
+    const queries = await SupportQueryMaster.findAll({
+      attributes: ["id", "name"],
+      order: [["created_at", "DESC"]],
+    });
+
+    if (!queries || queries.length === 0) {
+      return res.status(404).json({ message: "No support queries found." });
+    }
+
+    res.status(200).json(queries);
+  } catch (err) {
+    console.error("Failed to fetch support queries list:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}
