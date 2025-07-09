@@ -47,6 +47,6 @@ router.get("/allBetaUsers",getAllBetaUsers);
 router.put("/user/updateUser", upload.single("dp"), updateUserProfile)
 // router.get("/:userId", getUserById);
 // router.put("/:userId", updateUser);
-router.post("/query",SupportQueryForUser);
+router.post("/queries",SupportQueryForUser);
 
 export default router;

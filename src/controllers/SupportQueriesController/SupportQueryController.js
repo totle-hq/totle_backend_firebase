@@ -1,4 +1,6 @@
+import { SupportQueryMaster } from "../../Models/SupportModels/SupportQueriesMaster.js";
 import { SupportQueriesModel } from "../../Models/SupportModels/SupportQueriesModel.js";
+import jwt from "jsonwebtoken";
 
 export const SupportQueryForUser = async (req, res) => {
   try {
@@ -18,8 +20,8 @@ export const SupportQueryForUser = async (req, res) => {
 
     const token = authHeader.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Decoded user ID:", decoded.id);
-
+    // console.log("Decoded user ID:", decoded.id);
+    const query = await SupportQueryMaster.findOne({ where: { id: query_id } });
     // Validate required fields
     if (!query_id || !short_text) {
       return res
@@ -30,6 +32,7 @@ export const SupportQueryForUser = async (req, res) => {
     const newQuery = await SupportQueriesModel.create({
       user_id: decoded.id,
       query_id,
+      query_type: query ? query.name : null, // Use query name if exists
       short_text,
       description,
       priority: priority ?? null, // explicit null if not provided
