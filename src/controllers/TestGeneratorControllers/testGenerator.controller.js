@@ -36,14 +36,16 @@ export const generateTest = async (req, res) => {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
 
-    const topic = await Topic.findByPk(topicId);
+    const topic = await CatalogueNode.findByPk(topicId);
     if (!topic || !topic.is_topic) {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
+    
 
     const learnerProfile = await getUserLearningMetrics(userId);
-    const difficulty = evaluateDifficulty(topic.topic_params, learnerProfile);
-
+    console.log(learnerProfile);
+    // const difficulty = evaluateDifficulty(topic.topic_params, learnerProfile);
+const difficulty="beginner"
     const seenTexts = new Set();
     let finalQuestions = [];
     let finalAnswers = [];
@@ -53,7 +55,7 @@ export const generateTest = async (req, res) => {
     while (finalQuestions.length < 20 && attempts < 5) {
       const { questions, answers } = await generateQuestions({
         learnerProfile,
-        topicParams: topic.topic_params,
+        // topicParams: topic.topic_params,
         topicName: topic.name,
         topicId,
         userId,
@@ -254,9 +256,9 @@ export const evaluateTest = async (req, res) => {
     // ✅ Set cooling period based on score
     let cooling_period = 0; // default 0 weeks
     if (percentage >= 80 && percentage < 90) {
-      cooling_period = 7;
+      cooling_period = 1;
     } else if(percentage < 80) {
-      cooling_period = 14;
+      cooling_period = 7;
     }
     
     test.cooling_period = cooling_period;
@@ -267,18 +269,18 @@ export const evaluateTest = async (req, res) => {
       test.eligible_for_bridger = true;
     
       const topicId = test.topic_uuid;
-      const topic = await Topic.findByPk(topicId);
+      const topic = await CatalogueNode.findByPk(topicId);
 
   const teacherId = test.user_id;
 
   const statExists = await Teachertopicstats.findOne({
-    where: { teacherId, topicId }
+    where: { teacherId, node_id:topicId }
   });
 
   if (!statExists) {
     await Teachertopicstats.create({
       teacherId,
-      topicId,
+      node_id:topicId,
       tier: 'Bridger',
       sessionCount: 0,
       rating: 0
@@ -303,9 +305,9 @@ export const evaluateTest = async (req, res) => {
           topic.set('qualified_teacher_names', updatedNames);
           await topic.save();
 
-          const updatedTopic = await Topic.findByPk(topicId);
-          console.log("✅ Updated qualified_teachers:", updatedTopic.qualified_teacher_ids);
-          console.log("✅ Updated qualified_teacher_names:", updatedTopic.qualified_teacher_names);
+          const updatedTopic = await CatalogueNode.findByPk(topicId);
+          // console.log("✅ Updated qualified_teachers:", updatedTopic.qualified_teacher_ids);
+          // console.log("✅ Updated qualified_teacher_names:", updatedTopic.qualified_teacher_names);
         } else {
           console.log("❌ User not found to update teacher names.");
         }
@@ -458,12 +460,16 @@ export const getQualifiedTopics = async (req, res) => {
     console.log('decoded', decoded);
     const userId = decoded.id;
 
-    const topics = await Topic.findAll({
-      where: {
-        qualified_teacher_ids: {
-          [Op.contains]: [userId],
+    const topics =  await Teachertopicstats.findAll({
+      where: { teacherId:userId },
+ include: [
+        {
+          model: CatalogueNode,
+          as: "Topic",
+          attributes: ['node_id', 'name',"parent_id"]
         },
-      },
+      
+      ]
     });
 
     return res.status(200).json({

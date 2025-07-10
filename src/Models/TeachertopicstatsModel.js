@@ -10,7 +10,7 @@ export const Teachertopicstats=sequelize1.define('teacher_topic_stats',{
   type: DataTypes.UUID,
   allowNull: false,
 },
-topicId: {
+node_id: {
   type: DataTypes.UUID,
   allowNull: false,
 },

@@ -55,7 +55,10 @@ export const Session = sequelize1.define("Session", {
   learner_name: {
     type: DataTypes.STRING,
   },
-
+teacher_location: {
+      type: DataTypes.STRING,
+   
+    },
  status: {
   type: DataTypes.STRING,
   defaultValue: "available",

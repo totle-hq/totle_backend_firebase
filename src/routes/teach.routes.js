@@ -1,5 +1,5 @@
 import express from "express";
-import { getFeedbackSummary, getMyProgression,getSessionSummary, reportSession,  validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
+import { deleteAvailabilitySlot, getAvailabilityChart, getFeedbackSummary, getMyProgression,getSessionSummary, offerSlot, reportSession,  updateAvailabilitySlot,  validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 
 
@@ -9,7 +9,10 @@ const router=express.Router();
 
  router.get("/session/:id/summary",authMiddleware,getSessionSummary);
  router.get("/session/:id/validate-time",authMiddleware,validateSessionTime);
-
+router.get("/availibity-chart",authMiddleware,getAvailabilityChart);
+router.post("/offer-slot", authMiddleware, offerSlot);
+router.put("/:id", authMiddleware, updateAvailabilitySlot);
+router.delete("/:id", authMiddleware, deleteAvailabilitySlot);
 
  router.post("/validate-eligibility",authMiddleware,validateEligibility);
  router.get("/my-progression",authMiddleware,getMyProgression);
