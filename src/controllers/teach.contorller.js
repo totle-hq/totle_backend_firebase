@@ -5,6 +5,7 @@ import { Topic } from "../Models/CatalogModels/TopicModel.js";
 import { User } from "../Models/UserModels/UserModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
+import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 
 export const reportSession = async (req, res) => {
   try {
@@ -57,6 +58,190 @@ export const reportSession = async (req, res) => {
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
+export const offerSlot = async (req, res) => {
+  try {
+    const teacher_id = req.user.id; // assuming user is authenticated
+    const { topic_id, date, timeRange } = req.body;
+const user=await User.findByPk(teacher_id)
+const teacher_location=user.location;
+if(!teacher_location || teacher_location===null){
+     return res.status(400).json({ message: "please fill the location in profile to offer a slot" });
+}
+    if (!topic_id || !date || !timeRange) {
+      return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
+    }
+
+    // Parse time range like "14:00 - 15:00"
+    const [startTimeStr, endTimeStr] = timeRange.split("-");
+    const scheduled_at = new Date(`${date} ${startTimeStr}`);
+    const completed_at = new Date(`${date} ${endTimeStr}`);
+console.log(scheduled_at,completed_at);
+    const now = new Date();
+    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+    if (scheduled_at < twoHoursLater) {
+      return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
+    }
+
+    // Optional: prevent double booking on same time for same teacher
+    const overlapping = await Session.findOne({
+      where: {
+        teacher_id,
+        status: "available",
+        scheduled_at: {
+          [Op.lt]: completed_at
+        },
+        completed_at: {
+          [Op.gt]: scheduled_at
+        }
+      }
+    });
+
+    if (overlapping) {
+      return res.status(400).json({ message: "You already have an offered slot during this time." });
+    }
+
+    const session = await Session.create({
+      teacher_id,
+      topic_id,
+      scheduled_at,
+      completed_at,
+      status: "available",
+      teacher_location
+    });
+
+    return res.status(201).json({ message: "Slot offered successfully", session });
+
+  } catch (err) {
+    console.error("Offer slot error:", err);
+    return res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+
+
+// Helper to convert UTC date to IST
+const convertUTCToIST = (utcDate) => {
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  return new Date(new Date(utcDate).getTime() + istOffsetMs);
+};
+
+// Helper to format date as 'YYYY-MM-DD'
+const formatDate = (dateObj) => {
+  return dateObj.toISOString().split("T")[0];
+};
+
+export const getAvailabilityChart = async (req, res) => {
+  try {
+    const teacher_id = req.user.id;
+
+    // 1. Calculate today's date and 7 days ahead in UTC
+    const today = new Date();
+    const endDate = new Date();
+    endDate.setDate(today.getDate() + 7);
+
+    // 2. Fetch sessions between today and 7 days from now
+    const sessions = await Session.findAll({
+      where: {
+        teacher_id,
+        status: "available",
+        scheduled_at: {
+          [Op.between]: [today, endDate],
+        },
+      },
+      order: [["scheduled_at", "ASC"]],
+    });
+
+    // 3. Build empty chart for next 7 days
+    const availability = {};
+    for (let i = 0; i < 7; i++) {
+      const date = new Date();
+      date.setDate(today.getDate() + i);
+      const dateKey = formatDate(convertUTCToIST(date));
+      availability[dateKey] = []; // default empty array
+    }
+
+    // 4. Map sessions to respective IST dates
+    sessions.forEach((session) => {
+      const istStart = convertUTCToIST(session.scheduled_at);
+      const istEnd = convertUTCToIST(session.completed_at);
+      const dateKey = formatDate(istStart);
+
+      if (availability[dateKey]) {
+        availability[dateKey].push({
+          id: session.id,
+          topic_id: session.topic_id,
+          scheduled_at: istStart.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          completed_at: istEnd.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          status: session.status,
+        });
+      }
+    });
+
+    return res.status(200).json({ availability });
+  } catch (err) {
+    console.error("Error fetching availability chart:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+
+export const updateAvailabilitySlot = async (req, res) => {
+  try {
+    const teacher_id = req.user.id;
+    const sessionId = req.params.id;
+    const { date, timeRange } = req.body;
+
+    const session = await Session.findByPk(sessionId);
+
+    if (!session || session.teacher_id !== teacher_id || session.status !== "available") {
+      return res.status(404).json({ error: "Slot not found or unauthorized" });
+    }
+
+    const [startTimeStr, endTimeStr] = timeRange.split(" - ");
+    const scheduled_at = new Date(`${date} ${startTimeStr}`);
+    const completed_at = new Date(`${date} ${endTimeStr}`);
+
+    const now = new Date();
+    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+
+    if (scheduled_at < twoHoursLater) {
+      return res.status(400).json({ error: "Updated slot must be at least 2 hours ahead." });
+    }
+
+    session.scheduled_at = scheduled_at;
+    session.completed_at = completed_at;
+
+    await session.save();
+
+    return res.status(200).json({ message: "Slot updated successfully", session });
+
+  } catch (err) {
+    console.error("Update slot error:", err);
+    return res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+export const deleteAvailabilitySlot = async (req, res) => {
+  try {
+    const teacher_id = req.user.id;
+    const sessionId = req.params.id;
+
+    const session = await Session.findByPk(sessionId);
+
+    if (!session || session.teacher_id !== teacher_id || session.status !== "available") {
+      return res.status(404).json({ error: "Slot not found or unauthorized" });
+    }
+
+    await session.destroy();
+
+    return res.status(200).json({ message: "Slot deleted successfully" });
+
+  } catch (err) {
+    console.error("Delete slot error:", err);
+    return res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+
+
 
 
 export const validateSessionTime = async (req, res) => {
@@ -179,9 +364,9 @@ export const getMyProgression = async (req, res) => {
       where: { teacherId },
  include: [
         {
-          model: Topic,
+          model: CatalogueNode,
           as: "Topic",
-          attributes: ['id', 'name',"parent_id"]
+          attributes: ['node_id', 'name',"parent_id"]
         },
         {
           model: User,

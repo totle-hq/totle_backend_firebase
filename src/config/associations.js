@@ -12,6 +12,10 @@ import { MarketplaceSuggestion } from "../Models/SurveyModels/MarketplaceModel.j
 import { UserDepartment } from "../Models/UserModels/UserDepartment.js";
 import { RoleAssignmentLog } from "../Models/UserModels/RoleAssignmentLog.js";
 import { Department } from "../Models/UserModels/Department.js";
+import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
+import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { TestFlag } from "../Models/TestflagModel.js";
+import { Test } from "../Models/test.model.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -70,6 +74,16 @@ const defineRelationships = () => {
   Department.hasMany(UserDepartment, { foreignKey: 'departmentId' });
   UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
 
+  Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
+User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
+
+Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id', as:"Topic" });
+CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id',as:"Topic" });
+TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
+
+TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
+Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
 
   // Define the relationship between College and Category
   // Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });

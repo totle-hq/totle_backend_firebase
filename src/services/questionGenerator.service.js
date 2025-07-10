@@ -28,7 +28,7 @@ export async function generateQuestions({
   count = 20,
 }) {
   try {
-    const prompt = buildPrompt(topicName, learnerProfile, topicParams);
+    const prompt = buildPrompt(topicName,learnerProfile);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -79,7 +79,7 @@ export async function generateQuestions({
 /**
  * Dynamically builds GPT prompt using full learner and topic parameters
  */
-function buildPrompt(topicName, userParams, topicParams) {
+function buildPrompt(topicName,userparams) {
   const formatParams = (obj) =>
     Object.entries(obj)
       .map(([key, val]) => `${key.replace(/_/g, " ")}: ${val}`)
@@ -105,10 +105,10 @@ function buildPrompt(topicName, userParams, topicParams) {
   Topic Name: ${topicName}
 
   User Parameters (33 total):
-  ${formatParams(userParams)}
+  ${formatParams(userparams)}
 
   Topic Parameters (7 total):
-  ${formatParams(topicParams)}
+ 
 
   You MUST return exactly 20 questions and their corresponding answers. Do not generate fewer. Do not include explanations or any extra output.
   the number of question must be 20.
