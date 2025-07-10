@@ -5,6 +5,7 @@ import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from "sequelize";
 import dotenv from "dotenv";
 import { Test } from '../Models/test.model.js'; // ✅ Test model for storing generated tests
+import { SupportQueriesMasterSeeder } from '../seeders/SupportQueriesSeeder.js';
 // import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
 
 dotenv.config();
@@ -150,7 +151,7 @@ export async function syncDatabase() {
 
     // Insert languages if they don't exist
     await insertLanguagesIfNeeded();
-
+    await SupportQueriesMasterSeeder();
     // await seedCatalogueDomains();
 
 
