@@ -10,18 +10,6 @@ import { Test } from "../Models/test.model.js";
  * @param {string} topicId
  * @returns {Promise<{ eligible: boolean, waitTimeInMinutes?: number }>}
  */
-// File: src/utils/testCooldown.utils.js
- 
-import { Test } from "../Models/test.model.js";
- 
-/**
- * Checks if a user is eligible to retake a test for a given topic.
- * Applies a fixed cooldown window (e.g., 24 hours) between tests.
- *
- * @param {string} userId
- * @param {string} topicId
- * @returns {Promise<{ eligible: boolean, waitTimeInMinutes?: number }>}
- */
 export const isUserEligibleForRetest = async (userId, topicId) => {
  
   let cooldownMinutes = 0;
