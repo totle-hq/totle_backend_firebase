@@ -1,4 +1,4 @@
-import { createSuperAdmin } from '../controllers/UserControllers/superAdmin.controller.js'; // Import SuperAdmin function
+import { ensureFounder } from '../controllers/UserControllers/superAdmin.controller.js'; // Import SuperAdmin function
 import { insertLanguages } from '../controllers/language.controller.js'; // Import languages insertion function
 import { Language } from '../Models/LanguageModel.js'; // Import Sequelize models
 import { sequelize1 } from './sequelize.js';
@@ -40,7 +40,7 @@ async function createSuperAdminIfNeeded() {
     if (results.length > 0) {
       console.log('✅ Admin schema exists');
       // Run the super admin creation function if the admin schema exists
-      await createSuperAdmin();
+      await ensureFounder();
     } else {
       console.log('❌ Admin schema does not exist');
     }
@@ -152,6 +152,7 @@ export async function syncDatabase() {
     // Insert languages if they don't exist
     await insertLanguagesIfNeeded();
     await SupportQueriesMasterSeeder();
+    await createSuperAdminIfNeeded();
     // await seedCatalogueDomains();
 
 
