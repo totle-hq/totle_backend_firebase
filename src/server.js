@@ -78,16 +78,9 @@ app.use("/languages", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 // app.use("/session", authMiddleware, sessionRoutes);
 app.use("/admin", adminRoutes);
-// app.use("/api/topics", topicRoutes);
-// app.use("/api/subjects", subjectRoutes);
-// app.use("/api/catalogue/nodes", catalogueRoutes); // ✅ Mount catalogue endpoints
 app.use('/api', ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
-// app.use("/api/grades", gradeRoutes);
-// app.use("/api/boards", boardRoutes);
-// app.use("/api/education", educationRoutes);
-// app.use("/api/categories", categoryRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
