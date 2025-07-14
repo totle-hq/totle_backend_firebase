@@ -32,6 +32,7 @@ import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 import http from "http";
 import { Server } from "socket.io";
+import nucleusAuthRoutes from './routes/nucleusAuth.js';
 
 import teachRoutes from "./routes/teach.routes.js"
 
@@ -86,6 +87,7 @@ app.use("/admin", adminRoutes);
 // app.use("/api/topics", topicRoutes);
 // app.use("/api/subjects", subjectRoutes);
 // app.use("/api/catalogue/nodes", catalogueRoutes); // ✅ Mount catalogue endpoints
+app.use('/nucleus', nucleusAuthRoutes);
 
 app.use("/api/catalogue", catalogueRoutes);
 // app.use("/api/grades", gradeRoutes);
