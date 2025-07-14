@@ -12,14 +12,8 @@ import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user 
 // import sessionRoutes from "./routes/session.routes.js";
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
-// import topicRoutes from './routes/CatalogRoutes/topic.routes.js';
-// import subjectRoutes from './routes/CatalogRoutes/subject.routes.js';
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
 
-// import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
-// import boardRoutes from './routes/CatalogRoutes/board.routes.js';
-// import educationRoutes from './routes/CatalogRoutes/education.routes.js';
-// import categoryRoutes from './routes/CatalogRoutes/category.routes.js';
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
@@ -32,9 +26,9 @@ import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 import http from "http";
 import { Server } from "socket.io";
-import nucleusAuthRoutes from './routes/nucleusAuth.js';
-
 import teachRoutes from "./routes/teach.routes.js"
+import ctaRoutes from "./routes/cta.js"
+import platformCtaRoutes from "./routes/platformCta.routes.js";
 
 
 const __filename = fileURLToPath(import.meta.url);
@@ -87,8 +81,8 @@ app.use("/admin", adminRoutes);
 // app.use("/api/topics", topicRoutes);
 // app.use("/api/subjects", subjectRoutes);
 // app.use("/api/catalogue/nodes", catalogueRoutes); // ✅ Mount catalogue endpoints
-app.use('/nucleus', nucleusAuthRoutes);
-
+app.use('/api', ctaRoutes);
+app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
 // app.use("/api/grades", gradeRoutes);
 // app.use("/api/boards", boardRoutes);
