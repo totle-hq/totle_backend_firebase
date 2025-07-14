@@ -34,8 +34,8 @@ import http from "http";
 import { Server } from "socket.io";
 
 import teachRoutes from "./routes/teach.routes.js"
-
-
+import ctaRoutes from "./routes/cta.js"
+import platformCtaRoutes from "./routes/platformCta.routes.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -123,7 +123,8 @@ app.get("/db", async (req, res) => {
 
 const startServer = async () => {
   try {
-    // Step 1: Run the syncDatabase function to set up the database before starting the server
+    // Step 1: Run the syncDatabase
+    //  function to set up the database before starting the server
     await syncDatabase();  // Automatically run the syncDatabase on server start
 
     // Step 2: Once syncDatabase has finished, start the server

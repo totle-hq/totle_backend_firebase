@@ -33,9 +33,7 @@
     "firebase-admin": "^13.1.0",
     "getstream": "^8.8.0",
     "helmet": "^8.0.0",
-    "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
     "openai": "^4.89.1",
     "passport": "^0.7.0",
@@ -48,10 +46,22 @@
     "twilio": "^5.4.3"
   },
   "devDependencies": {
-    "eslint": "^9.20.0",
-    "nodemon": "^3.1.9",
-    "prettier": "^3.4.2",
-    "prisma": "^6.3.1",
+    "@prisma/client": "^6.9.0",
+    "bcryptjs": "^3.0.2",
+    "eslint": "^9.28.0",
+    "express-rate-limit": "^7.5.0",
+    "firebase-admin": "^13.4.0",
+    "init": "^0.1.2",
+    "install": "^0.13.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
+    "nodemon": "^3.1.10",
+    "npm": "^11.4.1",
+    "npx": "^10.2.2",
+    "passport": "^0.7.0",
+    "pg": "^8.16.0",
+    "prettier": "^3.5.3",
+    "prisma": "^6.9.0",
     "typescript": "^5.7.3"
   }
 }
