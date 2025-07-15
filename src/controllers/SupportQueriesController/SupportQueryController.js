@@ -10,7 +10,6 @@ export const SupportQueryForUser = async (req, res) => {
       query_id,
       short_text,
       description,
-      priority, // allow null
     } = req.body;
 
     const authHeader = req.headers.authorization;
@@ -37,7 +36,6 @@ export const SupportQueryForUser = async (req, res) => {
       query_type: query ? query.name : null, // Use query name if exists
       short_text,
       description,
-      priority: priority ?? null, // explicit null if not provided
       status: "pending",
     });
 
@@ -115,6 +113,33 @@ export const updateQueryStatus = async (req, res) => {
     res.status(200).json({ message: "Query status updated successfully", query });
   } catch (err) {
     console.error("Failed to update query status:", err.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const updateQueryPriority = async (req, res) => {
+  try {
+    const { priority } = req.body;
+    const { id } = req.params;
+
+    if (!id || !priority) {
+      return res.status(400).json({ error: "queryId and status are required." });
+    }
+
+    const validPriorities = ["low", "medium", "high"];
+    if (!validPriorities.includes(priority)) {
+      return res.status(400).json({ error: "Invalid priority value." });
+    }
+
+    const query = await SupportQueriesModel.findByPk(id);
+    if (!query) {
+      return res.status(404).json({ error: "Query not found." });
+    }
+    query.priority = priority;
+    await query.save();
+    res.status(200).json({ message: "Query priority updated successfully", query });
+  } catch (err) {
+    console.error("Failed to update query priority:", err.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

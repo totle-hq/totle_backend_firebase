@@ -36,6 +36,7 @@ export const SupportQueriesModel = sequelize1.define(
     priority: {
         type: DataTypes.ENUM("low", "medium", "high"),
         defaultValue: "low",
+        allowNull: true, // Allow null to keep existing priority if not provided
     },
     created_at: {
         type: DataTypes.DATE,
