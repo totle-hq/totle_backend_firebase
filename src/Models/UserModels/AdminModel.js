@@ -23,7 +23,7 @@ const Admin = sequelize1.define('Admin', {
     defaultValue: 'active',
   },
    global_role: {
-    type: DataTypes.ENUM('Founder', 'Superadmin', 'None'),
+    type: DataTypes.ENUM('Founder', 'Superadmin', 'Subsuperadmin', 'None'),
     defaultValue: 'None',
   },
   tags: {

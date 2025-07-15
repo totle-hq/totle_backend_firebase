@@ -19,6 +19,7 @@ import { type } from 'os';
 import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
 import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
 import { getAdminContext } from '../../utils/getAdminContext.js';
+import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
 const uploadDir = "src/uploads";
@@ -1167,3 +1168,32 @@ export const getAdminProfile = async (req, res) => {
     return res.status(500).json({ message: 'Failed to load profile' });
   }
 };
+
+export const superAdminCreationByFounder = async (req, res) =>{
+  try {
+      const { founderEmail,adminName, adminEmail, adminPassword, adminRole }  = req.body;
+      var admin = await Admin.findOne({ where: { email: founderEmail } })
+      if(admin.global_role=="Founder"){
+        const superAdmin = await Admin.create({name: adminName, email: adminEmail, password: adminPassword, role: adminRole});
+        return res.status(201).json({ message: `${adminRole} created by Founder.`, admin: superAdmin });
+      }
+      return res.status(403).json({ message: "You do not have permission to create an admin." });
+  } catch (error) {
+    console.error("Error creating admin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const DepartmentCreationByFounder = async(req,res)=>{
+  try {
+    const { founderEmail, departmentName, departmentCode } = req.body;
+    const founder = await Admin.find({where: {email: founderEmail}});
+    if(!founder) return res.status(400).json({message: "Invalid Email"});
+    if(!departmentName||!departmentCode) return res.status(400).json({message: "Missing Department Name or Department Code"});
+    await Department.create({headId: founder.id, name: departmentName, code: departmentCode});
+    return res.json({message: `Department ${departmentName} created successfully`})
+  } catch (error) {
+    console.error("Error creating department:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message})
+  }
+}
