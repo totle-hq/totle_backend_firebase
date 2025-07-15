@@ -25,62 +25,65 @@ import { TestFlag } from "../../Models/TestflagModel.js";
 
 
 
+// ✅ generateTest with ID mapping fixed
 export const generateTest = async (req, res) => {
   try {
     const { topicId } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
-
+ 
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
-
+ 
     const topic = await CatalogueNode.findByPk(topicId);
     if (!topic || !topic.is_topic) {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
-    
-
+ 
     const learnerProfile = await getUserLearningMetrics(userId);
-    console.log(learnerProfile);
-    // const difficulty = evaluateDifficulty(topic.topic_params, learnerProfile);
-const difficulty="beginner"
+    const difficulty = "beginner";
     const seenTexts = new Set();
     let finalQuestions = [];
     let finalAnswers = [];
     let attempts = 0;
-
-    // Retry until we collect 20 unique questions
+ 
     while (finalQuestions.length < 20 && attempts < 5) {
       const { questions, answers } = await generateQuestions({
         learnerProfile,
-        // topicParams: topic.topic_params,
         topicName: topic.name,
         topicId,
         userId,
         count: 20,
       });
-
-      for (const q of questions) {
-        if (!seenTexts.has(q.text) && finalQuestions.length < 20) {
+ 
+      for (let i = 0; i < questions.length && finalQuestions.length < 20; i++) {
+        const q = questions[i];
+        const ans = answers.find(a => a.id === q.id);
+ 
+        if (!seenTexts.has(q.text) && ans) {
           seenTexts.add(q.text);
-          finalQuestions.push({ text: q.text, options: q.options });
-          const ans = answers.find(a => a.id === q.id);
-          finalAnswers.push({ correct_answer: ans?.correct_answer });
+          const newId = finalQuestions.length + 1;
+ 
+          finalQuestions.push({ id: newId, text: q.text, options: q.options });
+          finalAnswers.push({ id: newId, correct_answer: ans.correct_answer });
         }
       }
-
+ 
       attempts++;
     }
-
-    // Assign clean IDs 1–20
-    finalQuestions = finalQuestions.map((q, i) => ({ id: i + 1, ...q }));
-    finalAnswers = finalAnswers.map((a, i) => ({ id: i + 1, correct_answer: a.correct_answer }));
-
+ 
+    if (finalQuestions.length !== 20) {
+      return res.status(500).json({
+        success: false,
+        message: "Could not generate enough unique questions.",
+      });
+    }
+ 
     const time_limit_minutes = 30;
     const count = await Test.count() + 1;
-
+ 
     const savedTest = await Test.create({
       sl_no: count,
       topic_name: topic.name,
@@ -104,7 +107,7 @@ const difficulty="beginner"
       },
       status: "generated",
     });
-
+ 
     return res.status(200).json({
       success: true,
       message: "Test generated successfully.",
@@ -116,7 +119,6 @@ const difficulty="beginner"
         questions: finalQuestions,
       },
     });
-
   } catch (error) {
     console.error("❌ Error generating test:", error);
     return res.status(500).json({
@@ -126,6 +128,7 @@ const difficulty="beginner"
     });
   }
 };
+ 
 
 
 
@@ -449,7 +452,7 @@ export async function getTestById(req, res) {
 
 export const getQualifiedTopics = async (req, res) => {
   try {
-    console.log('getQualifiedTopics called');
+    console.log('get Qualified Topics called');
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ success: false, message: "Missing or invalid token format" });

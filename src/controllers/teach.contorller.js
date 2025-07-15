@@ -163,8 +163,8 @@ export const getAvailabilityChart = async (req, res) => {
 
     // 4. Map sessions to respective IST dates
     sessions.forEach((session) => {
-      const istStart = convertUTCToIST(session.scheduled_at);
-      const istEnd = convertUTCToIST(session.completed_at);
+      const istStart = session.scheduled_at;
+      const istEnd = session.completed_at;
       const dateKey = formatDate(istStart);
 
       if (availability[dateKey]) {
@@ -197,7 +197,7 @@ export const updateAvailabilitySlot = async (req, res) => {
       return res.status(404).json({ error: "Slot not found or unauthorized" });
     }
 
-    const [startTimeStr, endTimeStr] = timeRange.split(" - ");
+    const [startTimeStr, endTimeStr] = timeRange.split("-");
     const scheduled_at = new Date(`${date} ${startTimeStr}`);
     const completed_at = new Date(`${date} ${endTimeStr}`);
 
