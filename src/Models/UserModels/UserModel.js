@@ -111,10 +111,12 @@ const User = sequelize1.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-    ipAddress: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
+   ipAddress: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    field: 'ip_address', // ✅ maps to snake_case column in DB
+    comment: "User's IP address"
+   },
     createdAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -123,6 +125,12 @@ const User = sequelize1.define(
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     },
+    role: {
+  type: DataTypes.ENUM("learner", "teacher", "admin"),
+  allowNull: false,
+  defaultValue: "learner",
+},
+
   },
   {
     schema: "user", // Private schema

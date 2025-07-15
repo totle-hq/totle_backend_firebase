@@ -13,7 +13,11 @@ import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user 
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
-
+import sessionRoutes from "./routes/session.routs.js";
+// import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
+// import boardRoutes from './routes/CatalogRoutes/board.routes.js';
+// import educationRoutes from './routes/CatalogRoutes/education.routes.js';
+// import categoryRoutes from './routes/CatalogRoutes/category.routes.js';
 // import authMiddleware from "./middlewares/authMiddleware.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
@@ -24,6 +28,7 @@ import {syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
+//import sessionRoutes from './routes/sessionRoutes.js';
 import http from "http";
 import { Server } from "socket.io";
 import teachRoutes from "./routes/teach.routes.js"

@@ -27,7 +27,7 @@ router.post("/signup/verifyOtp", otpVerification);
  * ✅ Secure Login with Email/Mobile & Password
  */
 router.post("/login", loginUser);
-
+router.put('/updateUser', updateUserProfile);
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);

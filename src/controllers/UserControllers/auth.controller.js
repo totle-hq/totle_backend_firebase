@@ -436,6 +436,7 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+
 export const getUserProfile = async (req, res) => {
   try {
     // Extract token from Authorization header
@@ -455,38 +456,32 @@ export const getUserProfile = async (req, res) => {
       console.log("decoded", decoded.id);
       const userId = decoded.id;
 
-      if (!userId) {
-        return res
-          .status(401)
-          .json({ error: true, message: "Unauthorized: Invalid token" });
-      }
+    if (!userId) {
+      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
+    }
 
-      // Fetch user from the database
-      const user = await User.findOne({
-        where: { id: userId },
-        attributes: [
-          "id",
-          "firstName",
-          "lastName",
-          "email",
-          "dob",
-          "gender",
-          "known_language_ids",
-          "preferred_language_id",
-          "educational_qualifications",
-          "status",
-          "currentOccupation",
-          "skills",
-          "years_of_experience",
-          "location",
-          "profilePictureUrl",
-        ],
-      });
-      // console.log('user', user)
+    // ✅ Get IP Address
+    const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const ip_address = rawIp.includes('::ffff:') ? rawIp.split('::ffff:')[1] : rawIp;
 
-      if (!user) {
-        return res.status(404).json({ error: true, message: "User not found" });
-      }
+    // ✅ Update user's IP address in DB
+    await User.update({ ip_address }, { where: { id: userId } });
+
+    // Fetch user from the database
+    const user = await User.findOne({
+      where: { id: userId },
+      attributes: [
+        'id', 'firstName', 'lastName', 'email', 'dob', 'gender',
+        'known_language_ids', 'preferred_language_id',
+        'educational_qualifications', 'status', 'currentOccupation',
+        'skills', 'years_of_experience', 'location', 'profilePictureUrl',
+        'ip_address'  // ✅ Include IP in return if needed
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: true, message: "User not found" });
+    }
 
       return res
         .status(200)
@@ -498,9 +493,7 @@ export const getUserProfile = async (req, res) => {
     }
   } catch (error) {
     console.error("Error fetching user profile:", error);
-    return res
-      .status(500)
-      .json({ error: true, message: "Internal Server Error" });
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
   }
 };
 
@@ -603,12 +596,15 @@ export const getAllBetaUsers = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Failed to retrieve beta users." });
   }
-};
+  
+}
+import useragent from "useragent";
+import { getClientIp } from "request-ip"; // ✅ required for IP extraction
 
 export const updateUserProfile = async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    // console.log("Received Auth Header:", authHeader);
+
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res
         .status(401)
@@ -617,7 +613,6 @@ export const updateUserProfile = async (req, res) => {
 
     const token = authHeader.split(" ")[1];
 
-    // ✅ Validate JWT format
     if (!token || token.split(".").length !== 3) {
       return res
         .status(401)
@@ -627,7 +622,6 @@ export const updateUserProfile = async (req, res) => {
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
-      // console.log('decoded update', decoded.id)
     } catch (jwtError) {
       console.error("❌ JWT Verification Error:", jwtError);
       return res
@@ -646,8 +640,6 @@ export const updateUserProfile = async (req, res) => {
     }
 
     const updateData = {};
-
-    // ✅ Extract and validate input data
     let {
       firstName,
       lastName,
@@ -663,35 +655,33 @@ export const updateUserProfile = async (req, res) => {
       years_of_experience,
       location,
     } = req.body;
-    console.log("file", req.file);
+
     const user = await User.findOne({ where: { id: userId } });
+
     if (req.file && req.file.buffer) {
       if (user.profile_picture_id) {
         try {
           await cloudinary.uploader.destroy(user.profile_picture_id);
-          console.log("🗑️ Old image deleted:", user.profile_picture_id);
         } catch (err) {
           console.warn("⚠️ Failed to delete old image:", err);
         }
       }
+
       const base64Image = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
       const result = await cloudinary.uploader.upload(base64Image, {
         folder: "totle-profile-pics",
       });
-      // console.log("Image upload result:", result);
 
-      updateData.profilePictureUrl = result.secure_url; // or profilePictureUrl
+      updateData.profilePictureUrl = result.secure_url;
       updateData.profile_picture_id = result.public_id;
-      const betaUser = await BetaUsers.findOne({
-        where: { email: user.email },
-      });
+
+      const betaUser = await BetaUsers.findOne({ where: { email: user.email } });
       if (betaUser) {
         await BetaUsers.update(
           { profilePictureUrl: result.secure_url },
           { where: { id: betaUser.id } }
         );
-        console.log("✅ Beta user profile image also updated");
       }
     }
 
@@ -800,12 +790,10 @@ export const updateUserProfile = async (req, res) => {
     if (skills) updateData.skills = Array.isArray(skills) ? skills : [];
     if (location) updateData.location = location;
 
-    // ✅ Fix years_of_experience to always be an integer
     updateData.years_of_experience = !isNaN(parseInt(years_of_experience, 10))
       ? parseInt(years_of_experience, 10)
       : 0;
 
-    // ✅ Ensure language IDs are valid numbers
     if (preferredLanguage) {
       preferredLanguage = Number(preferredLanguage);
       if (!isNaN(preferredLanguage) && preferredLanguage > 0) {
@@ -834,6 +822,16 @@ export const updateUserProfile = async (req, res) => {
           );
       }
     }
+
+    // ✅ Client metadata handling (IP, deviceType, browser, OS)
+    const source = req.headers["user-agent"] || "";
+    const ua = useragent.parse(source);
+    const ip = getClientIp(req) || req.ip;
+
+    updateData.ipAddress = ip;
+    updateData.deviceType = ua.platform || "unknown";
+    updateData.browser = ua.toAgent() || "unknown";
+    updateData.os = ua.os.toString() || "unknown"; // ✅ fixed: toString to prevent Sequelize error
 
     if (Object.keys(updateData).length === 0) {
       return res
