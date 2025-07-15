@@ -12,6 +12,8 @@ import {
   getSubtopics,
   updateSubtopic,
   deleteSubtopic,
+  getDomainCount,
+  getTopicCount,
 } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
@@ -41,6 +43,10 @@ router.get("/nodes/:id/subtopics", getSubtopics);
 router.put("/nodes/:id/subtopics/:subtopic_id", updateSubtopic);
 
 router.delete("/nodes/:id/subtopics/:subtopic_id", deleteSubtopic);
+
+router.get("/domain-count", getDomainCount);
+
+router.get("/topic-count", getTopicCount);
 
 
 

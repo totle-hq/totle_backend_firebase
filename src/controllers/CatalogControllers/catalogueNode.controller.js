@@ -283,3 +283,30 @@ export const deleteSubtopic = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+export const getDomainCount = async (req, res) => {
+  try{
+    var domainCount = await CatalogueNode.count({
+      where: {
+        is_domain:true
+      }
+    })
+    return res.json({ count: domainCount });
+  }
+  catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export const getTopicCount = async (req, res) => {
+  try {
+    var topicCount = await CatalogueNode.count({
+      where: {
+        is_topic: true
+      }
+    });
+    return res.json({ count: topicCount });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
