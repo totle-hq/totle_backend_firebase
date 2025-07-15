@@ -29,7 +29,7 @@ import { Server } from "socket.io";
 import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
-
+import FeedbackRoutes from "./routes/feedback.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,6 +86,8 @@ app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
 
 app.use("/api/teach",teachRoutes);
+
+app.use("/api/feedback",FeedbackRoutes);
 
 
 

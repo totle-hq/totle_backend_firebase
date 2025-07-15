@@ -69,11 +69,14 @@ export const CatalogueNode = sequelize1.define(
 );
 
 // Self-referencing parent-child
-CatalogueNode.hasMany(CatalogueNode, {
-  foreignKey: "parent_id",
-  as: "children",
-});
 CatalogueNode.belongsTo(CatalogueNode, {
-  foreignKey: "parent_id",
-  as: "parent",
+  foreignKey: 'parent_id',     // My parent’s id
+  targetKey: 'node_id',        // The actual node it points to
+  as: 'parent',                // So we can do: topic.parent.name
+});
+
+CatalogueNode.hasMany(CatalogueNode, {
+  foreignKey: 'parent_id',     // I am the parent of these children
+  sourceKey: 'node_id',
+  as: 'children',              // So we can do: subject.children
 });
