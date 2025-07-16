@@ -11,14 +11,14 @@ COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
 
 # Copy the Prisma directory explicitly
-COPY prisma ./prisma
+# COPY prisma ./prisma
 
-# Ensure Prisma schema files exist inside the container
-RUN ls -l prisma/
+# # Ensure Prisma schema files exist inside the container
+# RUN ls -l prisma/
 
-# Generate Prisma Client for each schema
-RUN npx prisma generate --schema=prisma/catalogSchema.prisma
-RUN npx prisma generate --schema=prisma/userSchema.prisma
+# # Generate Prisma Client for each schema
+# RUN npx prisma generate --schema=prisma/catalogSchema.prisma
+# RUN npx prisma generate --schema=prisma/userSchema.prisma
 
 # Copy the rest of the application code
 COPY . .
