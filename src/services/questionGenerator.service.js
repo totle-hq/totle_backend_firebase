@@ -20,6 +20,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
  * @returns {Promise<Object>} - { questions, answers, time_limit_minutes }
  */
 export async function generateQuestions({
+  subject,domain,
   learnerProfile,
   topicParams,
   topicId,
@@ -28,7 +29,7 @@ export async function generateQuestions({
   count = 20,
 }) {
   try {
-    const prompt = buildPrompt(topicName,learnerProfile);
+    const prompt = buildPrompt(topicName,learnerProfile,domain,subject);
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -79,7 +80,7 @@ export async function generateQuestions({
 /**
  * Dynamically builds GPT prompt using full learner and topic parameters
  */
-function buildPrompt(topicName,userparams) {
+function buildPrompt(topicName,userparams,domain,subject) {
   const formatParams = (obj) =>
     Object.entries(obj)
       .map(([key, val]) => `${key.replace(/_/g, " ")}: ${val}`)
@@ -87,7 +88,7 @@ function buildPrompt(topicName,userparams) {
 
   return `
   You are an AI that generates high-quality multiple-choice questions (MCQs) for an educational platform. Your task is to create 20 MCQs for a Bridger qualification test to assess a user’s readiness to teach a specific topic, based on their user parameters and the topic’s attributes. The test must be custom-made, emphasizing the user’s weaknesses relative to the topic’s demands while ensuring a comprehensive evaluation.
-
+ 
   Guidelines for MCQ Generation:
   Each question must have four answer choices (one correct, three plausible distractors).  
   Avoid obvious or too-easy answer choices.  
@@ -97,13 +98,24 @@ function buildPrompt(topicName,userparams) {
   Application-Based: Weight higher if Application Type is Practical and Practical Application is Low  
   Analytical: Weight higher if Depth is Deep and user Critical Thinking is Low  
   Personalized: At least 4 questions must target weak areas
+   All generated questions must be strictly related to the topic provided, but framed within the broader context of the associated domain and subject.
+
+- The **topic** defines the core concept or skill being assessed.
+- The **domain** provides the thematic area the topic belongs to (e.g., Algebra, World History, Thermodynamics).
+- The **subject** represents the overarching academic category (e.g., Mathematics, History, Physics).
+
+Ensure that:
+- No question introduces concepts outside of the specified subject or domain.
+- Question wording and context remain aligned with the subject's academic level.
+- Do not mix examples or references from unrelated fields.
 
   Adjust time limit (default 30 mins) based on Speed (<40%) and Stress Management (<30%)
 
   Input Data:
 
   Topic Name: ${topicName}
-
+  Subject: ${subject},
+  domain:  ${domain},
   User Parameters (33 total):
   ${formatParams(userparams)}
 

@@ -16,6 +16,7 @@ import { User } from "../../Models/UserModels/UserModel.js";
 import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
 import { TabSwitchEvent } from "../../Models/TabswitchModel.js";
 import { TestFlag } from "../../Models/TestflagModel.js";
+import { findSubjectAndDomain } from "../../utils/getsubject.js";
 
 
 /**
@@ -32,7 +33,7 @@ export const generateTest = async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
- 
+ const { subject, domain }=findSubjectAndDomain(topicId);
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
@@ -51,6 +52,7 @@ export const generateTest = async (req, res) => {
  
     while (finalQuestions.length < 20 && attempts < 5) {
       const { questions, answers } = await generateQuestions({
+        subject,domain,
         learnerProfile,
         topicName: topic.name,
         topicId,

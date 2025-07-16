@@ -6,6 +6,7 @@ import { User } from "../Models/UserModels/UserModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { findSubjectAndDomain } from "../utils/getsubject.js";
 
 export const reportSession = async (req, res) => {
   try {
@@ -356,30 +357,7 @@ const tierProgression = {
 };
 
 
-// Helper function to trace parent nodes and find subject and domain
-const findSubjectAndDomain = async (topicId) => {
-  let current = await CatalogueNode.findByPk(topicId);
-  let subject = null;
-  let domain = null;
 
-  while (current?.parent_id) {
-    const parent = await CatalogueNode.findByPk(current.parent_id);
-
-    if (parent?.is_subject && !subject) {
-      subject = { id: parent.node_id, name: parent.name };
-    }
-
-    if (parent?.is_domain && !domain) {
-      domain = { id: parent.node_id, name: parent.name };
-    }
-
-    if (subject && domain) break;
-
-    current = parent;
-  }
-
-  return { subject, domain };
-};
 
 export const getMyProgression = async (req, res) => {
   try {
