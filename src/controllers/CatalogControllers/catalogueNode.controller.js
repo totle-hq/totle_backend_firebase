@@ -61,10 +61,8 @@ async function distributePricesRecursively(parentId, prices) {
     const avg = Math.floor(total / children.length);
     const remainder = total - avg * children.length;
 
-    // Distribute base avg to all
+    // Base avg assignment
     priceMatrix[key] = Array(children.length).fill(avg);
-
-    // Add 1 to first `remainder` children
     for (let i = 0; i < remainder; i++) {
       priceMatrix[key][i] += 1;
     }
@@ -73,16 +71,22 @@ async function distributePricesRecursively(parentId, prices) {
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
     const childPrices = {};
+
     for (const key of priceKeys) {
       childPrices[key] = priceMatrix[key][i];
     }
 
     await child.update({ prices: childPrices });
 
-    // Recurse with current child prices
+    // Recursively go to next level
     await distributePricesRecursively(child.node_id, childPrices);
   }
+
+  // ✅ After updating all children — cache fresh version of children
+  const freshChildren = await CatalogueNode.findAll({ where: { parent_id: parentId } });
+  await cacheSet(`catalogue:children:${parentId}`, freshChildren);
 }
+
 
 
 // 🟢 Create node
