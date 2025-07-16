@@ -25,6 +25,10 @@ export const Session = sequelize1.define(
       type: DataTypes.DATE,
       allowNull: false,
     },
+      completed_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
     duration_minutes: {
       type: DataTypes.INTEGER,
       allowNull: false,

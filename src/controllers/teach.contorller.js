@@ -70,17 +70,15 @@ if(!teacher_location || teacher_location===null){
 }
     if (!topic_id || !date || !timeRange) {
       return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
-    }
-
-    // Parse time range like "14:00 - 15:00"
+    } // Parse time range like "14:00 - 15:00"
     const [startTimeStr, endTimeStr] = timeRange.split("-");
     const scheduled_at = new Date(`${date} ${startTimeStr}`);
     const completed_at = new Date(`${date} ${endTimeStr}`);
+    const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
 console.log(scheduled_at,completed_at);
     const now = new Date();
     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-
-    if (scheduled_at < twoHoursLater) {
+if (scheduled_at < twoHoursLater) {
       return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
     }
 
@@ -107,9 +105,9 @@ console.log(scheduled_at,completed_at);
       topic_id,
       scheduled_at,
       completed_at,
+      duration_minutes,
       status: "available",
-      teacher_location
-    });
+   });
 
     return res.status(201).json({ message: "Slot offered successfully", session });
 
@@ -189,7 +187,7 @@ export const updateAvailabilitySlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const sessionId = req.params.id;
-    const { date, timeRange } = req.body;
+    const { date, timeRange,topic_id } = req.body;
 
     const session = await Session.findByPk(sessionId);
 
@@ -200,7 +198,7 @@ export const updateAvailabilitySlot = async (req, res) => {
     const [startTimeStr, endTimeStr] = timeRange.split("-");
     const scheduled_at = new Date(`${date} ${startTimeStr}`);
     const completed_at = new Date(`${date} ${endTimeStr}`);
-
+   const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
     const now = new Date();
     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
@@ -210,7 +208,8 @@ export const updateAvailabilitySlot = async (req, res) => {
 
     session.scheduled_at = scheduled_at;
     session.completed_at = completed_at;
-
+    session.topic_id=topic_id;
+     session.duration_minutes=duration_minutes;
     await session.save();
 
     return res.status(200).json({ message: "Slot updated successfully", session });
@@ -356,17 +355,43 @@ const tierProgression = {
   Legend: null // No next tier
 };
 
+
+// Helper function to trace parent nodes and find subject and domain
+const findSubjectAndDomain = async (topicId) => {
+  let current = await CatalogueNode.findByPk(topicId);
+  let subject = null;
+  let domain = null;
+
+  while (current?.parent_id) {
+    const parent = await CatalogueNode.findByPk(current.parent_id);
+
+    if (parent?.is_subject && !subject) {
+      subject = { id: parent.node_id, name: parent.name };
+    }
+
+    if (parent?.is_domain && !domain) {
+      domain = { id: parent.node_id, name: parent.name };
+    }
+
+    if (subject && domain) break;
+
+    current = parent;
+  }
+
+  return { subject, domain };
+};
+
 export const getMyProgression = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
- include: [
+      include: [
         {
           model: CatalogueNode,
           as: "Topic",
-          attributes: ['node_id', 'name',"parent_id"]
+          attributes: ['node_id', 'name', 'parent_id']
         },
         {
           model: User,
@@ -376,48 +401,96 @@ export const getMyProgression = async (req, res) => {
       ]
     });
 
-    const result = stats.map(stat => {
-      const { tier, rating, sessionCount } = stat;
-      const topicId = stat.Topic?.id;
-      const topicName = stat.Topic?.name || "Unknown";
+    const result = await Promise.all(
+      stats.map(async (stat) => {
+        const { tier, rating, sessionCount } = stat;
+        const topicId = stat.Topic?.node_id;
+        const topicName = stat.Topic?.name || "Unknown";
 
-      const progression = tierProgression[tier];
-console.log(stats)
-      if (!progression) {
+        // Find subject and domain
+        const { subject, domain } = await findSubjectAndDomain(topicId);
+
+        const progression = tierProgression[tier]; // You should have this map defined
+
+        if (!progression) {
+          return {
+            topicId,
+            topicName,
+            currentTier: tier,
+            rating,
+            sessionCount,
+            nextTier: null,
+            sessionsToNextTier: 0,
+            meetsRatingForNextTier: null,
+            subject,
+            domain
+          };
+        }
+
+        const sessionsRemaining = Math.max(0, progression.sessions - sessionCount);
+        const meetsRating = rating >= progression.rating;
+
         return {
           topicId,
           topicName,
           currentTier: tier,
           rating,
           sessionCount,
-          nextTier: null,
-          sessionsToNextTier: 0,
-          meetsRatingForNextTier: null
+          nextTier: progression.next,
+          sessionsToNextTier: sessionsRemaining,
+          meetsRatingForNextTier: meetsRating,
+          subject,
+          domain
         };
-      }
-
-      const sessionsRemaining = Math.max(0, progression.sessions - sessionCount);
-      const meetsRating = rating >= progression.rating;
-
-      return {
-        topicId,
-        topicName,
-        currentTier: tier,
-        rating,
-        sessionCount,
-        nextTier: progression.next,
-        sessionsToNextTier: sessionsRemaining,
-        meetsRatingForNextTier: meetsRating
-      };
-    });
+      })
+    );
 
     return res.status(200).json(result);
   } catch (err) {
-    console.error('Progression fetch failed:', err);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    console.error("Progression fetch failed:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
+
+export const getUpcomingBookedSessions = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    const now = new Date();
+
+    const sessions = await Session.findAll({
+      where: {
+        teacher_id: teacherId,
+        status: "booked",
+        scheduled_at: {
+          [Op.gt]: now,
+        },
+      },
+   
+      order: [["scheduled_at", "ASC"]],
+    });
+console.log(sessions);
+    const formatted = sessions.map((s) => ({
+      session_id: s.id,
+      scheduled_at: s.scheduled_at,
+      completed_at: s.completed_at,
+      topic_id: s.topic_id,
+      topic_name: s.Topic?.name || "N/A",
+      learner: {
+        id: s.Student?.id,
+        name: s.Student?.firstName,
+        email: s.Student?.email
+      },
+      status: s.status,
+    }));
+
+    return res.status(200).json({ sessions: formatted });
+  } catch (err) {
+    console.error("Failed to fetch upcoming booked sessions:", err);
+    return res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
 
 
 
