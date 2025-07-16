@@ -1,6 +1,6 @@
 import express from "express";
 
-import { adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, revokeRoleAndTags, submitSurveyResponse, surveyResponsesAsJsonOrCsv, unblockUserByAdmin, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
+import { adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, revokeRoleAndTags, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, unblockUserByAdmin, updateBlog, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
@@ -48,6 +48,8 @@ router.delete("/surveys/:surveyId", deleteSurveyById);
 router.post("/block/:userId", blockUserByAdmin);
 router.post("/unblock/:userId", unblockUserByAdmin);
 router.delete("/deleteUser/:userId", deleteUserByAdmin);
+router.post("/create/superAdmin", superAdminCreationByFounder);
+router.get("/get/superadmins",verifyAdminToken, getAllSuperAdmins);
 
 router.post(
   '/assign',

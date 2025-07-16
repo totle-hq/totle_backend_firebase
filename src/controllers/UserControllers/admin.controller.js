@@ -76,7 +76,7 @@ export const adminLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.emai, role: admin.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
     let departmentName = null;
     if (admin.global_role !== "Founder" && admin.global_role !== "Superadmin") {
@@ -1173,13 +1173,50 @@ export const superAdminCreationByFounder = async (req, res) =>{
   try {
       const { founderEmail,adminName, adminEmail, adminPassword, adminRole }  = req.body;
       var admin = await Admin.findOne({ where: { email: founderEmail } })
+
+      const existingAdmin = await Admin.findOne({ where: { email: adminEmail } });
+      if (existingAdmin) {
+        return res.status(400).json({ message: "Admin with this email already exists." });
+      }
+
       if(admin.global_role=="Founder"){
-        const superAdmin = await Admin.create({name: adminName, email: adminEmail, password: adminPassword, role: adminRole});
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        const superAdmin = await Admin.create({
+          name: adminName,
+          email: adminEmail,
+          password: hashedPassword,
+          global_role: adminRole,
+        });
+
         return res.status(201).json({ message: `${adminRole} created by Founder.`, admin: superAdmin });
       }
       return res.status(403).json({ message: "You do not have permission to create an admin." });
   } catch (error) {
     console.error("Error creating admin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getAllSuperAdmins = async (req, res) => {
+  try {
+    const { role } = req.user;
+    if (role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    }
+
+    const superAdmins = await Admin.findAll({
+      where: { global_role: 'Superadmin' },
+      attributes: ['id', 'name', 'email', 'createdAt','global_role'],
+    });
+
+    if (!superAdmins.length) {
+      return res.status(404).json({ message: "No Superadmins found" });
+    }
+
+    return res.status(200).json(superAdmins);
+  }
+  catch (error) {
+    console.error("Error fetching superadmins:", error);
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 }
@@ -1197,3 +1234,23 @@ export const DepartmentCreationByFounder = async(req,res)=>{
     return res.status(500).json({ message: "Internal Server Error", error: error.message})
   }
 }
+
+
+export const verifyAdminToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("Decoded Admin Token:", decoded);
+    req.user = decoded; // { email, role }
+    next();
+  } catch (err) {
+    return res.status(403).json({ message: 'Invalid token' });
+  }
+};
