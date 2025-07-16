@@ -19,7 +19,7 @@ import { type } from 'os';
 import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
 import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
 import { getAdminContext } from '../../utils/getAdminContext.js';
-import { role } from '@stream-io/video-react-sdk';
+// import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
 const uploadDir = "src/uploads";
