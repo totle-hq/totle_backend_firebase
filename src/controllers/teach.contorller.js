@@ -456,7 +456,6 @@ export const getMyProgression = async (req, res) => {
 export const getUpcomingBookedSessions = async (req, res) => {
   try {
     const teacherId = req.user.id;
-
     const now = new Date();
 
     const sessions = await Session.findAll({
@@ -467,30 +466,53 @@ export const getUpcomingBookedSessions = async (req, res) => {
           [Op.gt]: now,
         },
       },
-   
       order: [["scheduled_at", "ASC"]],
     });
-console.log(sessions);
-    const formatted = sessions.map((s) => ({
-      session_id: s.id,
-      scheduled_at: s.scheduled_at,
-      completed_at: s.completed_at,
-      topic_id: s.topic_id,
-      topic_name: s.Topic?.name || "N/A",
-      learner: {
-        id: s.Student?.id,
-        name: s.Student?.firstName,
-        email: s.Student?.email
-      },
-      status: s.status,
-    }));
+
+    const formatted = [];
+
+    for (const s of sessions) {
+      // Fetch topic name manually
+      let topicName = "N/A";
+      if (s.topic_id) {
+        const topic = await CatalogueNode.findByPk(s.topic_id, {
+          attributes: ["name"],
+        });
+        topicName = topic?.name || "N/A";
+      }
+
+      // Fetch student info manually
+      let learner = null;
+      if (s.student_id) {
+        const student = await User.findByPk(s.student_id, {
+          attributes: ["id", "firstName", "email"],
+        });
+        learner = {
+          id: student?.id || null,
+          name: student?.firstName || "Unknown",
+          email: student?.email || "Not Available",
+        };
+      }
+
+      formatted.push({
+        session_id: s.id,
+        scheduled_at: s.scheduled_at,
+        completed_at: s.completed_at,
+        topic_id: s.topic_id,
+        topic_name: topicName,
+        learner,
+        status: s.status,
+      });
+    }
 
     return res.status(200).json({ sessions: formatted });
-  } catch (err) {
-    console.error("Failed to fetch upcoming booked sessions:", err);
+
+  } catch (error) {
+    console.error("❌ Error fetching upcoming booked sessions:", error);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
 
 
 
