@@ -449,39 +449,45 @@ export const getUpcomingBookedSessions = async (req, res) => {
 
     const formatted = [];
 
-    for (const s of sessions) {
-      // Fetch topic name manually
-      let topicName = "N/A";
-      if (s.topic_id) {
-        const topic = await CatalogueNode.findByPk(s.topic_id, {
-          attributes: ["name"],
-        });
-        topicName = topic?.name || "N/A";
-      }
+   for (const s of sessions) {
+  // Declare variables at the top
+  let topicName = "N/A";
+  let subject = "N/A";
 
-      // Fetch student info manually
-      let learner = null;
-      if (s.student_id) {
-        const student = await User.findByPk(s.student_id, {
-          attributes: ["id", "firstName", "email"],
-        });
-        learner = {
-          id: student?.id || null,
-          name: student?.firstName || "Unknown",
-          email: student?.email || "Not Available",
-        };
-      }
+  if (s.topic_id) {
+    const topic = await CatalogueNode.findByPk(s.topic_id, {
+      attributes: ["name"],
+    });
+    const result = await findSubjectAndDomain(s.topic_id);
+    subject = result.subject || "N/A";
+    topicName = topic?.name || "N/A";
+  }
 
-      formatted.push({
-        session_id: s.id,
-        scheduled_at: s.scheduled_at,
-        completed_at: s.completed_at,
-        topic_id: s.topic_id,
-        topic_name: topicName,
-        learner,
-        status: s.status,
-      });
-    }
+  // Fetch student info manually
+  let learner = null;
+  if (s.student_id) {
+    const student = await User.findByPk(s.student_id, {
+      attributes: ["id", "firstName", "lastName", "email"],
+    });
+    learner = {
+      id: student?.id || null,
+      name: student?.firstName + " " + student?.lastName || "Unknown",
+      email: student?.email || "Not Available",
+    };
+  }
+
+  formatted.push({
+    session_id: s.id,
+    scheduled_at: s.scheduled_at,
+    completed_at: s.completed_at,
+    topic_id: s.topic_id,
+    topic_name: topicName,
+    learner,
+    subject,
+    status: s.status,
+  });
+}
+
 
     return res.status(200).json({ sessions: formatted });
 
