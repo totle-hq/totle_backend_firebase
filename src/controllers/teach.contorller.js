@@ -6,6 +6,7 @@ import { User } from "../Models/UserModels/UserModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { findSubjectAndDomain } from "../utils/getsubject.js";
 
 export const reportSession = async (req, res) => {
   try {
@@ -70,17 +71,15 @@ if(!teacher_location || teacher_location===null){
 }
     if (!topic_id || !date || !timeRange) {
       return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
-    }
-
-    // Parse time range like "14:00 - 15:00"
+    } // Parse time range like "14:00 - 15:00"
     const [startTimeStr, endTimeStr] = timeRange.split("-");
     const scheduled_at = new Date(`${date} ${startTimeStr}`);
     const completed_at = new Date(`${date} ${endTimeStr}`);
+    const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
 console.log(scheduled_at,completed_at);
     const now = new Date();
     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-
-    if (scheduled_at < twoHoursLater) {
+if (scheduled_at < twoHoursLater) {
       return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
     }
 
@@ -107,9 +106,9 @@ console.log(scheduled_at,completed_at);
       topic_id,
       scheduled_at,
       completed_at,
+      duration_minutes,
       status: "available",
-      teacher_location
-    });
+   });
 
     return res.status(201).json({ message: "Slot offered successfully", session });
 
@@ -189,7 +188,7 @@ export const updateAvailabilitySlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const sessionId = req.params.id;
-    const { date, timeRange } = req.body;
+    const { date, timeRange,topic_id } = req.body;
 
     const session = await Session.findByPk(sessionId);
 
@@ -200,7 +199,7 @@ export const updateAvailabilitySlot = async (req, res) => {
     const [startTimeStr, endTimeStr] = timeRange.split("-");
     const scheduled_at = new Date(`${date} ${startTimeStr}`);
     const completed_at = new Date(`${date} ${endTimeStr}`);
-
+   const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
     const now = new Date();
     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
@@ -210,7 +209,8 @@ export const updateAvailabilitySlot = async (req, res) => {
 
     session.scheduled_at = scheduled_at;
     session.completed_at = completed_at;
-
+    session.topic_id=topic_id;
+     session.duration_minutes=duration_minutes;
     await session.save();
 
     return res.status(200).json({ message: "Slot updated successfully", session });
@@ -356,17 +356,20 @@ const tierProgression = {
   Legend: null // No next tier
 };
 
+
+
+
 export const getMyProgression = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
- include: [
+      include: [
         {
           model: CatalogueNode,
           as: "Topic",
-          attributes: ['node_id', 'name',"parent_id"]
+          attributes: ['node_id', 'name', 'parent_id']
         },
         {
           model: User,
@@ -376,45 +379,121 @@ export const getMyProgression = async (req, res) => {
       ]
     });
 
-    const result = stats.map(stat => {
-      const { tier, rating, sessionCount } = stat;
-      const topicId = stat.Topic?.id;
-      const topicName = stat.Topic?.name || "Unknown";
+    const result = await Promise.all(
+      stats.map(async (stat) => {
+        const { tier, rating, sessionCount } = stat;
+        const topicId = stat.Topic?.node_id;
+        const topicName = stat.Topic?.name || "Unknown";
 
-      const progression = tierProgression[tier];
-console.log(stats)
-      if (!progression) {
+        // Find subject and domain
+        const { subject, domain } = await findSubjectAndDomain(topicId);
+
+        const progression = tierProgression[tier]; // You should have this map defined
+
+        if (!progression) {
+          return {
+            topicId,
+            topicName,
+            currentTier: tier,
+            rating,
+            sessionCount,
+            nextTier: null,
+            sessionsToNextTier: 0,
+            meetsRatingForNextTier: null,
+            subject,
+            domain
+          };
+        }
+
+        const sessionsRemaining = Math.max(0, progression.sessions - sessionCount);
+        const meetsRating = rating >= progression.rating;
+
         return {
           topicId,
           topicName,
           currentTier: tier,
           rating,
           sessionCount,
-          nextTier: null,
-          sessionsToNextTier: 0,
-          meetsRatingForNextTier: null
+          nextTier: progression.next,
+          sessionsToNextTier: sessionsRemaining,
+          meetsRatingForNextTier: meetsRating,
+          subject,
+          domain
         };
-      }
-
-      const sessionsRemaining = Math.max(0, progression.sessions - sessionCount);
-      const meetsRating = rating >= progression.rating;
-
-      return {
-        topicId,
-        topicName,
-        currentTier: tier,
-        rating,
-        sessionCount,
-        nextTier: progression.next,
-        sessionsToNextTier: sessionsRemaining,
-        meetsRatingForNextTier: meetsRating
-      };
-    });
+      })
+    );
 
     return res.status(200).json(result);
   } catch (err) {
-    console.error('Progression fetch failed:', err);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    console.error("Progression fetch failed:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+
+
+export const getUpcomingBookedSessions = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+    const now = new Date();
+
+    const sessions = await Session.findAll({
+      where: {
+        teacher_id: teacherId,
+        status: "booked",
+        scheduled_at: {
+          [Op.gt]: now,
+        },
+      },
+      order: [["scheduled_at", "ASC"]],
+    });
+
+    const formatted = [];
+
+   for (const s of sessions) {
+  // Declare variables at the top
+  let topicName = "N/A";
+  let subject = "N/A";
+
+  if (s.topic_id) {
+    const topic = await CatalogueNode.findByPk(s.topic_id, {
+      attributes: ["name"],
+    });
+    const result = await findSubjectAndDomain(s.topic_id);
+    subject = result.subject || "N/A";
+    topicName = topic?.name || "N/A";
+  }
+
+  // Fetch student info manually
+  let learner = null;
+  if (s.student_id) {
+    const student = await User.findByPk(s.student_id, {
+      attributes: ["id", "firstName", "lastName", "email"],
+    });
+    learner = {
+      id: student?.id || null,
+      name: student?.firstName + " " + student?.lastName || "Unknown",
+      email: student?.email || "Not Available",
+    };
+  }
+
+  formatted.push({
+    session_id: s.id,
+    scheduled_at: s.scheduled_at,
+    completed_at: s.completed_at,
+    topic_id: s.topic_id,
+    topic_name: topicName,
+    learner,
+    subject,
+    status: s.status,
+  });
+}
+
+
+    return res.status(200).json({ sessions: formatted });
+
+  } catch (error) {
+    console.error("❌ Error fetching upcoming booked sessions:", error);
+    return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
