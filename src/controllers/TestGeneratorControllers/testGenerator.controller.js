@@ -33,7 +33,11 @@ export const generateTest = async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
- const { subject, domain }=findSubjectAndDomain(topicId);
+ let { subject, domain }=await findSubjectAndDomain(topicId);
+ console.log(subject,domain);
+ subject=subject.name;
+ domain=domain.name;
+ console.log(subject,domain);
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
