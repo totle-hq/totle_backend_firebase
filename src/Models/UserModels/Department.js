@@ -1,5 +1,5 @@
 // models/Department.js
-import { DataTypes } from 'sequelize';
+import { DataTypes, ENUM } from 'sequelize';
 import { sequelize1 } from '../../config/sequelize.js';
 
 const Department = sequelize1.define('departments', {
@@ -23,6 +23,18 @@ const Department = sequelize1.define('departments', {
   headId: {
     type: DataTypes.UUID,
     allowNull: true, // FK to Admin
+  },
+  status:{
+    type: DataTypes.ENUM('active', 'disabled'),
+    allowNull: false
+  },
+  parentId: {
+    type: DataTypes.UUID,
+    allowNull: true, // This makes it a sub-department
+    references: {
+      model: 'departments',
+      key: 'id',
+    },
   },
   createdAt: DataTypes.DATE,
   updatedAt: DataTypes.DATE,

@@ -1174,8 +1174,9 @@ export const getAdminProfile = async (req, res) => {
 
 export const superAdminCreationByFounder = async (req, res) =>{
   try {
-      const { founderEmail,adminName, adminEmail, adminPassword, adminRole }  = req.body;
-      var admin = await Admin.findOne({ where: { email: founderEmail } })
+      const { adminName, adminEmail, adminPassword, adminRole }  = req.body;
+      const { email } = req.user;
+      var admin = await Admin.findOne({ where: { email } })
 
       const existingAdmin = await Admin.findOne({ where: { email: adminEmail } });
       if (existingAdmin) {
@@ -1273,6 +1274,7 @@ export const verifyAdminToken = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log("Decoded Admin Token:", decoded);
     req.user = decoded; // { email, role }
+    console.log("Admin User:", req.user);
     next();
   } catch (err) {
     return res.status(403).json({ message: 'Invalid token' });
@@ -1368,3 +1370,83 @@ export const deleteSuperAdmin = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 }
+
+export const subDepartmentCreation = async(req, res)=>{
+  try {
+    const {role,id} = req.user;
+    if (role !== 'Founder' && role!== "Superadmin") return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    const {name, code} = req.body;
+    const { parentId } = req.params;
+    if(!name||!code || !parentId) return res.status(400).json({message: "Missing sub Department Name or Sub Department Code or parent"});
+    const parentDepartment = await Department.findByPk(parentId);
+    if (!parentDepartment) {
+      return res.status(404).json({ message: "Parent department not found" });
+    }
+    const existingDepartment = await Department.findOne({
+      where: {
+        parentId,
+        [Op.or]: [{ name }, { code }],
+      },
+    });
+
+    if (existingDepartment) {
+      return res.status(409).json({
+        message: `Department with the same ${existingDepartment.name === name ? 'name' : 'code'} already exists`,
+      });
+    }
+    const subDepartment = await Department.create({
+      name,
+      code,
+      parentId,
+      headId: id, // Founder creating it
+      status: "active"
+    });
+    return res.status(201).json({
+      message: `Sub-department '${name}' created successfully under '${parentDepartment.name}'`,
+      subDepartment,
+    });
+  } catch (error) {
+    console.log("Error adding subdepartment",error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getSubDepartments = async(req,res)=>{
+  try {
+    const {role} = req.user;
+    if (role !== 'Founder' && role!== "Superadmin") return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    const { parentId } = req.params;
+    if(!parentId) return res.status(400).json({message: "Missing parent Department Id"})
+    
+    const subDepartments = await Department.findAll({
+      where: { parentId },
+      attributes: ['id', 'name', 'code', 'headId', 'parentId', 'status'],
+      order: [['createdAt', 'ASC']],
+    });
+
+    if(subDepartments.length!=0){
+
+      return res.status(200).json(subDepartments); // ✅ send plain array
+    }
+    return res.status(404).json({message: "No subdepartments here"})
+
+  } catch (error) {
+    console.log("Error adding subdepartment",error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+// export const toggleSubDepartmentStatus = async(req,res)=>{
+//   try {
+//     const { superAdminId } = req.params;
+//     const superAdmin = await Admin.findByPk(superAdminId);
+//     console.log('role',superAdmin, superAdminId);
+
+//     if (!superAdmin || superAdmin.global_role !== 'Superadmin') {
+//       return res.status(404).json({ message: "Superadmin not found" });
+//     }
+//   } catch (error) {
+//     console.log("Error changing status", error.message);
+//     return res.status(500).json({ message: "Internal Server Error", error: error.message});
+//   }
+// }
