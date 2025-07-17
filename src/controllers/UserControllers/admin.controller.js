@@ -19,6 +19,7 @@ import { type } from 'os';
 import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
 import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
 import { getAdminContext } from '../../utils/getAdminContext.js';
+import { Department } from '../../Models/UserModels/Department.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -66,6 +67,7 @@ export const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
     const admin = await findAdminByEmail(email);
+    // console.log("admin", admin);
 
     if (!admin) return res.status(400).json({ message: "Invalid Login" });
 
@@ -76,7 +78,7 @@ export const adminLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.emai, role: admin.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email, role: admin.global_role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
     let departmentName = null;
     if (admin.global_role !== "Founder" && admin.global_role !== "Superadmin") {
@@ -1200,13 +1202,14 @@ export const superAdminCreationByFounder = async (req, res) =>{
 export const getAllSuperAdmins = async (req, res) => {
   try {
     const { role } = req.user;
+    console.log(role)
     if (role !== 'Founder') {
       return res.status(403).json({ message: "Access denied: Invalid founder email" });
     }
 
     const superAdmins = await Admin.findAll({
       where: { global_role: 'Superadmin' },
-      attributes: ['id', 'name', 'email', 'createdAt','global_role'],
+      attributes: ['id', 'name', 'email','status', 'createdAt','global_role'],
     });
 
     if (!superAdmins.length) {
@@ -1254,3 +1257,87 @@ export const verifyAdminToken = (req, res, next) => {
     return res.status(403).json({ message: 'Invalid token' });
   }
 };
+
+export const activeSuperAdmins = async (req, res) => {
+  try {
+    const superAdmins = await Admin.findAll({
+      where: { global_role: 'Superadmin', status: 'active' },
+      attributes: ['id', 'name', 'email', 'createdAt'],
+    });
+
+    if (!superAdmins.length) {
+      return res.status(404).json({ message: "No active Superadmins found" });
+    }
+
+    return res.status(200).json(superAdmins);
+  } catch (error) {
+    console.error("Error fetching active superadmins:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getAllDepartments = async (req, res) => {
+  try {
+    const departments = await Department.findAll({
+      attributes: ['id', 'name', 'code', 'headId'],
+      // include: [{
+      //   model: Admin,
+      //   as: 'head',
+      //   attributes: ['name', 'email']
+      // }]
+    });
+
+    if (!departments.length) {
+      return res.status(404).json({ message: "No departments found" });
+    }
+
+    return res.status(200).json(departments);
+  } catch (error) {
+    console.error("Error fetching departments:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const toggleSuperadminStatus  = async (req, res) => {
+  try {
+    const { superAdminId } = req.params;
+    const superAdmin = await Admin.findByPk(superAdminId);
+    console.log('role',superAdmin, superAdminId);
+
+    if (!superAdmin || superAdmin.global_role !== 'Superadmin') {
+      return res.status(404).json({ message: "Superadmin not found" });
+    }
+
+    const newStatus = superAdmin.status === 'active' ? 'disabled' : 'active';
+
+    await superAdmin.update({ status: newStatus });
+
+    return res.status(200).json({
+      message: `Superadmin has been ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully.`,
+      newStatus,
+    });
+  } catch (error) {
+    console.error("Error disabling superadmin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const deleteSuperAdmin = async (req, res) => {
+  try {
+    const { superAdminId } = req.params;
+    const superAdmin = await Admin.findByPk(superAdminId);
+
+    console.log('role',superAdmin.global_role);
+
+    if (!superAdmin || superAdmin.global_role !== 'Superadmin') {
+      return res.status(404).json({ message: "Superadmin not found" });
+    }
+
+    await superAdmin.destroy();
+
+    return res.status(200).json({ message: "Superadmin has been deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting superadmin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
