@@ -1,6 +1,6 @@
 import express from "express";
 
-import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, revokeRoleAndTags, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
+import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, revokeRoleAndTags, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
@@ -50,10 +50,11 @@ router.post("/unblock/:userId", unblockUserByAdmin);
 router.delete("/deleteUser/:userId", deleteUserByAdmin);
 router.post("/create/superAdmin",verifyAdminToken, superAdminCreationByFounder);
 router.get("/get/superadmins",verifyAdminToken, getAllSuperAdmins);
-router.get("/org/superadmins", activeSuperAdmins);
-router.get("/org/departments", getAllDepartments);
-router.put("/org/superadmins/:superAdminId/toggle", toggleSuperadminStatus);
-router.delete("/org/superadmins/:superAdminId", deleteSuperAdmin)
+router.get("/org/superadmins", verifyAdminToken, activeSuperAdmins);
+router.put("/org/superadmins/:superAdminId/toggle", verifyAdminToken, toggleSuperadminStatus);
+router.delete("/org/superadmins/:superAdminId", verifyAdminToken, deleteSuperAdmin)
+router.post("/org/departments", verifyAdminToken, DepartmentCreationByFounder);
+router.get("/org/departments",verifyAdminToken, getAllDepartments);
 
 
 router.post(

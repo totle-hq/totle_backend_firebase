@@ -20,6 +20,7 @@ import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
 import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
 import { getAdminContext } from '../../utils/getAdminContext.js';
 import { Department } from '../../Models/UserModels/Department.js';
+import { Op } from 'sequelize';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -1226,12 +1227,31 @@ export const getAllSuperAdmins = async (req, res) => {
 
 export const DepartmentCreationByFounder = async(req,res)=>{
   try {
-    const { founderEmail, departmentName, departmentCode } = req.body;
-    const founder = await Admin.find({where: {email: founderEmail}});
-    if(!founder) return res.status(400).json({message: "Invalid Email"});
-    if(!departmentName||!departmentCode) return res.status(400).json({message: "Missing Department Name or Department Code"});
-    await Department.create({headId: founder.id, name: departmentName, code: departmentCode});
-    return res.json({message: `Department ${departmentName} created successfully`})
+    const { name, code } = req.body;
+    const { role,id } = req.user;
+    console.log(role,id)
+     if (!role || !id) {
+      return res.status(401).json({ message: "Unauthorized: Invalid or missing token" });
+    }
+    if (role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    }
+
+    if(!name||!code) return res.status(400).json({message: "Missing Department Name or Department Code"});
+    const existingDepartment = await Department.findOne({
+      where: {
+        [Op.or]: [{ name }, { code }],
+      },
+    });
+
+    if (existingDepartment) {
+      return res.status(409).json({
+        message: `Department with the same ${existingDepartment.name === name ? 'name' : 'code'} already exists`,
+      });
+    }
+
+    await Department.create({headId: id, name, code});
+    return res.json({message: `Department ${name} created successfully`})
   } catch (error) {
     console.error("Error creating department:", error);
     return res.status(500).json({ message: "Internal Server Error", error: error.message})
@@ -1241,6 +1261,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
 
 export const verifyAdminToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
+  console.log("Admin Token:", authHeader);
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'No token provided' });
@@ -1278,6 +1299,12 @@ export const activeSuperAdmins = async (req, res) => {
 
 export const getAllDepartments = async (req, res) => {
   try {
+    const { role } = req.user;
+    // console.log(role)
+    if (role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    }
+
     const departments = await Department.findAll({
       attributes: ['id', 'name', 'code', 'headId'],
       // include: [{

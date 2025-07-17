@@ -42,32 +42,32 @@ export const ensureFounder = async () => {
       console.log("✅ Founder already exists");
     }
 
-    for (const dept of coreDepartments) {
-      const [department, created] = await Department.findOrCreate({
-        where: { code: dept.code },
-        defaults: {
-          name: dept.name,
-          headId: founder.id,
-        }
-      });
+    // for (const dept of coreDepartments) {
+    //   const [department, created] = await Department.findOrCreate({
+    //     where: { code: dept.code },
+    //     defaults: {
+    //       name: dept.name,
+    //       headId: founder.id,
+    //     }
+    //   });
 
-      if (!created && department.headId !== founder.id) {
-        department.headId = founder.id;
-        await department.save();
-      }
+    //   if (!created && department.headId !== founder.id) {
+    //     department.headId = founder.id;
+    //     await department.save();
+    //   }
 
-      // Step 3: Assign founder to each department in user_departments
-      await UserDepartment.findOrCreate({
-        where: {
-          userId: founder.id,
-          departmentId: department.id,
-        },
-        defaults: {
-          roleType: "manage",
-          tags: [], // Add default tags if needed
-        }
-      });
-    }
+    //   // Step 3: Assign founder to each department in user_departments
+    //   await UserDepartment.findOrCreate({
+    //     where: {
+    //       userId: founder.id,
+    //       departmentId: department.id,
+    //     },
+    //     defaults: {
+    //       roleType: "manage",
+    //       tags: [], // Add default tags if needed
+    //     }
+    //   });
+    // }
 
     console.log("🎉 Founder added successfully!");
   } catch (error) {
