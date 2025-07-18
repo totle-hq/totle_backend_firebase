@@ -1,6 +1,6 @@
 import express from "express";
 
-import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
+import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSubDepartmentStatus, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
@@ -57,6 +57,7 @@ router.post("/org/departments", verifyAdminToken, DepartmentCreationByFounder);
 router.get("/org/departments",verifyAdminToken, getAllDepartments);
 router.post("/org/departments/:parentId/subdepartments", verifyAdminToken, subDepartmentCreation);
 router.get("/org/departments/:parentId/subdepartments", verifyAdminToken, getSubDepartments);
+router.put("/org/subdepartments/:parentId/toggle",verifyAdminToken, toggleSubDepartmentStatus);
 
 
 router.post(

@@ -1230,7 +1230,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
   try {
     const { name, code } = req.body;
     const { role,id } = req.user;
-    console.log(role,id)
+    // console.log(role,id)
      if (!role || !id) {
       return res.status(401).json({ message: "Unauthorized: Invalid or missing token" });
     }
@@ -1241,7 +1241,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
     if(!name||!code) return res.status(400).json({message: "Missing Department Name or Department Code"});
     const existingDepartment = await Department.findOne({
       where: {
-        [Op.or]: [{ name }, { code }],
+        [Op.or]: [{ name }, { code },{ status : 'active' }],
       },
     });
 
@@ -1251,7 +1251,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
       });
     }
 
-    await Department.create({headId: id, name, code});
+    await Department.create({headId: id, name, code, status: 'active'});
     return res.json({message: `Department ${name} created successfully`})
   } catch (error) {
     console.error("Error creating department:", error);
@@ -1382,6 +1382,9 @@ export const subDepartmentCreation = async(req, res)=>{
     if (!parentDepartment) {
       return res.status(404).json({ message: "Parent department not found" });
     }
+    if (parentDepartment.parentId !== null) {
+      return res.status(400).json({ message: "Cannot create a sub-department under another sub-department." });
+    }
     const existingDepartment = await Department.findOne({
       where: {
         parentId,
@@ -1436,17 +1439,26 @@ export const getSubDepartments = async(req,res)=>{
   }
 }
 
-// export const toggleSubDepartmentStatus = async(req,res)=>{
-//   try {
-//     const { superAdminId } = req.params;
-//     const superAdmin = await Admin.findByPk(superAdminId);
-//     console.log('role',superAdmin, superAdminId);
+export const toggleSubDepartmentStatus = async(req,res)=>{
+  try {
+    const { superAdminId } = req.params;
+    const superAdmin = await Admin.findByPk(superAdminId);
+    const { departmentId } = req.body;
+    // console.log('role',superAdmin, superAdminId);
 
-//     if (!superAdmin || superAdmin.global_role !== 'Superadmin') {
-//       return res.status(404).json({ message: "Superadmin not found" });
-//     }
-//   } catch (error) {
-//     console.log("Error changing status", error.message);
-//     return res.status(500).json({ message: "Internal Server Error", error: error.message});
-//   }
-// }
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+
+    const department = await Department.findByPk(departmentId);
+    if (!department) return res.status(404).json({ message: "Department not found" });
+    department.status = department.status === 'active' ? 'disabled' : 'active';
+    await department.save();
+    return res.status(200).json({
+      message: `Department has been ${status === 'active' ? 'enabled' : 'disabled'} successfully.`,
+      department,
+    });
+  } catch (error) {
+    console.log("Error changing status", error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message});
+  }
+}
