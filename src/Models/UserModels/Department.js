@@ -35,6 +35,7 @@ const Department = sequelize1.define('departments', {
       model: 'departments',
       key: 'id',
     },
+    onDelete: 'CASCADE',
   },
   createdAt: DataTypes.DATE,
   updatedAt: DataTypes.DATE,

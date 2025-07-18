@@ -1175,8 +1175,8 @@ export const getAdminProfile = async (req, res) => {
 export const superAdminCreationByFounder = async (req, res) =>{
   try {
       const { adminName, adminEmail, adminPassword, adminRole }  = req.body;
-      const { email } = req.user;
-      var admin = await Admin.findOne({ where: { email } })
+      const { id } = req.user;
+      var admin = await Admin.findOne({ where: { id } })
 
       const existingAdmin = await Admin.findOne({ where: { email: adminEmail } });
       if (existingAdmin) {
@@ -1230,7 +1230,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
   try {
     const { name, code } = req.body;
     const { role,id } = req.user;
-    // console.log(role,id)
+    console.log(name,code)
      if (!role || !id) {
       return res.status(401).json({ message: "Unauthorized: Invalid or missing token" });
     }
@@ -1241,11 +1241,12 @@ export const DepartmentCreationByFounder = async(req,res)=>{
     if(!name||!code) return res.status(400).json({message: "Missing Department Name or Department Code"});
     const existingDepartment = await Department.findOne({
       where: {
-        [Op.or]: [{ name }, { code },{ status : 'active' }],
+        [Op.or]: [{ name }, { code }],
       },
     });
 
     if (existingDepartment) {
+      console.log("Existing Department:", existingDepartment);
       return res.status(409).json({
         message: `Department with the same ${existingDepartment.name === name ? 'name' : 'code'} already exists`,
       });
@@ -1262,7 +1263,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
 
 export const verifyAdminToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
-  console.log("Admin Token:", authHeader);
+  // console.log("Admin Token:", authHeader);
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'No token provided' });
@@ -1272,9 +1273,9 @@ export const verifyAdminToken = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Decoded Admin Token:", decoded);
+    // console.log("Decoded Admin Token:", decoded);
     req.user = decoded; // { email, role }
-    console.log("Admin User:", req.user);
+    // console.log("Admin User:", req.user);
     next();
   } catch (err) {
     return res.status(403).json({ message: 'Invalid token' });
@@ -1308,7 +1309,8 @@ export const getAllDepartments = async (req, res) => {
     }
 
     const departments = await Department.findAll({
-      attributes: ['id', 'name', 'code', 'headId'],
+      where: { parentId: null },
+      attributes: ['id', 'name', 'code', 'headId', 'status'],
       // include: [{
       //   model: Admin,
       //   as: 'head',
@@ -1388,7 +1390,7 @@ export const subDepartmentCreation = async(req, res)=>{
     const existingDepartment = await Department.findOne({
       where: {
         parentId,
-        [Op.or]: [{ name }, { code }],
+        name,
       },
     });
 
@@ -1441,24 +1443,44 @@ export const getSubDepartments = async(req,res)=>{
 
 export const toggleSubDepartmentStatus = async(req,res)=>{
   try {
-    const { superAdminId } = req.params;
-    const superAdmin = await Admin.findByPk(superAdminId);
-    const { departmentId } = req.body;
-    // console.log('role',superAdmin, superAdminId);
+    const { id } = req.user;
+    const superAdmin = await Admin.findByPk(id);
+    const { parentId } = req.params;
 
     if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
     if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
 
-    const department = await Department.findByPk(departmentId);
-    if (!department) return res.status(404).json({ message: "Department not found" });
-    department.status = department.status === 'active' ? 'disabled' : 'active';
-    await department.save();
+    const subDepartment = await Department.findByPk(parentId);
+    if (!subDepartment) return res.status(404).json({ message: "Department not found" });
+    subDepartment.status = subDepartment.status === 'active' ? 'disabled' : 'active';
+    await subDepartment.save();
+    console.log("subDepartment", subDepartment.status);
     return res.status(200).json({
-      message: `Department has been ${status === 'active' ? 'enabled' : 'disabled'} successfully.`,
-      department,
+      message: `Department has been ${subDepartment.status === 'active' ? 'enabled' : 'disabled'} successfully.`,
+      subDepartment,
     });
   } catch (error) {
     console.log("Error changing status", error.message);
     return res.status(500).json({ message: "Internal Server Error", error: error.message});
+  }
+}
+
+export const deleteSubDepartment = async(req,res)=>{
+  try {
+    const { id } = req.user;
+    const superAdmin = await Admin.findByPk(id);
+    const { subdeptid } = req.params;
+
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+
+    const subDepartment = await Department.findByPk(subdeptid);
+    if (!subDepartment) return res.status(404).json({ message: "Sub Department not found" });
+
+    await subDepartment.destroy();
+    return res.status(200).json({ message: "Sub-department has been deleted successfully." });
+  } catch (error) {
+    console.log("Error deleting subdepartment", error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 }

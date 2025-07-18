@@ -88,33 +88,17 @@ Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
   SupportQueriesModel.belongsTo(User, {foreignKey: "user_id",});
   User.hasMany(SupportQueriesModel, {foreignKey: "user_id", onDelete: "CASCADE"});
 
+  Department.hasMany(Department, {
+    foreignKey: 'parentId',
+    as: 'subDepartments',
+    onDelete: 'CASCADE',
+  });
 
+  Department.belongsTo(Department, {
+    foreignKey: 'parentId',
+    as: 'parentDepartment',
+  });
 
-  // Define the relationship between College and Category
-  // Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
-  // Category.hasMany(Education, { foreignKey: 'parent_id' });
-
-  // Define the relationship between Board and School
-  // Board.belongsTo(Education, { foreignKey: 'parent_id' });
-  // Education.hasMany(Board, { foreignKey: 'parent_id' , onDelete: "CASCADE" });
-
-  // Board.hasMany(Grade, { foreignKey: 'parent_id', onDelete: 'CASCADE' });
-  // Grade.belongsTo(Board, { foreignKey: 'parent_id'});
-
-  // Define the relationship between Grade and School
-  // Grade.belongsTo(Education, { foreignKey: 'parent_id' });
-  // Education.hasMany(Grade, { foreignKey: 'parent_id' });
-
-  // Define the relationship between Subject and Grade
-  // Subject.belongsTo(Grade, { foreignKey: 'parent_id' });
-  // Grade.hasMany(Subject, { foreignKey: 'parent_id' , onDelete: "CASCADE" });
-
-  // Define the relationship between Topic and Subject
-  // Topic.belongsTo(Subject, { foreignKey: 'parent_id' });
-  // Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE", hooks: true,  });
-
-  // Subtopic.belongsTo(Topic, { foreignKey: 'parent_id' });
-  // Topic.hasMany(Subtopic, { foreignKey: 'parent_id', onDelete: "CASCADE" });
 };
 
 export default defineRelationships;
