@@ -3,12 +3,21 @@ import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../../config/sequelize.js';
 
 const UserDepartment = sequelize1.define('user_departments', {
-  userId: {
+  roleId: {
     type: DataTypes.UUID,
     allowNull: false,
+    primaryKey: true,
+  },
+  headId: {
+    type: DataTypes.UUID,
+    allowNull: true, // Optional
   },
   departmentId: {
     type: DataTypes.UUID,
+    allowNull: false,
+  },
+  role: {
+    type: DataTypes.TEXT,
     allowNull: false,
   },
   roleType: {
@@ -16,7 +25,7 @@ const UserDepartment = sequelize1.define('user_departments', {
     defaultValue: 'read',
   },
   tags: {
-    type: DataTypes.ARRAY(DataTypes.STRING), // e.g., ['moderator', 'test_gatekeeper']
+    type: DataTypes.ARRAY(DataTypes.STRING),
     defaultValue: [],
   },
 }, {
@@ -26,7 +35,7 @@ const UserDepartment = sequelize1.define('user_departments', {
   indexes: [
     {
       unique: true,
-      fields: ['userId', 'departmentId'],
+      fields: ['role', 'departmentId'], // ✅ Valid unique constraint
     },
   ],
 });

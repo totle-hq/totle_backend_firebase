@@ -1,6 +1,6 @@
 import express from "express";
 
-import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSubDepartmentStatus, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
+import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, createRoleDeptwise, deleteBlog, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSubDepartmentStatus, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, updateDepartment, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
@@ -59,6 +59,9 @@ router.post("/org/departments/:parentId/subdepartments", verifyAdminToken, subDe
 router.get("/org/departments/:parentId/subdepartments", verifyAdminToken, getSubDepartments);
 router.put("/org/subdepartments/:parentId/toggle", verifyAdminToken, toggleSubDepartmentStatus);
 router.delete("/org/subdepartments/:subdeptid", verifyAdminToken, deleteSubDepartment);
+router.patch("/org/departments/:departmentId",verifyAdminToken, updateDepartment)
+// router.get("/org/departments/${departmentId}/roles",  fetchDepartmentRoles);
+router.post("/org/departments/:departmentId/roles", verifyAdminToken, createRoleDeptwise)
 
 
 router.post(

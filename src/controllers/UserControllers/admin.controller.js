@@ -21,6 +21,8 @@ import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
 import { getAdminContext } from '../../utils/getAdminContext.js';
 import { Department } from '../../Models/UserModels/Department.js';
 import { Op } from 'sequelize';
+import { v4 as uuidv4 } from 'uuid';
+import { UserDepartment } from '../../Models/UserModels/UserDepartment.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -1481,6 +1483,79 @@ export const deleteSubDepartment = async(req,res)=>{
     return res.status(200).json({ message: "Sub-department has been deleted successfully." });
   } catch (error) {
     console.log("Error deleting subdepartment", error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const updateDepartment = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const superAdmin = await Admin.findByPk(id);
+    const { departmentId } = req.params;
+    const { name, code, status } = req.body;
+
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+
+    const department = await Department.findByPk(departmentId);
+    if (!department) return res.status(404).json({ message: "Department not found" });
+
+    // Update only provided fields
+    if (name) department.name = name;
+    if (code) department.code = code;
+    if (status) department.status = status;
+
+    await department.save();
+
+    return res.status(200).json({ message: "Department updated successfully", department });
+  } catch (error) {
+    console.error("Error updating department:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const createRoleDeptwise = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const { name } = req.body;
+    const { departmentId } = req.params;
+
+
+    const superAdmin = await Admin.findByPk(id);
+    if (!superAdmin || (superAdmin.global_role !== 'Superadmin' && superAdmin.global_role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+    }
+
+    if (!name || !departmentId) {
+      return res.status(400).json({ message: "Role name and department ID are required" });
+    }
+
+    const department = await Department.findByPk(departmentId);
+    if (!department) {
+      return res.status(404).json({ message: "Department not found" });
+    }
+
+    // Check if the role already exists
+    const existingRole = await UserDepartment.findOne({
+      where: { departmentId, role: name },
+    });
+
+    if (existingRole) {
+      return res.status(409).json({ message: "Role already exists in this department" });
+    }
+
+    // Create the new role
+    const newRole = await UserDepartment.create({
+      roleId: uuidv4(),
+      departmentId,
+      role: name,
+      headId: id, // Assuming the creator is the head
+      tags: [],
+    });
+
+    return res.status(201).json({ message: "Role created successfully", role: newRole });
+  } catch (error) {
+    console.error("Error creating role:", error);
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 }
