@@ -1,4 +1,4 @@
-// File: src/controllers/testGenerator.controller.js
+// File: src/controllers/TestGeneratorControllers/testGenerator.controller.js
 
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { getUserLearningMetrics } from "../../services/learnerProfile.service.js";

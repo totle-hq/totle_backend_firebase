@@ -8,6 +8,7 @@ import { Test } from '../Models/test.model.js';
 import { BookedSession } from '../Models/BookedSession.js'; // ✅ ADDED
 import { SupportQueriesMasterSeeder } from '../seeders/SupportQueriesSeeder.js';
 // import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
+import { ProgressionThresholds } from "../Models/progressionThresholds.model.js";
 
 dotenv.config();
 
@@ -122,6 +123,10 @@ export async function syncDatabase() {
     await CatalogueNode.sync({ alter: true });
 
     await BookedSession.sync({ alter: true }); // ✅ ADDED: Ensure this table is created
+
+    await ProgressionThresholds.sync({ alter: true });
+console.log("✅ ProgressionThresholds table synced successfully!");
+
 
     await sequelize1.sync({ alter: true });
 
