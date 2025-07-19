@@ -549,5 +549,103 @@ export const getFeedbackSummary = async (req, res) => {
   }
 };
 
+export const getMyQualifiedTopics = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
 
+    const stats = await Teachertopicstats.findAll({
+      where: { teacherId },
+      include: [
+        {
+          model: CatalogueNode,
+          as: "Topic",
+          attributes: ["node_id", "name", "parent_id"]
+        }
+      ]
+    });
 
+    const topicsMap = {};
+
+    for (const stat of stats) {
+      const topic = stat.Topic;
+      if (!topic) continue; // Skip if no associated topic
+
+      // Fetch parent subject node
+      const subjectNode = await CatalogueNode.findByPk(topic.parent_id, {
+        attributes: ["node_id", "name", "parent_id"]
+      });
+
+      // Fetch domain node (parent of subject)
+      let domainNode = null;
+      if (subjectNode?.parent_id) {
+        domainNode = await CatalogueNode.findByPk(subjectNode.parent_id, {
+          attributes: ["node_id", "name"]
+        });
+      }
+
+      const domainName = domainNode?.name || "Unknown Domain";
+      const subjectName = subjectNode?.name || "Unknown Subject";
+
+      if (!topicsMap[domainName]) topicsMap[domainName] = {};
+      if (!topicsMap[domainName][subjectName]) topicsMap[domainName][subjectName] = [];
+
+      topicsMap[domainName][subjectName].push(topic.name);
+    }
+
+    return res.status(200).json({ topics: topicsMap });
+  } catch (err) {
+    console.error("❌ Error fetching qualified topics:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+
+export const getMyTopicsWithStats = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    const stats = await Teachertopicstats.findAll({
+      where: { teacherId },
+      include: [
+        {
+          model: CatalogueNode,
+          as: "Topic",
+          attributes: ["node_id", "name", "parent_id"]
+        }
+      ]
+    });
+
+    const topicsWithStats = [];
+
+    for (const stat of stats) {
+      const topic = stat.Topic;
+      if (!topic) continue;
+
+      // Fetch sessions taught on this topic by this teacher
+      const sessions = await Session.findAll({
+        where: {
+          teacher_id: teacherId,
+          topic_id: topic.node_id,
+          status: "completed", // Only completed sessions
+        },
+        attributes: ["student_id"],
+      });
+
+      const uniqueLearners = new Set();
+      sessions.forEach((s) => {
+        if (s.student_id) uniqueLearners.add(s.student_id);
+      });
+
+      topicsWithStats.push({
+        topic_id: topic.node_id,
+        topic_name: topic.name,
+        sessionCount: sessions.length,
+        uniqueLearnerCount: uniqueLearners.size,
+      });
+    }
+
+    return res.status(200).json({ topics: topicsWithStats });
+  } catch (err) {
+    console.error("❌ Error fetching topics with stats:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};

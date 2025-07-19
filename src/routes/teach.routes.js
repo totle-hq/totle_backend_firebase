@@ -2,6 +2,9 @@ import express from "express";
 import { deleteAvailabilitySlot, getAvailabilityChart, getFeedbackSummary, getMyProgression, getSessionSummary, getUpcomingBookedSessions, offerSlot, reportSession, updateAvailabilitySlot, validateEligibility, validateSessionTime } from "../controllers/teach.contorller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 import { getTeachingProgression } from "../controllers/TeachControllers/progression.controller.js";
+import { getMyQualifiedTopics } from "../controllers/teach.contorller.js";
+import { getMyTopicsWithStats } from "../controllers/teach.contorller.js";
+
 
 
 const router = express.Router();
@@ -9,6 +12,8 @@ const router = express.Router();
 
 // ✅ Get Teaching Progression (with Auth)
 router.get("/progression", authMiddleware, getTeachingProgression);
+router.get("/my-topics", authMiddleware, getMyQualifiedTopics);
+router.get("/my-topics-stats", authMiddleware, getMyTopicsWithStats);
 
 router.get("/session/:id/summary", authMiddleware, getSessionSummary);
 router.get("/session/:id/validate-time", authMiddleware, validateSessionTime);
