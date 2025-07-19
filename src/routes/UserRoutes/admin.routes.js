@@ -1,6 +1,6 @@
 import express from "express";
 
-import { activeSuperAdmins, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, createRoleDeptwise, deleteBlog, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleSubDepartmentStatus, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, updateDepartment, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
+import { activeSuperAdmins, addSubDepartmentRole, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, createRoleDeptwise, deleteBlog, deleteDepartmentRole, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getRolesByDepartment, getSubDepartmentRoles, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleRoleStatus, toggleSubDepartmentStatus, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, updateDepartment, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
@@ -62,6 +62,12 @@ router.delete("/org/subdepartments/:subdeptid", verifyAdminToken, deleteSubDepar
 router.patch("/org/departments/:departmentId",verifyAdminToken, updateDepartment)
 // router.get("/org/departments/${departmentId}/roles",  fetchDepartmentRoles);
 router.post("/org/departments/:departmentId/roles", verifyAdminToken, createRoleDeptwise)
+router.get("/org/departments/:departmentId/roles", verifyAdminToken, getRolesByDepartment);
+router.delete('/org/roles/:roleId', verifyAdminToken, deleteDepartmentRole);
+router.patch('/org/roles/:roleId/toggle', verifyAdminToken, toggleRoleStatus);
+router.post('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, addSubDepartmentRole);
+router.get('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, getSubDepartmentRoles);
+
 
 
 router.post(

@@ -1537,7 +1537,7 @@ export const createRoleDeptwise = async (req, res) => {
 
     // Check if the role already exists
     const existingRole = await UserDepartment.findOne({
-      where: { departmentId, role: name },
+      where: { departmentId, role: name, status: 'active' },
     });
 
     if (existingRole) {
@@ -1559,3 +1559,115 @@ export const createRoleDeptwise = async (req, res) => {
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 }
+
+export const getRolesByDepartment = async (req, res) => {
+  try {
+    const { departmentId } = req.params;
+
+    const roles = await UserDepartment.findAll({
+      where: { departmentId },
+      attributes: ['role','roleId', 'headId', 'tags', 'status']
+    });
+
+    if (!roles.length) {
+      return res.status(404).json({ message: "No roles found for this department" });
+    }
+
+    return res.status(200).json(roles);
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const deleteDepartmentRole = async (req, res) => {
+  try {
+    const { roleId } = req.params;
+
+    if (!roleId) {
+      return res.status(400).json({ message: 'Missing roleId in request params' });
+    }
+
+    const role = await UserDepartment.findOne({ where: { roleId } });
+
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+
+    await role.destroy();
+
+    return res.status(200).json({ message: 'Role deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting role:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+export const toggleRoleStatus = async (req, res) => {
+  try {
+    const { roleId } = req.params;
+    const { status } = req.body;
+
+    if (!roleId || !['active', 'disabled'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid roleId or status' });
+    }
+
+    const role = await UserDepartment.findOne({ where: { roleId } });
+
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+
+    role.status = status;
+    await role.save();
+
+    return res.status(200).json({ message: `Role status updated to ${status}` });
+  } catch (error) {
+    console.error('Error toggling role status:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+export const addSubDepartmentRole = async (req, res) => {
+  try {
+    const { subDepartmentId } = req.params;
+    const { role, headId, tags, roleType } = req.body;
+
+    if (!role || !roleType) {
+      return res.status(400).json({ message: 'Role and roleType are required' });
+    }
+
+    const newRole = await UserDepartment.create({
+      roleId: uuidv4(),         // assuming roleId is UUID PK
+      departmentId: subDepartmentId,
+      role,
+      headId: headId || null,
+      tags: tags || [],
+      roleType,
+      status: 'active',         // default status on creation
+    });
+
+    return res.status(201).json({ message: 'Role created successfully', data: newRole });
+  } catch (error) {
+    console.error('Error creating sub-department role:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+
+export const getSubDepartmentRoles = async (req, res) => {
+  try {
+    const { subDepartmentId } = req.params;
+
+    const roles = await UserDepartment.findAll({
+      where: { departmentId: subDepartmentId },
+      attributes: ['roleId', 'role', 'headId', 'tags', 'status', 'roleType'],
+      order: [['createdAt', 'ASC']],
+    });
+
+    return res.status(200).json(roles);
+  } catch (error) {
+    console.error('Error fetching sub-department roles:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};

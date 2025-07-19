@@ -24,6 +24,11 @@ const UserDepartment = sequelize1.define('user_departments', {
     type: DataTypes.ENUM('read', 'edit', 'manage'),
     defaultValue: 'read',
   },
+  status: {
+    type: DataTypes.ENUM('active', 'disabled'),
+    allowNull: false,
+    defaultValue: 'active',
+  },
   tags: {
     type: DataTypes.ARRAY(DataTypes.STRING),
     defaultValue: [],
