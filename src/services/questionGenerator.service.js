@@ -8,6 +8,9 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function generateQuestions({
   subject,
+    subjectDescription,   // ✅ ADD THIS
+  domainDescription,    // ✅ ADD THIS
+
   domain,
   learnerProfile,
   topicParams,
@@ -26,7 +29,11 @@ export async function generateQuestions({
       subtopics,
       learnerProfile,
       domain,
+        domainDescription,   // ✅ ADD THIS
+
       subject,
+        subjectDescription,  // ✅ ADD THIS
+
     });
 
     const response = await openai.chat.completions.create({
@@ -83,8 +90,8 @@ You are an AI that generates advanced multiple-choice questions (MCQs) for a qua
 📘 Contextual Framework:
 - **Topic**: ${topicName}
 - **Description**: ${topicDescription}
-- **Subject**: ${subject}
-- **Domain**: ${domain}
+- **Subject**: ${subject} — ${subjectDescription}
+- **Domain**: ${domain} — ${domainDescription}
 
 📚 Subtopics to be covered (use as question coverage pool):
 ${formattedSubtopics}
