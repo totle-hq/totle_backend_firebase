@@ -55,6 +55,10 @@ export const CatalogueNode = sequelize1.define(
       type: DataTypes.JSONB,
       defaultValue: {},
     },
+    address_of_node:{
+      type: DataTypes.STRING(1024),
+      allowNull: true, // e.g., 'root/branch/level_1'
+    }
   },
   {
     schema: "catalog",

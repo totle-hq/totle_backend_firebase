@@ -35,6 +35,33 @@ async function cacheDel(pattern) {
   }
 }
 
+// 🔗 Build full address from root to current
+const buildAddressOfNode = async (node) => {
+  const names = [];
+  let current = node;
+
+  while (current) {
+    names.unshift(current.name);
+    if (!current.parent_id) break;
+    current = await CatalogueNode.findByPk(current.parent_id);
+  }
+
+  return names.join(" → "); // Use arrow
+};
+
+// 🔁 Update address for node and all children recursively
+const updateAddressRecursively = async (node) => {
+  const address = await buildAddressOfNode(node);
+  await node.update({ address_of_node: address });
+
+  const children = await CatalogueNode.findAll({ where: { parent_id: node.node_id } });
+
+  for (const child of children) {
+    await updateAddressRecursively(child);
+  }
+};
+
+
 const findUniformDomainParent = async (node) => {
   if (!node?.parent_id) return null;
 
@@ -93,6 +120,9 @@ async function distributePricesRecursively(parentId, prices) {
 export const createNode = async (req, res) => {
   try {
     const node = await CatalogueNode.create(req.body);
+
+    const fullNode = await CatalogueNode.findByPk(node.node_id); // includes .name
+    await updateAddressRecursively(fullNode);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
 
     const domainNode = await findUniformDomainParent(node);
@@ -151,6 +181,10 @@ export const updateNode = async (req, res) => {
     if (!node) return res.status(404).json({ error: "Node not found" });
 
     await node.update(req.body);
+
+    const updatedNode = await CatalogueNode.findByPk(node.node_id);
+    await updateAddressRecursively(updatedNode); // Update address after any change
+
     await cacheDel(`catalogue:node:${req.params.id}`);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
     const domainNode = await findUniformDomainParent(node);
@@ -160,7 +194,7 @@ export const updateNode = async (req, res) => {
       await distributePricesRecursively(domainNode.node_id, domainNode.prices);
     }
 
-    return res.json(node);
+    return res.json(updateNode);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }

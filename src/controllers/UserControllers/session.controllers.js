@@ -1,5 +1,5 @@
 // controllers/session/bookSession.controller.js
-import { BookedSession } from "../../models/BookedSession.js";
+import { BookedSession } from "../../Models/SessionModels/BookedSession.js";
 
 export const bookFreeSession = async (req, res) => {
   try {
