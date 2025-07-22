@@ -6,30 +6,35 @@ dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-/**
- * Generates unique test questions dynamically via OpenAI
- * Ensures previously generated questions for this user/topic aren't repeated
- *
- * @param {Object} params - Generation parameters
- * @param {Object} params.learnerProfile - User metrics (all 33 parameters)
- * @param {Object} params.topicParams - Topic characteristics (all 7 parameters)
- * @param {string} params.topicId - UUID of the topic
- * @param {string} params.topicName - Topic title
- * @param {string} params.userId - UUID of the user
- * @param {number} params.count - Number of questions
- * @returns {Promise<Object>} - { questions, answers, time_limit_minutes }
- */
 export async function generateQuestions({
-  subject,domain,
+  subject,
+    subjectDescription,   // ✅ ADD THIS
+  domainDescription,    // ✅ ADD THIS
+
+  domain,
   learnerProfile,
   topicParams,
+  topicDescription,
+  subtopics,
   topicId,
   topicName,
   userId,
   count = 20,
 }) {
   try {
-    const prompt = buildPrompt(topicName,learnerProfile,domain,subject);
+    const prompt = buildPrompt({
+      topicName,
+      topicDescription,
+      topicParams,
+      subtopics,
+      learnerProfile,
+      domain,
+        domainDescription,   // ✅ ADD THIS
+
+      subject,
+        subjectDescription,  // ✅ ADD THIS
+
+    });
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -38,8 +43,6 @@ export async function generateQuestions({
     });
 
     let raw = response.choices?.[0]?.message?.content || "{}";
-
-    // Strip common markdown wrappers like ```json or ```
     raw = raw.replace(/```json|```/g, "").trim();
 
     let parsed;
@@ -50,10 +53,8 @@ export async function generateQuestions({
       throw new Error("Failed to generate questions: Invalid JSON from GPT");
     }
 
-
     let { questions = [], answers = [], time_limit_minutes = 30 } = parsed;
 
-    // Filter out previously asked questions for this user-topic
     const previousTests = await Test.findAll({
       where: { topic_uuid: topicId, user_id: userId },
       attributes: ["questions"],
@@ -77,77 +78,84 @@ export async function generateQuestions({
   }
 }
 
-/**
- * Dynamically builds GPT prompt using full learner and topic parameters
- */
-function buildPrompt(topicName,userparams,domain,subject) {
+function buildPrompt({ topicName, topicDescription, topicParams, subtopics, learnerProfile, domain, subject }) {
   const formatParams = (obj) =>
-    Object.entries(obj)
-      .map(([key, val]) => `${key.replace(/_/g, " ")}: ${val}`)
-      .join("\n");
+    Object.entries(obj).map(([key, val]) => `${key.replace(/_/g, " ")}: ${val}`).join("\n");
+
+  const formattedSubtopics = subtopics.map((s, i) => `${i + 1}. ${s}`).join("\n");
 
   return `
-  You are an AI that generates high-quality multiple-choice questions (MCQs) for an educational platform. Your task is to create 20 MCQs for a Bridger qualification test to assess a user’s readiness to teach a specific topic, based on their user parameters and the topic’s attributes. The test must be custom-made, emphasizing the user’s weaknesses relative to the topic’s demands while ensuring a comprehensive evaluation.
- 
-  Guidelines for MCQ Generation:
-  Each question must have four answer choices (one correct, three plausible distractors).  
-  Avoid obvious or too-easy answer choices.  
-  Do not use phrasing that gives hints about the correct answer.  
-  Distribute the 20 questions across four types, with weights adjusted based on user-topic alignment, but cap any single type at 40% (8 questions) to maintain variety:
-  Recall-Based: Weight higher if Retention Importance is High and user Retention is Low  
-  Application-Based: Weight higher if Application Type is Practical and Practical Application is Low  
-  Analytical: Weight higher if Depth is Deep and user Critical Thinking is Low  
-  Personalized: At least 4 questions must target weak areas
-   All generated questions must be strictly related to the topic provided, but framed within the broader context of the associated domain and subject.
+You are an AI that generates advanced multiple-choice questions (MCQs) for a qualification test. This test evaluates a candidate's readiness to teach a specific topic on our educational platform. The generation is fully custom, adapting to both the topic's characteristics and the user's profile.
 
-- The **topic** defines the core concept or skill being assessed.
-- The **domain** provides the thematic area the topic belongs to (e.g., Algebra, World History, Thermodynamics).
-- The **subject** represents the overarching academic category (e.g., Mathematics, History, Physics).
+📘 Contextual Framework:
+- **Topic**: ${topicName}
+- **Description**: ${topicDescription}
+- **Subject**: ${subject} — ${subjectDescription}
+- **Domain**: ${domain} — ${domainDescription}
 
-Ensure that:
-- No question introduces concepts outside of the specified subject or domain.
-- Question wording and context remain aligned with the subject's academic level.
-- Do not mix examples or references from unrelated fields.
+📚 Subtopics to be covered (use as question coverage pool):
+${formattedSubtopics}
 
-  Adjust time limit (default 30 mins) based on Speed (<40%) and Stress Management (<30%)
+🧠 Learner Profile (33 metrics total):
+${formatParams(learnerProfile)}
 
-  Input Data:
+📊 Topic Parameters (7 instructional modifiers):
+${formatParams(topicParams)}
 
-  Topic Name: ${topicName}
-  Subject: ${subject},
-  domain:  ${domain},
-  User Parameters (33 total):
-  ${formatParams(userparams)}
+📌 Design Requirements:
+- Generate 20 unique MCQs.
+- Each MCQ must have 4 options: one correct + 3 plausible distractors.
+- Do not repeat questions asked in earlier tests.
+- Questions should map the **topic parameters** directly:
+  • Complexity Level → match phrasing/difficulty appropriately
+  • Engagement Factor → avoid dull, overly technical tone
+  • Retention Importance → test memorability-sensitive content
+  • Application Type → emphasize real-world or practical usage if practical
+  • Cross-domain Relevance → frame questions in boundary-crossing contexts
+  • Typical Learning Curve → reflect how quickly users grasp it
+  • Depth Requirement → control abstraction and reasoning depth
 
-  Topic Parameters (7 total):
- 
+🎯 Instructional Focus:
+Distribute questions into four cognitive categories (max 8 per type):
+1. **Recall-Based** – emphasize if Retention is High & user retention is Low
+2. **Application-Based** – emphasize if Application is Practical & user lags there
+3. **Analytical** – emphasize if Depth is Deep & user critical thinking is weak
+4. **Personalized** – must reflect specific low-scoring metrics from learnerProfile
 
-  You MUST return exactly 20 questions and their corresponding answers. Do not generate fewer. Do not include explanations or any extra output.
-  the number of question must be 20.
+🕒 Time Recommendation Logic:
+Default time is 30 minutes. Increase by 2–5 mins if:
+- Speed < 40%
+- Stress Management < 30%
 
-  Strictly return this exact JSON format:
+🚫 Restrictions:
+- Do not introduce topics outside the provided subtopics/domain/subject
+- Do not explain answers or add commentary
+- Format exactly as shown below
 
-  
-  {
-    "questions": [
-      {
-        "id": 1,
-        "text": "When did Ashoka ascend the throne of the Maurya Empire?",
-        "options": {
-          "A": "268 BCE",
-          "B": "300 BCE",
-          "C": "250 BCE",
-          "D": "280 BCE"
-        }
+🎯 JSON Output Format:
+{
+  "questions": [
+    {
+      "id": 1,
+      "text": "Sample question text here",
+      "options": {
+        "A": "Option 1",
+        "B": "Option 2",
+        "C": "Option 3",
+        "D": "Option 4"
       }
-    ],
-    "answers": [
-      {
-        "id": 1,
-        "correct_answer": "A"
-      }
-    ],
-    "time_limit_minutes": 32
-  }
-  `.trim();
+    }
+  ],
+  "answers": [
+    {
+      "id": 1,
+      "correct_answer": "A"
+    }
+  ],
+  "time_limit_minutes": 30
+}
+
+Do not explain answers or add commentary.
+Strictly adhere to the output format.
+`.trim();
 }
