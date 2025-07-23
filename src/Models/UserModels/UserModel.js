@@ -83,6 +83,20 @@ const User = sequelize1.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    latitude: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    longitude: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+    },
+    ipAddress: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'ip_address', // ✅ maps to snake_case column in DB
+      comment: "User's IP address"
+    },
     profilePictureUrl: {
       type: DataTypes.TEXT, // ✅ Store image as BLOB
       allowNull: true,
@@ -111,12 +125,6 @@ const User = sequelize1.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
-   ipAddress: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    field: 'ip_address', // ✅ maps to snake_case column in DB
-    comment: "User's IP address"
-   },
     createdAt: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -126,10 +134,10 @@ const User = sequelize1.define(
       defaultValue: DataTypes.NOW,
     },
     role: {
-  type: DataTypes.ENUM("learner", "teacher", "admin"),
-  allowNull: false,
-  defaultValue: "learner",
-},
+      type: DataTypes.ENUM("learner", "teacher", "admin"),
+      allowNull: false,
+      defaultValue: "learner",
+    },
 
   },
   {

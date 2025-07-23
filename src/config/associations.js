@@ -17,6 +17,7 @@ import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { TestFlag } from "../Models/TestflagModel.js";
 import { Test } from "../Models/test.model.js";
 import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel.js";
+import { Session } from "../Models/SessionModel.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -92,6 +93,9 @@ const defineRelationships = () => {
   Department.hasMany(Department, { foreignKey: 'parentId', as: 'subDepartments', onDelete: 'CASCADE'});
 
   Department.belongsTo(Department, { foreignKey: 'parentId', as: 'parentDepartment'});
+
+  Session.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
+  User.hasMany(Session, { foreignKey: 'teacher_id', as: 'teachingSessions'});
 
 };
 

@@ -484,12 +484,12 @@ export const getQualifiedTopics = async (req, res) => {
 
     const topics =  await Teachertopicstats.findAll({
       where: { teacherId:userId },
- include: [
-        {
-          model: CatalogueNode,
-          as: "Topic",
-          attributes: ['node_id', 'name',"parent_id"]
-        },
+      include: [
+              {
+                model: CatalogueNode,
+                // as: "Topic",
+                attributes: ['node_id', 'name',"parent_id"]
+              },
       
       ]
     });
