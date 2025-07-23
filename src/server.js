@@ -1,5 +1,3 @@
-// version 01
-
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -12,10 +10,8 @@ import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user 
 // import sessionRoutes from "./routes/session.routes.js";
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
-// import topicRoutes from './routes/CatalogRoutes/topic.routes.js';
-// import subjectRoutes from './routes/CatalogRoutes/subject.routes.js';
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
-
+import sessionRoutes from "./routes/session.routs.js";
 // import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
 // import boardRoutes from './routes/CatalogRoutes/board.routes.js';
 // import educationRoutes from './routes/CatalogRoutes/education.routes.js';
@@ -30,10 +26,13 @@ import {syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
+//import sessionRoutes from './routes/sessionRoutes.js';
 import http from "http";
 import { Server } from "socket.io";
-
-
+import teachRoutes from "./routes/teach.routes.js"
+import ctaRoutes from "./routes/cta.js"
+import platformCtaRoutes from "./routes/platformCta.routes.js";
+import FeedbackRoutes from "./routes/feedback.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,18 +81,16 @@ app.use("/languages", languageRoutes);
 app.use("/api/languages", languageRoutes); // ✅ Register the languages route
 // app.use("/session", authMiddleware, sessionRoutes);
 app.use("/admin", adminRoutes);
-// app.use("/api/topics", topicRoutes);
-// app.use("/api/subjects", subjectRoutes);
-// app.use("/api/catalogue/nodes", catalogueRoutes); // ✅ Mount catalogue endpoints
-
+app.use('/api', ctaRoutes);
+app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
-// app.use("/api/grades", gradeRoutes);
-// app.use("/api/boards", boardRoutes);
-// app.use("/api/education", educationRoutes);
-// app.use("/api/categories", categoryRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/session",sessionRoutes);
+app.use("/api/teach",teachRoutes);
+
+app.use("/api/feedback",FeedbackRoutes);
 
 
 
@@ -121,7 +118,7 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-    await syncDatabase();  // Automatically run the syncDatabase on server start
+     await syncDatabase();  // Automatically run the syncDatabase on server start
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
@@ -153,7 +150,6 @@ const startServer = async () => {
     console.error("❌ Error during database setup or server start:", error);
   }
 };
-
 // Call the async startServer function using an immediately invoked function expression (IIFE)
 (async () => {
   await startServer(); // Call async function to start server after database setup
