@@ -89,7 +89,7 @@ app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
-
+app.use("/api/session",sessionRoutes);
 app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
@@ -120,7 +120,7 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-    // await syncDatabase();  // Automatically run the syncDatabase on server start
+     await syncDatabase();  // Automatically run the syncDatabase on server start
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
