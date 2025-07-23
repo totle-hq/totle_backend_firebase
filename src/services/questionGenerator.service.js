@@ -78,20 +78,32 @@ export async function generateQuestions({
   }
 }
 
-function buildPrompt({ topicName, topicDescription, topicParams, subtopics, learnerProfile, domain, subject }) {
+function buildPrompt({
+  topicName = "",
+  topicDescription = "",
+  topicParams = {},
+  subtopics = [],
+  learnerProfile = {},
+  domain = "",
+  subject = "",
+  subjectDescription = "",
+  domainDescription = ""
+}) {
   const formatParams = (obj) =>
     Object.entries(obj).map(([key, val]) => `${key.replace(/_/g, " ")}: ${val}`).join("\n");
 
-  const formattedSubtopics = subtopics.map((s, i) => `${i + 1}. ${s}`).join("\n");
+  const formattedSubtopics = Array.isArray(subtopics) && subtopics.length > 0
+  ? subtopics.map((s, i) => `${i + 1}. ${s}`).join("\n")
+  : "None specified";
 
   return `
 You are an AI that generates advanced multiple-choice questions (MCQs) for a qualification test. This test evaluates a candidate's readiness to teach a specific topic on our educational platform. The generation is fully custom, adapting to both the topic's characteristics and the user's profile.
 
 📘 Contextual Framework:
 - **Topic**: ${topicName}
-- **Description**: ${topicDescription}
-- **Subject**: ${subject} — ${subjectDescription}
-- **Domain**: ${domain} — ${domainDescription}
+- **Description**: ${topicDescription || ""}
+- **Subject**: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""}
+- **Domain**: ${domain}${domainDescription ? ` — ${domainDescription}` : ""}
 
 📚 Subtopics to be covered (use as question coverage pool):
 ${formattedSubtopics}

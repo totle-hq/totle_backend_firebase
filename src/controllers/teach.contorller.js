@@ -67,9 +67,11 @@ export const offerSlot = async (req, res) => {
 const user=await User.findByPk(teacher_id)
 const teacher_location=user.location;
 if(!teacher_location || teacher_location===null){
+  console.log("teacher location not found")
      return res.status(400).json({ message: "please fill the location in profile to offer a slot" });
 }
     if (!topic_id || !date || !timeRange) {
+      console.log("Missing topic_id, date or timeRange", { topic_id, date, timeRange });
       return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
     } // Parse time range like "14:00 - 15:00"
     const [startTimeStr, endTimeStr] = timeRange.split("-");

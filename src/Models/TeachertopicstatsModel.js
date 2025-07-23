@@ -28,5 +28,10 @@ rating: {
 }
 
 },{
+  schema:"catalog",
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  underscored: true,
  tableName: 'teacher_topic_stats',
 })

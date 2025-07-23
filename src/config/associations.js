@@ -76,28 +76,22 @@ const defineRelationships = () => {
   UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
 
   Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
-User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
+  User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
 
-Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id', as:"Topic" });
-CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id',as:"Topic" });
-TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
+  Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id' });
+  CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id'});
+  
+  TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+  User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
 
-TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
-Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
+  TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
+  Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
   SupportQueriesModel.belongsTo(User, {foreignKey: "user_id",});
   User.hasMany(SupportQueriesModel, {foreignKey: "user_id", onDelete: "CASCADE"});
 
-  Department.hasMany(Department, {
-    foreignKey: 'parentId',
-    as: 'subDepartments',
-    onDelete: 'CASCADE',
-  });
+  Department.hasMany(Department, { foreignKey: 'parentId', as: 'subDepartments', onDelete: 'CASCADE'});
 
-  Department.belongsTo(Department, {
-    foreignKey: 'parentId',
-    as: 'parentDepartment',
-  });
+  Department.belongsTo(Department, { foreignKey: 'parentId', as: 'parentDepartment'});
 
 };
 
