@@ -9,15 +9,22 @@ export const findSubjectAndDomain = async (topicId) => {
     const parent = await CatalogueNode.findByPk(current.parent_id);
 
     if (parent?.is_subject && !subject) {
-      subject = { id: parent.node_id, name: parent.name };
+      subject = {
+        id: parent.node_id,
+        name: parent.name,
+        description: parent.description || ""
+      };
     }
 
     if (parent?.is_domain && !domain) {
-      domain = { id: parent.node_id, name: parent.name };
+      domain = {
+        id: parent.node_id,
+        name: parent.name,
+        description: parent.description || ""
+      };
     }
 
     if (subject && domain) break;
-
     current = parent;
   }
 

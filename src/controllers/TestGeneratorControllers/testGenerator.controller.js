@@ -33,37 +33,50 @@ export const generateTest = async (req, res) => {
     const token = req.headers.authorization?.split(" ")[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
- let { subject, domain }=await findSubjectAndDomain(topicId);
- console.log(subject,domain);
- subject=subject.name;
- domain=domain.name;
- console.log(subject,domain);
+    const { subject, domain } = await findSubjectAndDomain(topicId);
+    const subjectName = subject?.name || "";
+    const subjectDescription = subject?.description || "";
+    const domainName = domain?.name || "";
+    const domainDescription = domain?.description || "";
+
+    console.log(subject,domain);
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
  
     const topic = await CatalogueNode.findByPk(topicId);
+    
     if (!topic || !topic.is_topic) {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
+    const topicDescription = topic.description || "";
  
+    const topicParams = topic.metadata || {};
+
     const learnerProfile = await getUserLearningMetrics(userId);
     const difficulty = "beginner";
     const seenTexts = new Set();
     let finalQuestions = [];
     let finalAnswers = [];
     let attempts = 0;
+
+    console.log("details", topic.name, topicDescription, subjectName, subjectDescription, domainName, domainDescription, topicParams);
  
     while (finalQuestions.length < 20 && attempts < 5) {
       const { questions, answers } = await generateQuestions({
-        subject,domain,
+        subject: subjectName,
+        subjectDescription,
+        domain: domainName,
+        domainDescription,
         learnerProfile,
         topicName: topic.name,
+        topicDescription,
+        topicParams,
         topicId,
         userId,
         count: 20,
       });
- 
+
       for (let i = 0; i < questions.length && finalQuestions.length < 20; i++) {
         const q = questions[i];
         const ans = answers.find(a => a.id === q.id);
