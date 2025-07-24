@@ -119,6 +119,11 @@ export async function syncDatabase() {
     const { Blog } = await import("../Models/SurveyModels/BlogModel.js");
     await Blog.sync({ alter: true });
 
+    const { Objective } = await import("../Models/Objectives/objective.model.js");
+await Objective.sync({ alter: true });
+console.log("✅ Objective table synced successfully!");
+
+
     const { Survey } = await import("../Models/SurveyModels/SurveyModel.js");
     await Survey.sync({ alter: true });
 
