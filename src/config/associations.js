@@ -97,6 +97,9 @@ const defineRelationships = () => {
   Session.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
   User.hasMany(Session, { foreignKey: 'teacher_id', as: 'teachingSessions'});
 
+  Session.belongsTo(User, { foreignKey: 'student_id', as: 'student' });
+  Session.belongsTo(CatalogueNode, { foreignKey: 'topic_id', as: 'topic' });
+
 };
 
 export default defineRelationships;
