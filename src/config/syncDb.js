@@ -83,6 +83,12 @@ async function createDatabaseIfNeeded(dbName) {
     console.error("❌ Error creating database:", error);
   }
 }
+// At the bottom of syncDb.js
+export async function defineModelRelationships() {
+  const defineRelationships = await import("../config/associations.js");
+  defineRelationships.default();
+  console.log("✅ Sequelize model associations initialized");
+}
 
 export async function syncDatabase() {
   try {

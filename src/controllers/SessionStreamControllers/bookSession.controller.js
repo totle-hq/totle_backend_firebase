@@ -68,15 +68,20 @@ export const bookFreeSession = async (req, res) => {
 
     const learner = await User.findOne({ where: { id: learner_id } });
     if (!learner) {
+      console.warn("⚠️ Learner not found:", learner_id);
       return res.status(404).json({ error: true, message: "Learner not found" });
     }
+    // console.log("Session associations:", Object.keys(Session.associations));
+
 
     const availableSessions = await Session.findAll({
       where: { topic_id, status: "available" },
-      include: [{ model: User, as: "teacher" }]
+      raw: true,
     });
 
-    if (availableSessions.length <= 2) {
+
+    if (availableSessions.length < 2) {
+      console.warn("⚠️ Not enough available sessions for booking", availableSessions.length);
       return res.status(404).json({ error: true, message: "Not enough available sessions" });
     }
 
@@ -85,11 +90,17 @@ export const bookFreeSession = async (req, res) => {
     let highestScore = -Infinity;
 
     for (const session of availableSessions) {
-      const teacher = session.teacher;
+      // console.log("session:", session);
+      let teacher = await User.findOne({
+        where: { id: session.teacher_id }
+      });
+
+      // console.log("Matching session:", session.id, "with teacher:", teacher);
       const mismatchPercent = calculateMismatchPercentage(
         learner.known_language_ids || [],
-        teacher.preferred_languages || []
+        teacher.known_language_ids || []
       );
+
 
       const distanceKm = getDistance(learner.location, teacher.location); // IP or lat/lng based
       const score = getScore(learner, teacher, mismatchPercent, distanceKm, learner.gender);
@@ -119,6 +130,7 @@ export const bookFreeSession = async (req, res) => {
     });
 
     if (!nextSlot) {
+      console.warn("⚠️ No suitable future slot found for booking");
       return res.status(404).json({ error: true, message: "No suitable future slot found" });
     }
 
