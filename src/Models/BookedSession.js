@@ -11,12 +11,20 @@ export const BookedSession = sequelize1.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+    teacher_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
     learner_id: {
       type: DataTypes.UUID,
       allowNull: false,
     },
     topic_id: {
       type: DataTypes.UUID,
+      allowNull: false,
+    },
+    topic: {
+      type: DataTypes.STRING,
       allowNull: false,
     },
   },

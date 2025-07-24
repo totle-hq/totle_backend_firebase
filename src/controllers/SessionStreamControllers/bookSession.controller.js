@@ -95,6 +95,18 @@ export const bookFreeSession = async (req, res) => {
         where: { id: session.teacher_id }
       });
 
+      console.log("id", session.teacher_id)
+      
+      if(!teacher.known_language_ids) {
+        console.error("❌ Teacher has no known languages, can't book session");
+        return res.status(400).json({ error: true, message: "❌ Teacher has no known languages, can't book session" });
+      }
+
+      if(!learner.known_language_ids) {
+        console.error("❌ Learner has no known languages, can't book session");
+        return res.status(400).json({ error: true, message: "❌ Learner has no known languages, can't book session" });
+      }
+        
       // console.log("Matching session:", session.id, "with teacher:", teacher);
       const mismatchPercent = calculateMismatchPercentage(
         learner.known_language_ids || [],
@@ -104,7 +116,7 @@ export const bookFreeSession = async (req, res) => {
 
       const distanceKm = getDistance(learner.location, teacher.location); // IP or lat/lng based
       const score = getScore(learner, teacher, mismatchPercent, distanceKm, learner.gender);
-
+      console.log("score for session", session.id, ":", score);
       if (score > highestScore) {
         highestScore = score;
         bestSession = session;
@@ -128,14 +140,26 @@ export const bookFreeSession = async (req, res) => {
       },
       order: [["scheduled_at", "ASC"]]
     });
+    console.log("Next slot found:", nextSlot ? nextSlot.id : "None");
 
     if (!nextSlot) {
       console.warn("⚠️ No suitable future slot found for booking");
       return res.status(404).json({ error: true, message: "No suitable future slot found" });
     }
 
+    let topicName = await CatalogueNode.findOne({
+      where: { node_id: topic_id },
+      attributes: ['name']
+    });
+
     // Save booking
-    await BookedSession.create({ learner_id, topic_id });
+    await BookedSession.create({
+      learner_id,
+      teacher_id: nextSlot.teacher_id,
+      topic_id,
+      topic: topicName.name || "Unknown",
+    });
+
     await Session.update(
       { student_id: learner_id, status: "upcoming" },
       { where: { id: nextSlot.id } }
