@@ -82,7 +82,14 @@ export const postFeedBack = async (req, res) => {
 // ✅ GET Feedback Summary for Learner or Qualified Teacher
 export const getAllFeedback = async (req, res) => {
   try {
-    const { id: userId } = req.user;
+    const userId = req.user?.id || req.query.bridger_id;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing user identity.",
+      });
+    }
 
     const qualifiedTopics = await Topic.findAll({
       where: {

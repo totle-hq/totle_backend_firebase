@@ -35,7 +35,7 @@ import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
 import FeedbackRoutes from "./routes/feedback.routes.js";
-
+import insights from "./routes/insights.routes.js"
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -93,7 +93,7 @@ app.use("/api/session",sessionRoutes);
 app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
-
+app.use("/api/teach",insights);
 
 
 // Test route
@@ -120,7 +120,7 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-     await syncDatabase();  // Automatically run the syncDatabase on server start
+    //  await syncDatabase();  // Automatically run the syncDatabase on server start
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;

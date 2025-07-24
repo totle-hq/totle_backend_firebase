@@ -1,6 +1,6 @@
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
-
+import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
 export const Session = sequelize1.define(
   "Session",
   {
@@ -46,3 +46,7 @@ export const Session = sequelize1.define(
   }
 );
 
+Session.belongsTo(CatalogueNode, {
+  foreignKey: "topic_id",
+  as: "topic",
+});
