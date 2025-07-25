@@ -1,109 +1,198 @@
 import UserDomainProgress from "../Models/progressModels.js";
+import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { Op } from "sequelize";
 
-export const getAllUserDomainProgress = async (req, res) => {
-  try {
-    const { id } = req.params;
+const buildHierarchyPathTillDomain = async (node) => {
+  const path = [];
+  let currentNode = node;
 
-    const progress = await UserDomainProgress.findAll({
-      where: {
-        user_id: id,
-      },
-    });
-
-    if (!progress || progress.length === 0) {
-      return res
-        .status(404)
-        .json({ message: "No progress entries found for the given user ID" });
-    }
-
-    return res.status(200).json(progress);
-  } catch (error) {
-    console.error("Error fetching user domain progress:", error);
-    return res.status(500).json({ message: "Internal server error" });
+  while (currentNode) {
+    path.unshift(currentNode.name);
+    if (currentNode.is_domain || !currentNode.parent_id) break;
+    currentNode = await CatalogueNode.findByPk(currentNode.parent_id);
   }
+
+  return path.join(" → ");
 };
 
 export const createUserDomainProgress = async (req, res) => {
   try {
-    const {
-      user_id,
-      subject_id,
-      subject_name,
-      topic_ids,
-      topic_names,
-      topics_completed,
-      hierarchy_path,
-      motivation,
-      goal,
-    } = req.body;
+    const { user_id, domain_id, motivation, goal } = req.body;
 
-    // Basic validation
-    if (
-      !user_id ||
-      !subject_id ||
-      !subject_name ||
-      !Array.isArray(topic_ids) ||
-      !Array.isArray(topic_names) ||
-      topic_ids.length !== topic_names.length
-    ) {
-      return res.status(400).json({
-        message:
-          "Required fields missing or mismatched topic_ids and topic_names.",
-      });
-    }
-
-    const progress = await UserDomainProgress.create({
-      user_id,
-      subject_id,
-      subject_name,
-      topic_ids,
-      topic_names,
-      topics_completed: topics_completed || [],
-      hierarchy_path: hierarchy_path || [],
-      motivation,
-      goal,
+    // Get domain node
+    const domainNode = await CatalogueNode.findOne({
+      where: { node_id: domain_id, is_domain: true },
     });
 
-    return res.status(201).json(progress);
-  } catch (err) {
-    console.error("Error in createUserDomainProgress:", err);
-    return res.status(500).json({ message: "Internal server error" });
+    if (!domainNode) {
+      return res.status(404).json({ error: "Domain not found" });
+    }
+
+    // Fetch subjects under the domain
+    const subjectNodes = await CatalogueNode.findAll({
+      where: { parent_id: domain_id, status: "active" },
+    });
+    console.log("Subject Nodes:", subjectNodes);
+
+    // For each subject, fetch its topics
+    const subjectsWithTopics = await Promise.all(
+      subjectNodes.map(async (subject) => {
+        const topics = await CatalogueNode.findAll({
+          where: { parent_id: subject.node_id, status: "active" },
+        });
+
+        return {
+          subject_id: subject.node_id,
+          subject_name: subject.name,
+          topics: topics.map((topic) => ({
+            topic_id: topic.node_id,
+            topic_name: topic.name,
+          })),
+        };
+      })
+    );
+
+    // const trimmedPath = domainNode.hierarchy_path
+      // ?.split("→")
+      // .slice(0, 3)
+      // .join(" → ")
+      // .trim();
+
+    // Upsert user progress
+    const [userProgress, created] = await UserDomainProgress.upsert(
+      {
+        user_id,
+        domain_id,
+        domain_name: domainNode.name,
+        subjects: subjectsWithTopics, 
+        hierarchy_path: domainNode.address_of_node, // Use address_of_node for hierarchy path
+        motivation: motivation || "",
+        goal: goal || "",
+        topics_completed: [],
+        completed_by_self: [],
+        completed_by_totle: [],
+      },
+      { returning: true }
+    );
+
+    return res.status(200).json({
+      message: created ? "Progress created" : "Progress updated",
+      data: userProgress,
+    });
+  } catch (error) {
+    console.error("Error in createUserDomainProgress:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
+export const getAllUserDomainProgress = async (req, res) => {
+  try {
+    const { user_id } = req.query;
+
+    if (!user_id) {
+      return res.status(400).json({ error: "user_id is required" });
+    }
+
+    const userProgress = await UserDomainProgress.findAll({
+      where: { user_id },
+      order: [["createdAt", "DESC"]],
+    });
+
+    res.status(200).json({
+      data: userProgress.map((progress) => ({
+        progress_id: progress.id,
+        domain_id: progress.domain_id,
+        domain_name: progress.domain_name,
+        subjects: progress.subjects, // already nested
+        hierarchy_path: progress.hierarchy_path,
+        motivation: progress.motivation,
+        goal: progress.goal,
+        topics_completed: progress.topics_completed,
+        completed_by_self: progress.completed_by_self,
+        completed_by_totle: progress.completed_by_totle,
+      })),
+    });
+  } catch (error) {
+    console.error("Error in getAllUserDomainProgress:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+
+export const getDomain = async (req, res) => {
+  try {
+    const matchedDomains = await CatalogueNode.findAll({
+      where: {
+        is_domain: true,
+      },
+      attributes: ['node_id', 'name', 'address_of_node']
+    });
+
+    return res.status(200).json({ domains: matchedDomains });
+  } catch (err) {
+    console.error("Error in getDomain:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 
 export const updateUserDomainProgress = async (req, res) => {
   try {
-    const { id } = req.params;
-    const updates = req.body;
+    const {
+      user_id,
+      domain_id,
+      completed_by_self = [],
+      completed_by_totle = [],
+    } = req.body;
 
-    const progress = await UserDomainProgress.findByPk(id);
-    if (!progress) {
-      return res.status(404).json({ message: "Progress entry not found" });
+    if (!user_id || !domain_id) {
+      return res.status(400).json({ error: "Missing required user or domain ID" });
     }
 
-    await progress.update(updates);
-    return res.status(200).json(progress);
+    const progress = await UserDomainProgress.findOne({
+      where: { user_id, domain_id },
+    });
+
+    if (!progress) {
+      return res.status(404).json({ error: "Progress record not found" });
+    }
+
+    
+    const topics_completed = Array.from(
+      new Set([...completed_by_self, ...completed_by_totle])
+    );
+
+    await progress.update({
+      completed_by_self,
+      completed_by_totle,
+      topics_completed,
+    });
+
+    res.status(200).json({ message: "Progress updated", data: progress });
   } catch (error) {
-    console.error("Error updating progress:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("Error in updateUserDomainProgress:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
-
 export const deleteUserDomainProgress = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { user_id, domain_id } = req.query;
 
-    const progress = await UserDomainProgress.findByPk(id);
-    if (!progress) {
-      return res.status(404).json({ message: "Progress entry not found" });
+    if (!user_id || !domain_id) {
+      return res.status(400).json({ message: "user_id and domain_id are required." });
     }
 
-    await progress.destroy();
-    return res
-      .status(200)
-      .json({ message: "Progress entry deleted successfully" });
+    const deleted = await UserDomainProgress.destroy({
+      where: { user_id, domain_id },
+    });
+
+    if (deleted === 0) {
+      return res.status(404).json({ message: "Progress record not found." });
+    }
+
+    return res.status(200).json({ message: "Progress record deleted successfully." });
   } catch (error) {
-    console.error("Error deleting progress:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    console.error("Error in deleteUserDomainProgress:", error);
+    return res.status(500).json({ message: "Server error." });
   }
 };
