@@ -27,7 +27,10 @@ export const handleAllFeedbackSummaries = async ({
   newFeedback,
 }) => {
   try {
+    
     const { domain, subject } = await findSubjectAndDomain(topic_id);
+  
+
     const domain_id = domain.id;
     const subject_id = subject.id;
 
@@ -39,74 +42,58 @@ export const handleAllFeedbackSummaries = async ({
 
     const normalizedPace = newFeedback.pace_feedback.toLowerCase();
 
-    // Step 1: Fetch all summaries in one go
+    
     const existingSummaries = await FeedbackSummary.findAll({
       where: {
         teacher_id,
-        [Op.or]: nodes.map(({ node_id, node_type }) => ({
-          node_id,
-          node_type,
-        })),
+        [Op.or]: nodes.map(({ node_id, node_type }) => ({ node_id, node_type })),
       },
     });
+  
 
-    // Step 2: Map existing summaries for quick access
     const summaryMap = new Map();
     for (const summary of existingSummaries) {
       summaryMap.set(`${summary.node_id}_${summary.node_type}`, summary);
     }
 
-    // Step 3: Loop over nodes and update/create summaries
     for (const { node_id, node_type } of nodes) {
       const key = `${node_id}_${node_type}`;
       const existingSummary = summaryMap.get(key);
 
       if (existingSummary) {
-        const {
-          avg_star_rating,
-          avg_clarity_rating,
-          avg_helpfulness_rating,
-          feedback_count,
-          confidence_gain_percent,
-          engagement_percent,
-          pace_fast,
-          pace_normal,
-          pace_slow,
-        } = existingSummary;
-
-        const newCount = feedback_count + 1;
-
+        const newCount = existingSummary.feedback_count + 1;
         const updatedSummary = {
           avg_star_rating:
-            (avg_star_rating * feedback_count + newFeedback.star_rating) /
+            (existingSummary.avg_star_rating * existingSummary.feedback_count +
+              newFeedback.star_rating) /
             newCount,
           avg_clarity_rating:
-            (avg_clarity_rating * feedback_count +
+            (existingSummary.avg_clarity_rating * existingSummary.feedback_count +
               newFeedback.clarity_rating) /
             newCount,
           avg_helpfulness_rating:
-            (avg_helpfulness_rating * feedback_count +
+            (existingSummary.avg_helpfulness_rating * existingSummary.feedback_count +
               newFeedback.helpfulness_rating) /
             newCount,
           confidence_gain_percent: Math.round(
-            (confidence_gain_percent * feedback_count +
+            (existingSummary.confidence_gain_percent * existingSummary.feedback_count +
               (newFeedback.confidence_gain_yn ? 100 : 0)) /
               newCount
           ),
           engagement_percent: Math.round(
-            (engagement_percent * feedback_count +
+            (existingSummary.engagement_percent * existingSummary.feedback_count +
               (newFeedback.engagement_yn ? 100 : 0)) /
               newCount
           ),
-          pace_fast: pace_fast + (normalizedPace.includes("fast") ? 1 : 0),
-          pace_normal:
-            pace_normal + (normalizedPace.includes("normal") ? 1 : 0),
-          pace_slow: pace_slow + (normalizedPace.includes("slow") ? 1 : 0),
+          pace_fast: existingSummary.pace_fast + (normalizedPace.includes("fast") ? 1 : 0),
+          pace_normal: existingSummary.pace_normal + (normalizedPace.includes("normal") ? 1 : 0),
+          pace_slow: existingSummary.pace_slow + (normalizedPace.includes("slow") ? 1 : 0),
           feedback_count: newCount,
         };
 
+        
         await existingSummary.update(updatedSummary);
-      } else {
+     } else {
         await FeedbackSummary.create({
           teacher_id,
           node_id,
@@ -130,5 +117,6 @@ export const handleAllFeedbackSummaries = async ({
     return { success: false, message: "Internal error" };
   }
 };
+
 
 

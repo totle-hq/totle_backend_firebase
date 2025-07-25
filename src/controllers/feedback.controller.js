@@ -11,105 +11,88 @@ import { handleAllFeedbackSummaries } from "../utils/updatefeedbacksummary.js";
 // ✅ POST Feedback
 export const postFeedBack = async (req, res) => {
   try {
+    console.time("Total Feedback Request");
+
     const {
-      learner_id,
-      session_id,
-      bridger_id,
-      star_rating,
-      helpfulness_rating,
-      clarity_rating,
-      pace_feedback,
-      engagement_yn,
-      confidence_gain_yn,
-      text_feedback,
-      flagged_issue,
-      flag_reason,
+      learner_id, session_id, bridger_id,
+      star_rating, helpfulness_rating, clarity_rating,
+      pace_feedback, engagement_yn, confidence_gain_yn,
+      text_feedback, flagged_issue, flag_reason,
     } = req.body;
-   const now = new Date();
-    const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000); // 2 minutes window
+
+    const now = new Date();
+    const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
+
     if (!learner_id || !session_id || !bridger_id) {
-      return res.status(400).json({
-        success: false,
-        message: "learner_id, session_id, and bridger_id are required.",
-      });
+      return res.status(400).json({ success: false, message: "Missing IDs" });
     }
 
     if (star_rating === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "star_rating is required and must be between 1 and 5.",
-      });
+      return res.status(400).json({ success: false, message: "Missing star rating" });
     }
 
     if (flagged_issue && !flag_reason) {
-      return res.status(400).json({
-        success: false,
-        message: "flag_reason is required when flagged_issue is marked.",
-      });
+      return res.status(400).json({ success: false, message: "Flag reason required" });
     }
-     const session = await Session.findByPk(session_id);
+
+    console.time("Get Session");
+    const session = await Session.findByPk(session_id);
+    console.timeEnd("Get Session");
+
     if (!session) {
-      return res.status(404).json({
-        success: false,
-        message: "Session not found",
-      });
+      return res.status(404).json({ success: false, message: "Session not found" });
     }
-   
-    // Step 1: Check number of feedbacks in last 2 minutes
+
+    console.time("Check Recent Feedback Count");
     const recentCount = await Feedback.count({
       where: {
-        learner_id: learner_id,
-        created_at: {
-          [Op.gt]: twoMinutesAgo,
-        },
+        learner_id,
+        created_at: { [Op.gt]: twoMinutesAgo },
       },
     });
+    console.timeEnd("Check Recent Feedback Count");
 
     if (recentCount >= 5) {
-      return res.status(429).json({
-        success: false,
-        message: "Rate limit exceeded. You can only submit 5 feedbacks in 2 minutes.",
-      });
+      return res.status(429).json({ success: false, message: "Rate limit exceeded" });
     }
- const previousfeedback=await Feedback.findAll({
-  where:{session_id:session_id}
-});
- if(previousfeedback.length>0){
-  return res.status(404).json({message:"you already submit a review for this session",success:false})
- }
 
+    console.time("Check Existing Feedback for Session");
+    const previousfeedback = await Feedback.findAll({
+      where: { session_id }
+    });
+    console.timeEnd("Check Existing Feedback for Session");
+
+    if (previousfeedback.length > 0) {
+      return res.status(409).json({ message: "Already submitted", success: false });
+    }
 
     const topic_id = session.topic_id;
 
+    console.time("Create Feedback");
     const feedback = await Feedback.create({
-      learner_id,
-      session_id,
-      bridger_id,
-      topic_id,
-      star_rating,
-      helpfulness_rating,
-      clarity_rating,
-      pace_feedback,
-      engagement_yn,
-      confidence_gain_yn,
-      text_feedback,
-      flagged_issue,
-      flag_reason,
+      learner_id, session_id, bridger_id, topic_id,
+      star_rating, helpfulness_rating, clarity_rating,
+      pace_feedback, engagement_yn, confidence_gain_yn,
+      text_feedback, flagged_issue, flag_reason,
     });
-// ✅ Update feedback summary after storing
-const teacherId=bridger_id;
-await handleAllFeedbackSummaries({
-  teacher_id:teacherId,
-  topic_id,
-  newFeedback: {
-    star_rating,
-    clarity_rating,
-    helpfulness_rating,
-    pace_feedback,
-    engagement_yn,
-    confidence_gain_yn,
-  },
-});
+    console.timeEnd("Create Feedback");
+
+    console.time("Update Feedback Summary");
+    await handleAllFeedbackSummaries({
+      teacher_id: bridger_id,
+      topic_id,
+      newFeedback: {
+        star_rating,
+        clarity_rating,
+        helpfulness_rating,
+        pace_feedback,
+        engagement_yn,
+        confidence_gain_yn,
+      },
+    });
+    console.timeEnd("Update Feedback Summary");
+
+  
 
     return res.status(201).json({
       success: true,
@@ -121,6 +104,7 @@ await handleAllFeedbackSummaries({
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 // ✅ GET Feedback Summary for Learner or Qualified Teacher
 
@@ -512,6 +496,14 @@ export const getLifetimeFeedback = async (req, res) => {
   },
   raw: true,
 });
+const topicsummary = await FeedbackSummary.findAll({
+  where: {
+    teacher_id: teacherId,
+    node_type: 'topic',
+  },
+  raw: true,
+});
+
 const subjectsummary=await FeedbackSummary.findAll({
   where:{
         teacher_id: teacherId,
@@ -531,6 +523,7 @@ const subjectsummary=await FeedbackSummary.findAll({
 
      if (!feedbackMap[domainName]) {
   const domainDetails = domainsummary.find(d => d.node_id === domain.id);
+
 
   feedbackMap[domainName] = {
     __meta: {
@@ -570,13 +563,29 @@ if (!feedbackMap[domainName][subjectName]) {
   };
 }
 
-      if (!feedbackMap[domainName][subjectName][topicKey]) {
-        feedbackMap[domainName][subjectName][topicKey] = {
-          name: topicKey,
-          date: fb.created_at.toISOString().split("T")[0],
-          feedback: [],
-        };
+ if (!feedbackMap[domainName][subjectName][topicKey]) {
+  const topicDetails = topicsummary.find(t => t.node_id === fb.topic_id);
+
+  feedbackMap[domainName][subjectName][topicKey] = {
+    name: topicKey,
+    date: fb.created_at.toISOString().split("T")[0],
+    feedback: [],
+    __meta: {
+      id: fb.topic_id,
+      avg_rating: topicDetails?.avg_star_rating || 0,
+      helpfulness: topicDetails?.avg_helpfulness_rating || 0,
+      clarity: topicDetails?.avg_clarity_rating || 0,
+      confidence: topicDetails?.confidence_gain_percent || 0,
+      engagement_yn: topicDetails?.engagement_percent || 0,
+      pace_trend: {
+        fast: topicDetails?.pace_fast || 0,
+        normal: topicDetails?.pace_normal || 0,
+        slow: topicDetails?.pace_slow || 0,
       }
+    }
+  };
+}
+
 let name="";
 const user=await User.findByPk(fb.learner_id);
 name=[user.firstName,user.lastName].filter(Boolean).join(" ");
@@ -617,7 +626,22 @@ const groupedFeedbackArray = Object.entries(feedbackMap).map(
       subject_confidence_gain: `${Math.round(subjectMeta.confidence)}%`,
       subject_engagement_yn: `${Math.round(subjectMeta.engagement_yn)}%`,
       subject_pace_stats: subjectMeta.pace_trend,
-      topic: Object.values(topics).filter(t => typeof t === 'object' && t.name)[0],
+      topic: Object.entries(topics)
+  .filter(([key]) => key !== "__meta")
+  .map(([topicName, topicData]) => {
+    return {
+      name: topicData.name,
+      date: topicData.date,
+      feedback: topicData.feedback,
+      topic_avg_rating: +parseFloat(topicData.__meta?.avg_rating || 0).toFixed(2),
+      topic_helpfulness_avg: +parseFloat(topicData.__meta?.helpfulness || 0).toFixed(2),
+      topic_clarity_avg: +parseFloat(topicData.__meta?.clarity || 0).toFixed(2),
+      topic_confidence_gain: `${Math.round(topicData.__meta?.confidence || 0)}%`,
+      topic_engagement_yn: `${Math.round(topicData.__meta?.engagement_yn || 0)}%`,
+      topic_pace_stats: topicData.__meta?.pace_trend || {},
+    };
+  })
+
     };
   }),
 
