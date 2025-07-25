@@ -7,10 +7,11 @@ import {
 } from "../controllers/progressTracker.controller.js";
 import express from "express";
 const router = express.Router();
-router.get('/domain/progress',getAllUserDomainProgress);
-router.post('/domain/progress', createUserDomainProgress);
-router.put('/domain-table', updateUserDomainProgress);
-router.delete('/', deleteUserDomainProgress);
-router.get("/domain/search",getDomain)
+router.get('/getProgress',getAllUserDomainProgress); //done
+router.post('/createProgress', createUserDomainProgress); //done
+router.put('/updateProgress', updateUserDomainProgress);//done
+router.delete('/deleteProgress', deleteUserDomainProgress);//done
+router.get("/domain/search",getDomain) //done
+
 
 export default router;

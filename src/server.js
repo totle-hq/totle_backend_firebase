@@ -94,7 +94,8 @@ app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
 
-app.use("api/progress",progressRoutes);
+app.use("/api/progress",progressRoutes);
+
 
 
 // Test route

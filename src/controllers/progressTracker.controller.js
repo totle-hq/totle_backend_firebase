@@ -30,14 +30,15 @@ export const createUserDomainProgress = async (req, res) => {
 
     // Fetch subjects under the domain
     const subjectNodes = await CatalogueNode.findAll({
-      where: { parent_id: domain_id, status: "ACTIVE" },
+      where: { parent_id: domain_id, status: "active" },
     });
+    console.log("Subject Nodes:", subjectNodes);
 
     // For each subject, fetch its topics
     const subjectsWithTopics = await Promise.all(
       subjectNodes.map(async (subject) => {
         const topics = await CatalogueNode.findAll({
-          where: { parent_id: subject.node_id, status: "ACTIVE" },
+          where: { parent_id: subject.node_id, status: "active" },
         });
 
         return {
@@ -51,12 +52,11 @@ export const createUserDomainProgress = async (req, res) => {
       })
     );
 
-    // Save only till "Academic → School → Class 10"
-    const trimmedPath = domainNode.hierarchy_path
-      ?.split("→")
-      .slice(0, 3)
-      .join(" → ")
-      .trim();
+    // const trimmedPath = domainNode.hierarchy_path
+      // ?.split("→")
+      // .slice(0, 3)
+      // .join(" → ")
+      // .trim();
 
     // Upsert user progress
     const [userProgress, created] = await UserDomainProgress.upsert(
@@ -64,8 +64,8 @@ export const createUserDomainProgress = async (req, res) => {
         user_id,
         domain_id,
         domain_name: domainNode.name,
-        subjects: subjectsWithTopics,
-        hierarchy_path: trimmedPath,
+        subjects: subjectsWithTopics, 
+        hierarchy_path: domainNode.address_of_node, // Use address_of_node for hierarchy path
         motivation: motivation || "",
         goal: goal || "",
         topics_completed: [],
@@ -100,6 +100,7 @@ export const getAllUserDomainProgress = async (req, res) => {
 
     res.status(200).json({
       data: userProgress.map((progress) => ({
+        progress_id: progress.id,
         domain_id: progress.domain_id,
         domain_name: progress.domain_name,
         subjects: progress.subjects, // already nested
@@ -120,36 +121,20 @@ export const getAllUserDomainProgress = async (req, res) => {
 
 export const getDomain = async (req, res) => {
   try {
-    const { query } = req.query;
-
-    if (!query || query.trim() === "") {
-      return res.status(400).json({ message: "Query string is required." });
-    }
-
     const matchedDomains = await CatalogueNode.findAll({
       where: {
         is_domain: true,
-        name: { [Op.iLike]: `${query}%` },
       },
+      attributes: ['node_id', 'name', 'address_of_node']
     });
 
-    const results = await Promise.all(
-      matchedDomains.map(async (node) => {
-        const path = await buildHierarchyPathTillDomain(node);
-        return {
-          node_id: node.node_id,
-          name: node.name,
-          path,
-        };
-      })
-    );
-
-    return res.status(200).json({ domains: results });
+    return res.status(200).json({ domains: matchedDomains });
   } catch (err) {
     console.error("Error in getDomain:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 export const updateUserDomainProgress = async (req, res) => {
   try {
