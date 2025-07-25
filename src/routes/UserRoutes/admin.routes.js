@@ -8,6 +8,7 @@ import multer from "multer";
 import path from "path";
 import { create } from "domain";
 import { checkAdminAccess } from "../../middlewares/checkAdminAccess.js";
+import { getAllFlaggedFeedbacks } from "../../controllers/feedback.controller.js";
 
 // Setup Multer storage
 const storage = multer.diskStorage({
@@ -67,7 +68,7 @@ router.delete('/org/roles/:roleId', verifyAdminToken, deleteDepartmentRole);
 router.patch('/org/roles/:roleId/toggle', verifyAdminToken, toggleRoleStatus);
 router.post('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, addSubDepartmentRole);
 router.get('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, getSubDepartmentRoles);
-
+router.get("/feedback/flagged",verifyAdminToken,getAllFlaggedFeedbacks); // get flagged feedback
 
 
 router.post(
