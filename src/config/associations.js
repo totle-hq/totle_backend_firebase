@@ -19,6 +19,7 @@ import { Test } from "../Models/test.model.js";
 import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { BookedSession } from "../Models/BookedSession.js";
+import { FeedbackSummary } from "../Models/feedbacksummary.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -82,6 +83,9 @@ const defineRelationships = () => {
 
   Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id' });
   CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id'});
+    
+  FeedbackSummary.belongsTo(CatalogueNode,{foreignKey:'node_id'});
+  CatalogueNode.hasMany(FeedbackSummary,{foreignKey:'node_id'});
   
   TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
   User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
@@ -110,4 +114,4 @@ const defineRelationships = () => {
 
 };
 
-export default defineRelationships;
+export default defineRelationships
