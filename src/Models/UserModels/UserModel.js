@@ -1,4 +1,4 @@
-// models/user.js
+// Models/UserModels/UserModel.js
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../../config/sequelize.js"; // Use the main DB connection
 

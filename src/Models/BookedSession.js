@@ -1,4 +1,4 @@
-// src/Models/bookedSession.js
+// src/Models/BookedSession.js
 
 import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';

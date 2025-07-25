@@ -1,3 +1,4 @@
+// src/Models/SessionModel.js
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
 import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
