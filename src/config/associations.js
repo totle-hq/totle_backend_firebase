@@ -99,12 +99,15 @@ const defineRelationships = () => {
   User.hasMany(Session, { foreignKey: 'teacher_id', as: 'teachingSessions'});
 
   BookedSession.belongsTo(User, { foreignKey: 'learner_id', as: 'student' });
-  BookedSession.belongsTo(CatalogueNode, { foreignKey: 'topic_id', as: 'topicName' });
-
-  BookedSession.belongsTo(CatalogueNode, { foreignKey: 'topic_id', as: 'bookedTopic' });
   CatalogueNode.belongsTo(CatalogueNode, { foreignKey: 'parent_id', as: 'parentNode' });
 
   CatalogueNode.belongsTo(CatalogueNode, { as: "subject", foreignKey: "parent_id" });
+
+  BookedSession.belongsTo(User, { as: 'teacher', foreignKey: 'teacher_id' })
+
+  BookedSession.belongsTo(CatalogueNode, { as: 'bookedTopic', foreignKey: 'topic_id' })
+
+
 };
 
 export default defineRelationships;
