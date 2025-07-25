@@ -21,7 +21,7 @@ import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
 import FeedbackRoutes from "./routes/feedback.routes.js";
-import sessionRoutes from "./routes/SessionRoutes/session.routes.js"; // ✅ Import session routes
+import insights from "./routes/insights.routes.js"import sessionRoutes from "./routes/SessionRoutes/session.routes.js"; // ✅ Import session routes
 import objectiveRoutes from './routes/Objectives/objective.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,12 +55,12 @@ app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/tests", testRoutes); 
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
-app.use("/api/session", sessionRoutes)
+app.use("/api/session",sessionRoutes);app.use("/api/session", sessionRoutes)
 
 app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
-// app.use("api/progress",progressRoutes);
+app.use("/api/teach",insights);// app.use("api/progress",progressRoutes);
 app.use('/api/objectives', objectiveRoutes);
 
 app.get("/", (req, res) => {

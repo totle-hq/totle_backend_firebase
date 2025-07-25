@@ -1,10 +1,8 @@
 import express, { Router } from "express";
-import { getAllFeedback , postFeedBack } from "../controllers/feedback.controller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
-
+import { getInsights } from "../controllers/Insights.controller.js";
 const router = express.Router();
 
-router.post("/",postFeedBack);
-router.get("/",getAllFeedback);
+router.get("/insights",authMiddleware,getInsights);
 
 export default router;
