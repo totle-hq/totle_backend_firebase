@@ -1,10 +1,14 @@
 import express, { Router } from "express";
-import { getAllFeedback , postFeedBack } from "../controllers/feedback.controller.js";
+import { getAllFeedback , getDomainAveragesFromSummary, getLifetimeFeedback, getSubjectAveragesFromSummary, getTopicAveragesFromSummary, postFeedBack } from "../controllers/feedback.controller.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
 router.post("/",postFeedBack);
-router.get("/",getAllFeedback);
+router.get("/",authMiddleware,getAllFeedback);
+router.get("/global",getLifetimeFeedback);
+router.get("/domain",authMiddleware,getDomainAveragesFromSummary);
+router.get("/subject",authMiddleware,getSubjectAveragesFromSummary);
+router.get("/topics",authMiddleware,getTopicAveragesFromSummary);
 
 export default router;
