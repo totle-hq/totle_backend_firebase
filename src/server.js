@@ -53,7 +53,7 @@ app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/tests", testRoutes); 
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
-app.use("/api/session",sessionRoutes);app.use("/api/session", sessionRoutes)
+app.use("/api/session",sessionRoutes);
 
 app.use("/api/teach",teachRoutes);
 
