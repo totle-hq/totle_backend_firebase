@@ -14,7 +14,7 @@ import { fileURLToPath } from "url";
 import {defineModelRelationships, syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
-import sessionRoutes from "./routes/SessionRoutes/session.routes.js;
+import sessionRoutes from "./routes/SessionRoutes/session.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 import http from "http";
 import { Server } from "socket.io";
