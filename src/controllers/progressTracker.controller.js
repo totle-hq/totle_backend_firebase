@@ -1,19 +1,5 @@
 import UserDomainProgress from "../Models/progressModels.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
-import { Op } from "sequelize";
-
-const buildHierarchyPathTillDomain = async (node) => {
-  const path = [];
-  let currentNode = node;
-
-  while (currentNode) {
-    path.unshift(currentNode.name);
-    if (currentNode.is_domain || !currentNode.parent_id) break;
-    currentNode = await CatalogueNode.findByPk(currentNode.parent_id);
-  }
-
-  return path.join(" → ");
-};
 
 export const createUserDomainProgress = async (req, res) => {
   try {
@@ -51,13 +37,6 @@ export const createUserDomainProgress = async (req, res) => {
         };
       })
     );
-
-    // const trimmedPath = domainNode.hierarchy_path
-      // ?.split("→")
-      // .slice(0, 3)
-      // .join(" → ")
-      // .trim();
-
     // Upsert user progress
     const [userProgress, created] = await UserDomainProgress.upsert(
       {
