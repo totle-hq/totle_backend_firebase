@@ -22,6 +22,9 @@ import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
 import FeedbackRoutes from "./routes/feedback.routes.js";
+import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust path if necessary
+
+// After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +62,7 @@ app.use("/api/session",sessionRoutes);
 app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
+app.use('/api/objectives', objectiveRoutes);
 
 
 

@@ -5,7 +5,9 @@ import {
   getObjectiveById,
   updateObjective,
   archiveObjective,
+  deleteObjective, // ✅ Add this
 } from '../../controllers/Objectives/objective.controller.js';
+
 
 const router = express.Router();
 
@@ -23,5 +25,9 @@ router.put('/:id', updateObjective);
 
 // ✅ Archive objective (soft delete)
 router.patch('/:id/archive', archiveObjective);
+
+// ❌ PERMANENT DELETE
+router.delete('/:id', deleteObjective);
+
 
 export default router;

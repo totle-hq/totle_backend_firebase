@@ -144,3 +144,26 @@ export const archiveObjective = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error });
   }
 };
+
+// ❌ Hard Delete Objective
+export const deleteObjective = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await Objective.destroy({
+      where: {
+        [Op.or]: [{ objectiveId: id }, { objectiveCode: id }],
+      },
+    });
+
+    if (deleted === 0) {
+      return res.status(404).json({ message: 'Objective not found' });
+    }
+
+    res.status(200).json({ message: 'Objective permanently deleted' });
+  } catch (error) {
+    console.error('❌ Error deleting objective:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
+
