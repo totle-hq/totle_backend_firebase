@@ -11,6 +11,7 @@ import { SupportQueriesMasterSeeder } from '../seeders/SupportQueriesSeeder.js';
 import { ProgressionThresholds } from "../Models/progressionThresholds.model.js";
 import "../Models/CatalogModels/catalogueNode.model.js";
 import "../Models/TeachertopicstatsModel.js";
+import { KeyResult } from '../Models/Objectives/keyresult.model.js'; // ✅ Add this line
 
 dotenv.config();
 
@@ -122,6 +123,9 @@ export async function syncDatabase() {
     const { Objective } = await import("../Models/Objectives/objective.model.js");
 await Objective.sync({ alter: true });
 console.log("✅ Objective table synced successfully!");
+
+await KeyResult.sync({ alter: true });
+console.log("✅ KeyResult table synced successfully!");
 
 
     const { Survey } = await import("../Models/SurveyModels/SurveyModel.js");

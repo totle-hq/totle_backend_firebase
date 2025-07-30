@@ -26,7 +26,7 @@ import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 // import sessionRoutes from "./routes/SessionRoutes/session.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
-//import sessionRoutes from './routes/sessionRoutes.js';
+import sessionRoutes from './routes/session.routs.js';
 import http from "http";
 import { Server } from "socket.io";
 import teachRoutes from "./routes/teach.routes.js"
@@ -37,13 +37,13 @@ import FeedbackRoutes from "./routes/feedback.routes.js";
 // import ctaRoutes from "./routes/cta.js"
 // import platformCtaRoutes from "./routes/platformCta.routes.js";
 // import FeedbackRoutes from "./routes/feedback.routes.js";
-import teachRoutes from "./routes/teach.routes.js"
-import ctaRoutes from "./routes/cta.js"
-import platformCtaRoutes from "./routes/platformCta.routes.js";
-import FeedbackRoutes from "./routes/feedback.routes.js";
+// import ctaRoutes from "./routes/cta.js"
+// import platformCtaRoutes from "./routes/platformCta.routes.js";
+// import FeedbackRoutes from "./routes/feedback.routes.js";
 import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust path if necessary
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
+import keyResultRoutes from './routes/Objectives/keyResult.routes.js'; // adjust path if necessary
 
 // After other `app.use` statements for /api/*
 
@@ -84,7 +84,7 @@ app.use("/api/teach",teachRoutes);
 app.use("/api/feedback",FeedbackRoutes);
 
 app.use('/api/objectives', objectiveRoutes);
-
+app.use('/api/objectives', keyResultRoutes); // Use the key result routes
 app.use("/api/teach",insights);
 app.use("/api/progress",progressRoutes);
 

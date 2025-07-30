@@ -11,6 +11,7 @@ export const Objective = sequelize1.define('Objective', {
   objectiveCode: {
     type: DataTypes.STRING(12),
     allowNull: false,
+    unique: true,
     comment: 'e.g., OBJ-0001, OBJ-0043 etc.',
   },
   title: {
@@ -21,12 +22,10 @@ export const Objective = sequelize1.define('Objective', {
     type: DataTypes.INTEGER,
     allowNull: false,
     defaultValue: 1,
-    comment: 'Represents Level 1, Level 2, etc.',
   },
   createdBy: {
     type: DataTypes.UUID,
     allowNull: false,
-    comment: 'User ID of the creator',
   },
   isArchived: {
     type: DataTypes.BOOLEAN,
@@ -35,10 +34,14 @@ export const Objective = sequelize1.define('Objective', {
 }, {
   tableName: 'objectives',
   timestamps: true,
-  indexes: [
-    {
-      unique: true,
-      fields: ['objectiveCode'],
-    },
-  ],
+});
+
+// Generate next objectiveCode before creation
+Objective.beforeCreate(async (objective) => {
+  const latest = await Objective.findOne({
+    order: [['createdAt', 'DESC']],
+  });
+  const count = latest?.objectiveCode?.match(/\d+/)?.[0] || '0';
+  const next = String(Number(count) + 1).padStart(4, '0');
+  objective.objectiveCode = `OBJ-${next}`;
 });
