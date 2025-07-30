@@ -35,11 +35,103 @@ async function cacheDel(pattern) {
   }
 }
 
+// 🔗 Build full address from root to current
+const buildAddressOfNode = async (node) => {
+  const names = [];
+  let current = node;
+
+  while (current) {
+    names.unshift(current.name);
+    if (!current.parent_id) break;
+    current = await CatalogueNode.findByPk(current.parent_id);
+  }
+
+  return names.join(" → "); // Use arrow
+};
+
+// 🔁 Update address for node and all children recursively
+const updateAddressRecursively = async (node) => {
+  const address = await buildAddressOfNode(node);
+  await node.update({ address_of_node: address });
+
+  const children = await CatalogueNode.findAll({ where: { parent_id: node.node_id } });
+
+  for (const child of children) {
+    await updateAddressRecursively(child);
+  }
+};
+
+
+const findUniformDomainParent = async (node) => {
+  if (!node?.parent_id) return null;
+
+  const parent = await CatalogueNode.findByPk(node.parent_id);
+  if (!parent) return null;
+
+  if (parent.is_domain && parent.metadata?.uniform) {
+    return parent;
+  }
+
+  // Continue digging upward
+  return await findUniformDomainParent(parent);
+};
+
+async function distributePricesRecursively(parentId, prices) {
+  const children = await CatalogueNode.findAll({ where: { parent_id: parentId } });
+  if (children.length === 0) return;
+
+  const priceKeys = ['bridgers', 'experts', 'masters', 'legends'];
+  const priceMatrix = {};
+
+  for (const key of priceKeys) {
+    const total = prices[key] || 0;
+    const avg = Math.floor(total / children.length);
+    const remainder = total - avg * children.length;
+
+    // Base avg assignment
+    priceMatrix[key] = Array(children.length).fill(avg);
+    for (let i = 0; i < remainder; i++) {
+      priceMatrix[key][i] += 1;
+    }
+  }
+
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const childPrices = {};
+
+    for (const key of priceKeys) {
+      childPrices[key] = priceMatrix[key][i];
+    }
+
+    await child.update({ prices: childPrices });
+
+    // Recursively go to next level
+    await distributePricesRecursively(child.node_id, childPrices);
+  }
+
+  // ✅ After updating all children — cache fresh version of children
+  const freshChildren = await CatalogueNode.findAll({ where: { parent_id: parentId } });
+  await cacheSet(`catalogue:children:${parentId}`, freshChildren);
+}
+
+
+
 // 🟢 Create node
 export const createNode = async (req, res) => {
   try {
     const node = await CatalogueNode.create(req.body);
+
+    const fullNode = await CatalogueNode.findByPk(node.node_id); // includes .name
+    await updateAddressRecursively(fullNode);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
+
+    const domainNode = await findUniformDomainParent(node);
+
+    if (domainNode && domainNode.prices) {
+      console.log(`📤 [createNode] Triggering uniform distribution from domain "${domainNode.name}"`);
+      await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+    }
+
     return res.status(201).json(node);
   } catch (err) {
     console.error("Error creating node:", err, err.message);
@@ -89,9 +181,20 @@ export const updateNode = async (req, res) => {
     if (!node) return res.status(404).json({ error: "Node not found" });
 
     await node.update(req.body);
+
+    const updatedNode = await CatalogueNode.findByPk(node.node_id);
+    await updateAddressRecursively(updatedNode); // Update address after any change
+
     await cacheDel(`catalogue:node:${req.params.id}`);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
-    return res.json(node);
+    const domainNode = await findUniformDomainParent(node);
+
+    if (domainNode && domainNode.prices) {
+      console.log(`📤 [createNode] Triggering uniform distribution from domain "${domainNode.name}"`);
+      await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+    }
+
+    return res.json(updateNode);
   } catch (err) {
     return res.status(400).json({ error: err.message });
   }
@@ -106,9 +209,21 @@ export const deleteNode = async (req, res) => {
     const children = await CatalogueNode.findOne({ where: { parent_id: node.node_id } });
     if (children) return res.status(400).json({ error: "Node has children, cannot delete" });
 
+    const parent = node.parent_id
+      ? await CatalogueNode.findByPk(node.parent_id)
+      : null;
+
     await node.destroy();
     await cacheDel(`catalogue:node:${req.params.id}`);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
+
+    const domainNode = await findUniformDomainParent(parent); // this will walk up from parent
+
+    if (domainNode && domainNode.prices) {
+      console.log(`♻️ [deleteNode] Redistributing prices from domain "${domainNode.name}" after deletion`);
+      await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+    }
+    
     return res.json({ message: "Node deleted" });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -202,6 +317,33 @@ export const deleteSubtopic = async (req, res) => {
     await subtopic.destroy();
     await cacheDel(`catalogue:children:${subtopic.parent_id}*`);
     return res.json({ message: "Subtopic deleted" });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+export const getDomainCount = async (req, res) => {
+  try{
+    var domainCount = await CatalogueNode.count({
+      where: {
+        is_domain:true
+      }
+    })
+    return res.json({ count: domainCount });
+  }
+  catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+export const getTopicCount = async (req, res) => {
+  try {
+    var topicCount = await CatalogueNode.count({
+      where: {
+        is_topic: true
+      }
+    });
+    return res.json({ count: topicCount });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }

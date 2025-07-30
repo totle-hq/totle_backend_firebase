@@ -9,6 +9,14 @@ import { UserMetrics } from "../Models/UserModels/UserMetricsModel.js";
 import { Question } from "../Models/SurveyModels/QuestionModel.js";
 import { OTP } from "../Models/UserModels/OtpModel.js";
 import { MarketplaceSuggestion } from "../Models/SurveyModels/MarketplaceModel.js";
+import { UserDepartment } from "../Models/UserModels/UserDepartment.js";
+import { RoleAssignmentLog } from "../Models/UserModels/RoleAssignmentLog.js";
+import { Department } from "../Models/UserModels/Department.js";
+import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
+import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { TestFlag } from "../Models/TestflagModel.js";
+import { Test } from "../Models/test.model.js";
+import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -58,31 +66,33 @@ const defineRelationships = () => {
   // ✅ Admin Access to Marketplace Suggestions (Indirect Access)
   Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
 
-  // Define the relationship between College and Category
-  // Education.belongsTo(Category, { foreignKey: 'parent_id', onDelete: "CASCADE"  });
-  // Category.hasMany(Education, { foreignKey: 'parent_id' });
+  Admin.hasMany(UserDepartment, { foreignKey: 'userId' });
+  UserDepartment.belongsTo(Admin, { foreignKey: 'userId' });
 
-  // Define the relationship between Board and School
-  // Board.belongsTo(Education, { foreignKey: 'parent_id' });
-  // Education.hasMany(Board, { foreignKey: 'parent_id' , onDelete: "CASCADE" });
+  Admin.hasMany(RoleAssignmentLog, { foreignKey: 'userId' });
+  RoleAssignmentLog.belongsTo(Admin, { foreignKey: 'userId' });
 
-  // Board.hasMany(Grade, { foreignKey: 'parent_id', onDelete: 'CASCADE' });
-  // Grade.belongsTo(Board, { foreignKey: 'parent_id'});
+  Department.hasMany(UserDepartment, { foreignKey: 'departmentId' });
+  UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
 
-  // Define the relationship between Grade and School
-  // Grade.belongsTo(Education, { foreignKey: 'parent_id' });
-  // Education.hasMany(Grade, { foreignKey: 'parent_id' });
+  Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
+  User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
 
-  // Define the relationship between Subject and Grade
-  // Subject.belongsTo(Grade, { foreignKey: 'parent_id' });
-  // Grade.hasMany(Subject, { foreignKey: 'parent_id' , onDelete: "CASCADE" });
+  Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id' });
+  CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id'});
+  
+  TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+  User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
 
-  // Define the relationship between Topic and Subject
-  // Topic.belongsTo(Subject, { foreignKey: 'parent_id' });
-  // Subject.hasMany(Topic, { foreignKey: 'parent_id', onDelete: "CASCADE", hooks: true,  });
+  TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
+  Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
+  SupportQueriesModel.belongsTo(User, {foreignKey: "user_id",});
+  User.hasMany(SupportQueriesModel, {foreignKey: "user_id", onDelete: "CASCADE"});
 
-  // Subtopic.belongsTo(Topic, { foreignKey: 'parent_id' });
-  // Topic.hasMany(Subtopic, { foreignKey: 'parent_id', onDelete: "CASCADE" });
+  Department.hasMany(Department, { foreignKey: 'parentId', as: 'subDepartments', onDelete: 'CASCADE'});
+
+  Department.belongsTo(Department, { foreignKey: 'parentId', as: 'parentDepartment'});
+
 };
 
 export default defineRelationships;

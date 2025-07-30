@@ -4,10 +4,8 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import morgan from "morgan";
-// import {userPool, catalogPool, closeDbConnections } from "./config/db.js"; // Import database connection
 import authRoutes from "./routes/UserRoutes/auth.routes.js";
 import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user routes
-// import sessionRoutes from "./routes/session.routes.js";
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
@@ -20,6 +18,7 @@ import sessionRoutes from "./routes/session.routs.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
 // import { Server } from "socket.io";
+
 import path from "path";
 import { fileURLToPath } from "url";
 import {syncDatabase} from './config/syncDb.js';
@@ -33,6 +32,10 @@ import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
 import FeedbackRoutes from "./routes/feedback.routes.js";
+import teachRoutes from "./routes/teach.routes.js"
+import ctaRoutes from "./routes/cta.js"
+import platformCtaRoutes from "./routes/platformCta.routes.js";
+import FeedbackRoutes from "./routes/feedback.routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,10 +44,6 @@ dotenv.config();
 
 const app = express();
 
-// const httpServer = createServer(app);
-// const io = new Server(httpServer, {
-//   cors: { origin: "*" },
-// });
 
 app.use("/uploads", express.static(path.resolve("src/uploads")));
 app.use(express.json({ limit: "50mb" }));
@@ -56,34 +55,17 @@ app.use(cors({
 }));
 app.use(helmet());
 
-// io.on("connection", (socket) => {
-//   console.log("User connected:", socket.id);
-
-//   socket.on("joinSession", (sessionId) => {
-//     socket.join(sessionId);
-//     console.log(`User joined session: ${sessionId}`);
-//   });
-
-//   socket.on("sessionUpdate", (sessionId, status) => {
-//     io.to(sessionId).emit("sessionStatusChanged", status);
-//   });
-
-//   socket.on("disconnect", () => {
-//     console.log("User disconnected");
-//   });
-// });
-
 app.use(compression());
 app.use(morgan("dev"));
-app.use("/auth", authRoutes); // Add authentication routes
+app.use("/auth", authRoutes); 
 app.use("/users", userRoutes);
 app.use("/languages", languageRoutes);
-app.use("/api/languages", languageRoutes); // ✅ Register the languages route
-// app.use("/session", authMiddleware, sessionRoutes);
+app.use("/api/languages", languageRoutes);
 app.use("/admin", adminRoutes);
 app.use('/api', ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
+//<<<<<<< HEAD
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
@@ -92,17 +74,14 @@ app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
 
+app.use("/api/teach",teachRoutes);
 
+app.use("/api/feedback",FeedbackRoutes);
+// app.use("api/progress",progressRoutes);
 
-// Test route
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
 });
-
-// Run the function
-// insertLanguages();
-
-// Test database connection
 app.get("/db", async (req, res) => {
   try {
     // const result = await userPool.query("SELECT NOW()");

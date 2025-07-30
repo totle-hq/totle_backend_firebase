@@ -6,32 +6,20 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
-    "generate:user": "prisma generate --schema=prisma/userSchema.prisma",
-    "generate:catalog": "prisma generate --schema=prisma/catalogSchema.prisma",
-    "migrate:user": "npx prisma migrate dev --schema=prisma/userSchema.prisma  --name",
-    "migrate:catalog": "npx prisma migrate dev --schema=prisma/catalogSchema.prisma --name",
-    "studio:user": "prisma studio --schema=prisma/userSchema.prisma",
-    "studio:catalog": "prisma studio --schema=prisma/catalogSchema.prisma",
-    "build": "npx prisma generate --schema=prisma/userSchema.prisma && npx prisma generate --schema=prisma/catalogSchema.prisma"
+    "start": "node src/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@prisma/client": "^6.3.1",
-    "@stream-io/video-react-sdk": "^1.14.2",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.6.1",
     "compression": "^1.7.5",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
-    "firebase-admin": "^13.1.0",
-    "getstream": "^8.8.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
@@ -42,16 +30,19 @@
     "pg": "^8.13.1",
     "razorpay": "^2.9.6",
     "redis": "^5.5.6",
+    "request-ip": "^3.3.0",
     "sequelize": "^6.37.5",
     "shortid": "^2.2.17",
     "socket.io": "^4.8.1",
-    "twilio": "^5.4.3"
+    "twilio": "^5.4.3",
+    "ua-parser-js": "^2.0.4",
+    "useragent": "^2.3.0",
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "eslint": "^9.20.0",
-    "nodemon": "^3.1.9",
+    "nodemon": "^3.1.10",
     "prettier": "^3.4.2",
-    "prisma": "^6.3.1",
     "typescript": "^5.7.3"
   }
 }

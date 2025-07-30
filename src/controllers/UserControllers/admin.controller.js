@@ -10,6 +10,39 @@ import {Responses} from '../../Models/SurveyModels/ResponsesModel.js';
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+
+import multer from "multer";
+import path, { format } from "path";
+import fs from "fs";
+import { MarketplaceSuggestion } from '../../Models/SurveyModels/MarketplaceModel.js';
+import { type } from 'os';
+import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
+import { AdminActionLog } from '../../Models/UserModels/AdminActionLogModel.js';
+import { getAdminContext } from '../../utils/getAdminContext.js';
+import { Department } from '../../Models/UserModels/Department.js';
+import { Op } from 'sequelize';
+import { v4 as uuidv4 } from 'uuid';
+import { UserDepartment } from '../../Models/UserModels/UserDepartment.js';
+// import { role } from '@stream-io/video-react-sdk';
+
+// Ensure uploads folder exists
+const uploadDir = "src/uploads";
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Multer Storage Configuration
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "src/uploads/"); // Store in backend
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename
+  },
+});
+
+const upload = multer({ storage });
+
 // import ExcelJS from "exceljs";
 
 dotenv.config();
@@ -37,8 +70,9 @@ export const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
     const admin = await findAdminByEmail(email);
+    // console.log("admin", admin);
 
-    if (!admin) return res.status(400).json({ message: "Admin not found" });
+    if (!admin) return res.status(400).json({ message: "Invalid Login" });
 
     if (admin.status !== "active") {
       return res.status(403).json({ message: "Admin account is inactive. Contact Super Admin." });
@@ -47,9 +81,28 @@ export const adminLogin = async (req, res) => {
     const isMatch = await bcrypt.compare(password, admin.password);
     if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
 
-    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email, role: admin.global_role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    res.status(200).json({message: "Successfully Logged in!", token, admin:{name: admin.name, email: admin.email, id: admin.id} });
+    let departmentName = null;
+    if (admin.global_role !== "Founder" && admin.global_role !== "Superadmin") {
+      const dept = await Department.findOne({ where: { headId: admin.id } });
+      departmentName = dept?.name || null;
+    }
+
+    
+    res.status(200).json({
+      message: "Successfully Logged in!",
+      token,
+      admin: {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        global_role: admin.global_role,
+        department: departmentName,
+      }
+    });
+
+    // Emit socket event
     io.emit("userLoginStatus", { userId: admin.id, isLoggedIn: true });
 
   } catch (error) {
@@ -233,32 +286,6 @@ export const deleteBlog = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
-
-
-import multer from "multer";
-import path, { format } from "path";
-import fs from "fs";
-import { MarketplaceSuggestion } from '../../Models/SurveyModels/MarketplaceModel.js';
-import { type } from 'os';
-import { BetaUsers } from '../../Models/UserModels/BetaUsersModel.js';
-
-// Ensure uploads folder exists
-const uploadDir = "src/uploads";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// Multer Storage Configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "src/uploads/"); // Store in backend
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Unique filename
-  },
-});
-
-const upload = multer({ storage });
 
 // ✅ Upload Route (Backend API)
 export const uploadImage= (req, res) => {
@@ -1007,3 +1034,640 @@ export const deleteUserByAdmin = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 }
+
+export const assignRoleAndTags = async (req, res) => {
+  const { targetUserId, departmentCode, roleType, tags = [] } = req.body;
+  const adminId = req.user?.id;
+
+  try {
+    const department = await Department.findOne({ where: { code: departmentCode } });
+    if (!department) return res.status(404).json({ message: 'Department not found' });
+
+    const [record, created] = await UserDepartment.upsert({
+      userId: targetUserId,
+      departmentId: department.id,
+      roleType,
+      tags,
+    }, {
+      returning: true,
+      conflictFields: ['userId', 'departmentId'],
+    });
+
+    await RoleAssignmentLog.create({
+      userId: targetUserId,
+      departmentId: department.id,
+      assignedBy: adminId,
+      roleType,
+      tags,
+      actionType: created ? 'assigned' : 'modified',
+      timestamp: new Date(),
+    });
+
+    await AdminActionLog.create({
+      performedBy: adminId,
+      actionType: 'assign_role',
+      objectType: 'user',
+      objectId: targetUserId,
+      notes: `Assigned ${roleType} role in ${departmentCode} with tags: ${tags.join(', ')}`,
+    });
+
+    return res.status(200).json({ message: 'Role and tags assigned successfully' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Error assigning role/tags' });
+  }
+};
+
+export const revokeRoleAndTags = async (req, res) => {
+  const { targetUserId, departmentCode } = req.body;
+  const adminId = req.user?.id;
+
+  try {
+    const department = await Department.findOne({ where: { code: departmentCode } });
+    if (!department) return res.status(404).json({ message: 'Department not found' });
+
+    const deleted = await UserDepartment.destroy({
+      where: { userId: targetUserId, departmentId: department.id },
+    });
+
+    if (deleted) {
+      await RoleAssignmentLog.create({
+        userId: targetUserId,
+        departmentId: department.id,
+        assignedBy: adminId,
+        roleType: null,
+        tags: [],
+        actionType: 'revoked',
+        timestamp: new Date(),
+      });
+
+      await AdminActionLog.create({
+        performedBy: adminId,
+        actionType: 'revoke_role',
+        objectType: 'user',
+        objectId: targetUserId,
+        notes: `Revoked all roles/tags in ${departmentCode}`,
+      });
+    }
+
+    return res.status(200).json({ message: 'Role and tags revoked' });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Error revoking role/tags' });
+  }
+};
+
+
+export const getAdminActionLogs = async (req, res) => {
+  const { departmentId, objectType, actionType, limit = 50 } = req.query;
+  const requesterId = req.user.id;
+
+  try {
+    const isFounderOrSuperadmin = await Admin.findOne({
+      where: {
+        id: requesterId,
+        global_role: { [Op.in]: ['Founder', 'Superadmin'] },
+      },
+    });
+
+    const whereClause = {};
+    if (objectType) whereClause.objectType = objectType;
+    if (actionType) whereClause.actionType = actionType;
+
+    // Department filter (if needed for scoped logs)
+    if (departmentId && !isFounderOrSuperadmin) {
+      whereClause.notes = { [Op.iLike]: `%${departmentId}%` }; // crude filter unless you normalize department
+    }
+
+    const logs = await AdminActionLog.findAll({
+      where: whereClause,
+      order: [['timestamp', 'DESC']],
+      limit: parseInt(limit),
+    });
+
+    return res.status(200).json({ logs });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: 'Failed to retrieve admin logs' });
+  }
+};
+
+
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    const adminId = req.user?.id;
+    const context = await getAdminContext(adminId);
+
+    return res.status(200).json({
+      id: context.adminId,
+      name: context.name,
+      email: context.email,
+      globalRole: context.globalRole,
+      isFounder: context.isFounder,
+      isSuperadmin: context.isSuperadmin,
+      departments: context.departments, // Array of { id, name, code, roleType, tags }
+    });
+  } catch (err) {
+    console.error('Error fetching admin profile:', err);
+    return res.status(500).json({ message: 'Failed to load profile' });
+  }
+};
+
+export const superAdminCreationByFounder = async (req, res) =>{
+  try {
+      const { adminName, adminEmail, adminPassword, adminRole }  = req.body;
+      const { id } = req.user;
+      var admin = await Admin.findOne({ where: { id } })
+
+      const existingAdmin = await Admin.findOne({ where: { email: adminEmail } });
+      if (existingAdmin) {
+        return res.status(400).json({ message: "Admin with this email already exists." });
+      }
+
+      if(admin.global_role=="Founder"){
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        const superAdmin = await Admin.create({
+          name: adminName,
+          email: adminEmail,
+          password: hashedPassword,
+          global_role: adminRole,
+        });
+
+        return res.status(201).json({ message: `${adminRole} created by Founder.`, admin: superAdmin });
+      }
+      return res.status(403).json({ message: "You do not have permission to create an admin." });
+  } catch (error) {
+    console.error("Error creating admin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getAllSuperAdmins = async (req, res) => {
+  try {
+    const { role } = req.user;
+    console.log(role)
+    if (role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    }
+
+    const superAdmins = await Admin.findAll({
+      where: { global_role: 'Superadmin' },
+      attributes: ['id', 'name', 'email','status', 'createdAt','global_role'],
+    });
+
+    if (!superAdmins.length) {
+      return res.status(404).json({ message: "No Superadmins found" });
+    }
+
+    return res.status(200).json(superAdmins);
+  }
+  catch (error) {
+    console.error("Error fetching superadmins:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const DepartmentCreationByFounder = async(req,res)=>{
+  try {
+    const { name, code } = req.body;
+    const { role,id } = req.user;
+    console.log(name,code)
+     if (!role || !id) {
+      return res.status(401).json({ message: "Unauthorized: Invalid or missing token" });
+    }
+    if (role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    }
+
+    if(!name||!code) return res.status(400).json({message: "Missing Department Name or Department Code"});
+    const existingDepartment = await Department.findOne({
+      where: {
+        [Op.or]: [{ name }, { code }],
+      },
+    });
+
+    if (existingDepartment) {
+      console.log("Existing Department:", existingDepartment);
+      return res.status(409).json({
+        message: `Department with the same ${existingDepartment.name === name ? 'name' : 'code'} already exists`,
+      });
+    }
+
+    await Department.create({headId: id, name, code, status: 'active'});
+    return res.json({message: `Department ${name} created successfully`})
+  } catch (error) {
+    console.error("Error creating department:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message})
+  }
+}
+
+
+export const verifyAdminToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  // console.log("Admin Token:", authHeader);
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // console.log("Decoded Admin Token:", decoded);
+    req.user = decoded; // { email, role }
+    // console.log("Admin User:", req.user);
+    next();
+  } catch (err) {
+    return res.status(403).json({ message: 'Invalid token' });
+  }
+};
+
+export const activeSuperAdmins = async (req, res) => {
+  try {
+    const superAdmins = await Admin.findAll({
+      where: { global_role: 'Superadmin', status: 'active' },
+      attributes: ['id', 'name', 'email', 'createdAt'],
+    });
+
+    if (!superAdmins.length) {
+      return res.status(404).json({ message: "No active Superadmins found" });
+    }
+
+    return res.status(200).json(superAdmins);
+  } catch (error) {
+    console.error("Error fetching active superadmins:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getAllDepartments = async (req, res) => {
+  try {
+    const { role } = req.user;
+    // console.log(role)
+    if (role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    }
+
+    const departments = await Department.findAll({
+      where: { parentId: null },
+      attributes: ['id', 'name', 'code', 'headId', 'status'],
+      // include: [{
+      //   model: Admin,
+      //   as: 'head',
+      //   attributes: ['name', 'email']
+      // }]
+    });
+
+    if (!departments.length) {
+      return res.status(404).json({ message: "No departments found" });
+    }
+
+    return res.status(200).json(departments);
+  } catch (error) {
+    console.error("Error fetching departments:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const toggleSuperadminStatus  = async (req, res) => {
+  try {
+    const { superAdminId } = req.params;
+    const superAdmin = await Admin.findByPk(superAdminId);
+    console.log('role',superAdmin, superAdminId);
+
+    if (!superAdmin || superAdmin.global_role !== 'Superadmin') {
+      return res.status(404).json({ message: "Superadmin not found" });
+    }
+
+    const newStatus = superAdmin.status === 'active' ? 'disabled' : 'active';
+
+    await superAdmin.update({ status: newStatus });
+
+    return res.status(200).json({
+      message: `Superadmin has been ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully.`,
+      newStatus,
+    });
+  } catch (error) {
+    console.error("Error disabling superadmin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const deleteSuperAdmin = async (req, res) => {
+  try {
+    const { superAdminId } = req.params;
+    const superAdmin = await Admin.findByPk(superAdminId);
+
+    console.log('role',superAdmin.global_role);
+
+    if (!superAdmin || superAdmin.global_role !== 'Superadmin') {
+      return res.status(404).json({ message: "Superadmin not found" });
+    }
+
+    await superAdmin.destroy();
+
+    return res.status(200).json({ message: "Superadmin has been deleted successfully." });
+  } catch (error) {
+    console.error("Error deleting superadmin:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const subDepartmentCreation = async(req, res)=>{
+  try {
+    const {role,id} = req.user;
+    if (role !== 'Founder' && role!== "Superadmin") return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    const {name, code} = req.body;
+    const { parentId } = req.params;
+    if(!name||!code || !parentId) return res.status(400).json({message: "Missing sub Department Name or Sub Department Code or parent"});
+    const parentDepartment = await Department.findByPk(parentId);
+    if (!parentDepartment) {
+      return res.status(404).json({ message: "Parent department not found" });
+    }
+    if (parentDepartment.parentId !== null) {
+      return res.status(400).json({ message: "Cannot create a sub-department under another sub-department." });
+    }
+    const existingDepartment = await Department.findOne({
+      where: {
+        parentId,
+        name,
+      },
+    });
+
+    if (existingDepartment) {
+      return res.status(409).json({
+        message: `Department with the same ${existingDepartment.name === name ? 'name' : 'code'} already exists`,
+      });
+    }
+    const subDepartment = await Department.create({
+      name,
+      code,
+      parentId,
+      headId: id, // Founder creating it
+      status: "active"
+    });
+    return res.status(201).json({
+      message: `Sub-department '${name}' created successfully under '${parentDepartment.name}'`,
+      subDepartment,
+    });
+  } catch (error) {
+    console.log("Error adding subdepartment",error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getSubDepartments = async(req,res)=>{
+  try {
+    const {role} = req.user;
+    if (role !== 'Founder' && role!== "Superadmin") return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    const { parentId } = req.params;
+    if(!parentId) return res.status(400).json({message: "Missing parent Department Id"})
+    
+    const subDepartments = await Department.findAll({
+      where: { parentId },
+      attributes: ['id', 'name', 'code', 'headId', 'parentId', 'status'],
+      order: [['createdAt', 'ASC']],
+    });
+
+    if(subDepartments.length!=0){
+
+      return res.status(200).json(subDepartments); // ✅ send plain array
+    }
+    return res.status(404).json({message: "No subdepartments here"})
+
+  } catch (error) {
+    console.log("Error adding subdepartment",error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const toggleSubDepartmentStatus = async(req,res)=>{
+  try {
+    const { id } = req.user;
+    const superAdmin = await Admin.findByPk(id);
+    const { parentId } = req.params;
+
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+
+    const subDepartment = await Department.findByPk(parentId);
+    if (!subDepartment) return res.status(404).json({ message: "Department not found" });
+    subDepartment.status = subDepartment.status === 'active' ? 'disabled' : 'active';
+    await subDepartment.save();
+    console.log("subDepartment", subDepartment.status);
+    return res.status(200).json({
+      message: `Department has been ${subDepartment.status === 'active' ? 'enabled' : 'disabled'} successfully.`,
+      subDepartment,
+    });
+  } catch (error) {
+    console.log("Error changing status", error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message});
+  }
+}
+
+export const deleteSubDepartment = async(req,res)=>{
+  try {
+    const { id } = req.user;
+    const superAdmin = await Admin.findByPk(id);
+    const { subdeptid } = req.params;
+
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+
+    const subDepartment = await Department.findByPk(subdeptid);
+    if (!subDepartment) return res.status(404).json({ message: "Sub Department not found" });
+
+    await subDepartment.destroy();
+    return res.status(200).json({ message: "Sub-department has been deleted successfully." });
+  } catch (error) {
+    console.log("Error deleting subdepartment", error.message);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const updateDepartment = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const superAdmin = await Admin.findByPk(id);
+    const { departmentId } = req.params;
+    const { name, code, status } = req.body;
+
+    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
+    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+
+    const department = await Department.findByPk(departmentId);
+    if (!department) return res.status(404).json({ message: "Department not found" });
+
+    // Update only provided fields
+    if (name) department.name = name;
+    if (code) department.code = code;
+    if (status) department.status = status;
+
+    await department.save();
+
+    return res.status(200).json({ message: "Department updated successfully", department });
+  } catch (error) {
+    console.error("Error updating department:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const createRoleDeptwise = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const { name } = req.body;
+    const { departmentId } = req.params;
+
+
+    const superAdmin = await Admin.findByPk(id);
+    if (!superAdmin || (superAdmin.global_role !== 'Superadmin' && superAdmin.global_role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+    }
+
+    if (!name || !departmentId) {
+      return res.status(400).json({ message: "Role name and department ID are required" });
+    }
+
+    const department = await Department.findByPk(departmentId);
+    if (!department) {
+      return res.status(404).json({ message: "Department not found" });
+    }
+
+    // Check if the role already exists
+    const existingRole = await UserDepartment.findOne({
+      where: { departmentId, role: name, status: 'active' },
+    });
+
+    if (existingRole) {
+      return res.status(409).json({ message: "Role already exists in this department" });
+    }
+
+    // Create the new role
+    const newRole = await UserDepartment.create({
+      roleId: uuidv4(),
+      departmentId,
+      role: name,
+      headId: id, // Assuming the creator is the head
+      tags: [],
+    });
+
+    return res.status(201).json({ message: "Role created successfully", role: newRole });
+  } catch (error) {
+    console.error("Error creating role:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const getRolesByDepartment = async (req, res) => {
+  try {
+    const { departmentId } = req.params;
+
+    const roles = await UserDepartment.findAll({
+      where: { departmentId },
+      attributes: ['role','roleId', 'headId', 'tags', 'status']
+    });
+
+    if (!roles.length) {
+      return res.status(404).json({ message: "No roles found for this department" });
+    }
+
+    return res.status(200).json(roles);
+  } catch (error) {
+    console.error("Error fetching roles:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+}
+
+export const deleteDepartmentRole = async (req, res) => {
+  try {
+    const { roleId } = req.params;
+
+    if (!roleId) {
+      return res.status(400).json({ message: 'Missing roleId in request params' });
+    }
+
+    const role = await UserDepartment.findOne({ where: { roleId } });
+
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+
+    await role.destroy();
+
+    return res.status(200).json({ message: 'Role deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting role:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+export const toggleRoleStatus = async (req, res) => {
+  try {
+    const { roleId } = req.params;
+    const { status } = req.body;
+
+    if (!roleId || !['active', 'disabled'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid roleId or status' });
+    }
+
+    const role = await UserDepartment.findOne({ where: { roleId } });
+
+    if (!role) {
+      return res.status(404).json({ message: 'Role not found' });
+    }
+
+    role.status = status;
+    await role.save();
+
+    return res.status(200).json({ message: `Role status updated to ${status}` });
+  } catch (error) {
+    console.error('Error toggling role status:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+export const addSubDepartmentRole = async (req, res) => {
+  try {
+    const { subDepartmentId } = req.params;
+    const { role, headId, tags, roleType } = req.body;
+
+    if (!role || !roleType) {
+      return res.status(400).json({ message: 'Role and roleType are required' });
+    }
+
+    const newRole = await UserDepartment.create({
+      roleId: uuidv4(),         // assuming roleId is UUID PK
+      departmentId: subDepartmentId,
+      role,
+      headId: headId || null,
+      tags: tags || [],
+      roleType,
+      status: 'active',         // default status on creation
+    });
+
+    return res.status(201).json({ message: 'Role created successfully', data: newRole });
+  } catch (error) {
+    console.error('Error creating sub-department role:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};
+
+
+export const getSubDepartmentRoles = async (req, res) => {
+  try {
+    const { subDepartmentId } = req.params;
+
+    const roles = await UserDepartment.findAll({
+      where: { departmentId: subDepartmentId },
+      attributes: ['roleId', 'role', 'headId', 'tags', 'status', 'roleType'],
+      order: [['createdAt', 'ASC']],
+    });
+
+    return res.status(200).json(roles);
+  } catch (error) {
+    console.error('Error fetching sub-department roles:', error);
+    return res.status(500).json({ message: 'Internal Server Error', error: error.message });
+  }
+};

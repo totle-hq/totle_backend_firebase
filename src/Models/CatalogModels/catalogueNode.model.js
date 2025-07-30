@@ -35,6 +35,10 @@ export const CatalogueNode = sequelize1.define(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    is_subject:{
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
     status: {
       type: DataTypes.ENUM("active", "draft", "archived"),
       defaultValue: "draft",
@@ -51,6 +55,10 @@ export const CatalogueNode = sequelize1.define(
       type: DataTypes.JSONB,
       defaultValue: {},
     },
+    address_of_node:{
+      type: DataTypes.STRING(1024),
+      allowNull: true, // e.g., 'root/branch/level_1'
+    }
   },
   {
     schema: "catalog",
@@ -65,11 +73,14 @@ export const CatalogueNode = sequelize1.define(
 );
 
 // Self-referencing parent-child
-CatalogueNode.hasMany(CatalogueNode, {
-  foreignKey: "parent_id",
-  as: "children",
-});
 CatalogueNode.belongsTo(CatalogueNode, {
-  foreignKey: "parent_id",
-  as: "parent",
+  foreignKey: 'parent_id',     // My parent’s id
+  targetKey: 'node_id',        // The actual node it points to
+  as: 'parent',                // So we can do: topic.parent.name
+});
+
+CatalogueNode.hasMany(CatalogueNode, {
+  foreignKey: 'parent_id',     // I am the parent of these children
+  sourceKey: 'node_id',
+  as: 'children',              // So we can do: subject.children
 });

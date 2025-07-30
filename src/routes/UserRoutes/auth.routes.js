@@ -1,8 +1,9 @@
 import express from "express";
-import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile } from "../../controllers/UserControllers/auth.controller.js";
+import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile ,updateProfileMeta} from "../../controllers/UserControllers/auth.controller.js";
 import upload from "../../middlewares/multer.js";
 import { loginLimiter, signupLimiter } from "../../middlewares/rateLimiter.js";
 import authMiddleware from "../../middlewares/authMiddleware.js";
+import { countQueriesByStatus, getQueriesList, getSupportQueries, SupportQueryForUser, updateQueryPriority, updateQueryStatus } from "../../controllers/SupportQueriesController/SupportQueryController.js";
 
 const router = express.Router();
 /**
@@ -26,11 +27,12 @@ router.post("/signup/verifyOtp", otpVerification);
  * ✅ Secure Login with Email/Mobile & Password
  */
 router.post("/login", loginUser);
-
+router.put('/updateUser', updateUserProfile);
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
 router.get('/user', getUserProfile);
+router.post("/profile/meta", updateProfileMeta);
 router.post("/logout", logout);
 router.get("/user-count", getUserCount);
 router.post("/contactus",sendContactEmail)
@@ -45,5 +47,11 @@ router.get("/allBetaUsers",getAllBetaUsers);
 router.put("/user/updateUser", upload.single("dp"), updateUserProfile)
 // router.get("/:userId", getUserById);
 // router.put("/:userId", updateUser);
+router.post("/queries",SupportQueryForUser);
+router.get("/queryList", getQueriesList);
+router.get("/queryStats",getSupportQueries);
+router.patch("/queries/:id",updateQueryStatus);
+router.patch("/queriesByPriority/:id", updateQueryPriority);
+router.get("/queries/summary", countQueriesByStatus)
 
 export default router;

@@ -1,4 +1,4 @@
-// File: src/controllers/test.controller.js
+// File: src/controllers/TestGeneratorControllers/test.controller.js
 
 import { TestGeneratorService } from "../services/testGenerator.service.js";
 

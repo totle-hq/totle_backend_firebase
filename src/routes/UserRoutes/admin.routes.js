@@ -1,12 +1,13 @@
 import express from "express";
 
-import { adminLogin, blockUserByAdmin, createBlog, createOrUpdateSurvey, deleteBlog, deleteSurveyById, deleteUserByAdmin, displayQuestionsBySurveyId, getAdminBlogs, getAdminDetails, getAllBlogs, getAllSuggestionsForAdmin, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getSurveyNames, getSurveyResults, loginNucleusAdmin, submitSurveyResponse, surveyResponsesAsJsonOrCsv, unblockUserByAdmin, updateBlog, uploadImage } from "../../controllers/UserControllers/admin.controller.js";
+import { activeSuperAdmins, addSubDepartmentRole, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, createRoleDeptwise, deleteBlog, deleteDepartmentRole, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getRolesByDepartment, getSubDepartmentRoles, getSubDepartments, getSurveyNames, getSurveyResults, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleRoleStatus, toggleSubDepartmentStatus, toggleSuperadminStatus, unblockUserByAdmin, updateBlog, updateDepartment, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
 import multer from "multer";
 import path from "path";
 import { create } from "domain";
+import { checkAdminAccess } from "../../middlewares/checkAdminAccess.js";
 
 // Setup Multer storage
 const storage = multer.diskStorage({
@@ -22,7 +23,7 @@ const upload = multer({ storage });
 
 
 router.post("/login", adminLogin);
-router.get("/auth/me", getAdminDetails);
+router.get("/auth/me", getAdminProfile);
 router.post("/blogs", authenticateAdmin, createBlog);       // Create a blog (Admin only)
 router.get("/blogs", getAllBlogs);                          // Get all blogs (Public)
 router.get("/blogs/:id", getBlogById);                      // Get a single blog (Public)
@@ -47,9 +48,48 @@ router.delete("/surveys/:surveyId", deleteSurveyById);
 router.post("/block/:userId", blockUserByAdmin);
 router.post("/unblock/:userId", unblockUserByAdmin);
 router.delete("/deleteUser/:userId", deleteUserByAdmin);
+router.post("/create/superAdmin",verifyAdminToken, superAdminCreationByFounder);
+router.get("/get/superadmins",verifyAdminToken, getAllSuperAdmins);
+router.get("/org/superadmins", verifyAdminToken, activeSuperAdmins);
+router.put("/org/superadmins/:superAdminId/toggle", verifyAdminToken, toggleSuperadminStatus);
+router.delete("/org/superadmins/:superAdminId", verifyAdminToken, deleteSuperAdmin)
+router.post("/org/departments", verifyAdminToken, DepartmentCreationByFounder);
+router.get("/org/departments",verifyAdminToken, getAllDepartments);
+router.post("/org/departments/:parentId/subdepartments", verifyAdminToken, subDepartmentCreation);
+router.get("/org/departments/:parentId/subdepartments", verifyAdminToken, getSubDepartments);
+router.put("/org/subdepartments/:parentId/toggle", verifyAdminToken, toggleSubDepartmentStatus);
+router.delete("/org/subdepartments/:subdeptid", verifyAdminToken, deleteSubDepartment);
+router.patch("/org/departments/:departmentId",verifyAdminToken, updateDepartment)
+// router.get("/org/departments/${departmentId}/roles",  fetchDepartmentRoles);
+router.post("/org/departments/:departmentId/roles", verifyAdminToken, createRoleDeptwise)
+router.get("/org/departments/:departmentId/roles", verifyAdminToken, getRolesByDepartment);
+router.delete('/org/roles/:roleId', verifyAdminToken, deleteDepartmentRole);
+router.patch('/org/roles/:roleId/toggle', verifyAdminToken, toggleRoleStatus);
+router.post('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, addSubDepartmentRole);
+router.get('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, getSubDepartmentRoles);
+
+
+
+router.post(
+  '/assign',
+  checkAdminAccess({ requiredRole: 'manage' }), // Founder/Superadmin override handled inside
+  assignRoleAndTags
+);
+
+router.post(
+  '/revoke',
+  checkAdminAccess({ requiredRole: 'manage' }),
+  revokeRoleAndTags
+);
+
+router.get(
+  '/',
+  checkAdminAccess({ requiredRole: 'manage' }),
+  getAdminActionLogs
+);
 
 // Nucleus admin
-router.post("/nucleus",loginNucleusAdmin)
+// router.post("/nucleus",loginNucleusAdmin)
 export default router;
 
 

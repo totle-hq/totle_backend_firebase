@@ -1,39 +1,48 @@
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
 
-export const Session = sequelize1.define("Session", {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-  },
-  teacher_id: {
-    type: DataTypes.UUID,
-    allowNull: false,
-    comment: "User ID of the teacher",
-  },
-  student_id: {
-    type: DataTypes.UUID,
-    allowNull: true,
-    comment: "User ID of the student (optional for public sessions)",
-  },
-  topic_id: {
-    type: DataTypes.UUID,
-    allowNull: false,
-    comment: "ID of the topic taught",
-  },
-  scheduled_at: {
+export const Session = sequelize1.define(
+  "Session",
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+    },
+    teacher_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
+    student_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    topic_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
+    scheduled_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+    },
+      completed_at: {
     type: DataTypes.DATE,
-    allowNull: false,
-    comment: "Scheduled date/time for the session",
+    allowNull: true,
   },
-  duration_minutes: {
-    type: DataTypes.INTEGER,
-    defaultValue: 60,
-    comment: "Duration of the session",
+    duration_minutes: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    status: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: "available",
+    },
   },
-  status: {
-    type: DataTypes.STRING,
-    defaultValue: "completed", // or "upcoming", "cancelled"
-  },
-});
+  {
+    schema: "user",
+    tableName: "sessions",
+    timestamps: true, // ✅ Ensure timestamps are enabled
+  }
+);
+
