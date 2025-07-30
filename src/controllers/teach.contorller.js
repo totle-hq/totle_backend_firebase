@@ -60,68 +60,7 @@ export const reportSession = async (req, res) => {
   }
 };
 
-// export const offerSlot = async (req, res) => {
-//   try {
-//     const teacher_id = req.user.id; // assuming user is authenticated
-//     const { topic_id, date, timeRange } = req.body;
-// const user=await User.findByPk(teacher_id)
-// const teacher_location=user.location;
-// if(!teacher_location || teacher_location===null){
-//   console.log("teacher location not found")
-//      return res.status(400).json({ message: "please fill the location in profile to offer a slot" });
-// }
-//     if (!topic_id || !date || !timeRange) {
-//       console.log("Missing topic_id, date or timeRange", { topic_id, date, timeRange });
-//       return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
-//     } // Parse time range like "14:00 - 15:00"
-//     const [startTimeStr, endTimeStr] = timeRange.split("-");
-//     const scheduled_at = new Date(`${date} ${startTimeStr}`);
-//     const completed_at = new Date(`${date} ${endTimeStr}`);
-//     const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
-// console.log(scheduled_at,completed_at);
-//     const now = new Date();
-//     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-// if (scheduled_at < twoHoursLater) {
-//       return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
-//     }
 
-//     // Optional: prevent double booking on same time for same teacher
-//     const overlapping = await Session.findOne({
-//       where: {
-//         teacher_id,
-//         status: "available",
-//         scheduled_at: {
-//           [Op.lt]: completed_at
-//         },
-//         completed_at: {
-//           [Op.gt]: scheduled_at
-//         }
-//       }
-//     });
-
-//     if (overlapping) {
-//       return res.status(400).json({ message: "You already have an offered slot during this time." });
-//     }
-
-//     const session = await Session.create({
-//       teacher_id,
-//       topic_id,
-//       scheduled_at,
-//       completed_at,
-//       duration_minutes,
-//       status: "available",
-//    });
-
-//     return res.status(201).json({ message: "Slot offered successfully", session });
-
-//   } catch (err) {
-//     console.error("Offer slot error:", err);
-//     return res.status(500).json({ error: "SERVER_ERROR" });
-//   }
-// };
-
-
-// Helper to convert UTC date to IST
 export const offerSlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
