@@ -199,6 +199,8 @@ const formatDate = (dateObj) => {
 };
 
 
+
+
 export const getAvailabilityChart = async (req, res) => {
   try {
     const teacher_id = req.user.id;
@@ -207,6 +209,7 @@ export const getAvailabilityChart = async (req, res) => {
     const endDate = new Date();
     endDate.setDate(today.getDate() + 7);
 
+    // 1. Get all sessions for the teacher in next 7 days
     const sessions = await Session.findAll({
       where: {
         teacher_id,
@@ -216,9 +219,26 @@ export const getAvailabilityChart = async (req, res) => {
         },
       },
       order: [["scheduled_at", "ASC"]],
+      raw: true,
     });
 
-    // Build default availability object
+    // 2. Get all unique topic IDs
+    const allTopicIds = [...new Set(sessions.map(s => s.topic_id))];
+
+    // 3. Fetch topic names
+    const topicRecords = await CatalogueNode.findAll({
+      where: { node_id: allTopicIds },
+      attributes: ["node_id", "name"],
+      raw: true,
+    });
+
+    // 4. Create a topic ID to name map
+    const topicMap = {};
+    topicRecords.forEach(topic => {
+      topicMap[topic.node_id] = topic.name;
+    });
+
+    // 5. Initialize availability for 7 days
     const availability = {};
     for (let i = 0; i < 7; i++) {
       const date = new Date();
@@ -227,44 +247,46 @@ export const getAvailabilityChart = async (req, res) => {
       availability[dateKey] = [];
     }
 
-    // Track duplicate times
-    const scheduledSet = new Set();
-    const completedSet = new Set();
+    // 6. Group sessions by time
+    const timeMap = new Map();
 
     for (const session of sessions) {
-      const istScheduled = session.scheduled_at;
-      const istCompleted = session.completed_at;
+      const scheduledTimeISO = new Date(session.scheduled_at).toISOString();
+      const dateKey = formatDate(convertUTCToIST(session.scheduled_at));
 
-      const scheduledKey = new Date(istScheduled).toISOString();
-      const completedKey = new Date(istCompleted).toISOString();
-      const dateKey = formatDate(convertUTCToIST(istScheduled));
-
-      // If scheduled_at or completed_at already added, skip this session
-      if (scheduledSet.has(scheduledKey) || completedSet.has(completedKey)) {
-        continue;
-      }
-
-      if (availability[dateKey]) {
-        availability[dateKey].push({
-          id: session.id,
-          topic_id: session.topic_id,
-          scheduled_at: istScheduled.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-          completed_at: istCompleted.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+      if (!timeMap.has(scheduledTimeISO)) {
+        timeMap.set(scheduledTimeISO, {
+          id: session.id, // single session id
+          scheduled_at: session.scheduled_at.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          completed_at: session.completed_at?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) || null,
+          topic_ids: [],
+          topic_names: [],
           status: session.status,
         });
+      }
 
-        // Mark this time as used
-        scheduledSet.add(scheduledKey);
-        completedSet.add(completedKey);
+      const entry = timeMap.get(scheduledTimeISO);
+      entry.topic_ids.push(session.topic_id);
+      entry.topic_names.push(topicMap[session.topic_id] || "Unknown");
+    }
+
+    // 7. Fill availability
+    for (const [isoTime, group] of timeMap.entries()) {
+      const dateKey = formatDate(convertUTCToIST(new Date(isoTime)));
+      if (availability[dateKey]) {
+        availability[dateKey].push(group);
       }
     }
 
     return res.status(200).json({ availability });
+
   } catch (err) {
     console.error("Error fetching availability chart:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
+
 
 
 

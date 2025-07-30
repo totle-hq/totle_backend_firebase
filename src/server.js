@@ -107,7 +107,7 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-    //  await syncDatabase();  // Automatically run the syncDatabase on server start
+     await syncDatabase();  // Automatically run the syncDatabase on server start
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
