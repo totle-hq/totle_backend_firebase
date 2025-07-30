@@ -10,6 +10,6 @@ router.post("/book", authMiddleware, bookFreeSession);
 router.get("/student-session", authMiddleware, getStudentSessions);
 router.get("/student/first-session", authMiddleware, getFirstUpcomingStudentSession);
 router.get("/teacher/first-session", authMiddleware, getFirstUpcomingTeacherSession);
-router.get("/teacher/remaining-sessions", authMiddleware, getAllUpcomingTeacherSessions);
+router.get("/teacher/upcoming-sessions", authMiddleware, getAllUpcomingTeacherSessions);
 
 export default router;
