@@ -9,7 +9,7 @@ import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user 
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
-import sessionRoutes from "./routes/session.routs.js";
+// import sessionRoutes from "./routes/session.routs.js";
 // import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
 // import boardRoutes from './routes/CatalogRoutes/board.routes.js';
 // import educationRoutes from './routes/CatalogRoutes/education.routes.js';
@@ -29,10 +29,6 @@ import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 //import sessionRoutes from './routes/sessionRoutes.js';
 import http from "http";
 import { Server } from "socket.io";
-import teachRoutes from "./routes/teach.routes.js"
-import ctaRoutes from "./routes/cta.js"
-import platformCtaRoutes from "./routes/platformCta.routes.js";
-import FeedbackRoutes from "./routes/feedback.routes.js";
 import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
@@ -77,12 +73,8 @@ app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/session",sessionRoutes);
 app.use("/api/teach",teachRoutes);
-
 app.use("/api/feedback",FeedbackRoutes);
 
-app.use("/api/teach",teachRoutes);
-
-app.use("/api/feedback",FeedbackRoutes);
 app.use('/api/objectives', objectiveRoutes);
 
 app.use("/api/teach",insights);
@@ -108,6 +100,8 @@ const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
      await syncDatabase();  // Automatically run the syncDatabase on server start
+
+    //  await defineModelRelationships();
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
