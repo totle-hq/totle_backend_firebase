@@ -86,7 +86,7 @@ app.use("/api/feedback",FeedbackRoutes);
 app.use('/api/objectives', objectiveRoutes);
 
 app.use("/api/teach",insights);
-app.use("api/progress",progressRoutes);
+app.use("/api/progress",progressRoutes);
 
 
 app.get("/", (req, res) => {
