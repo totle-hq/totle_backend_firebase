@@ -29,7 +29,7 @@ import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 import sessionRoutes from './routes/session.routs.js';
 import http from "http";
 import { Server } from "socket.io";
-// import teachRoutes from "./routes/teach.routes.js"
+import teachRoutes from "./routes/teach.routes.js"
 // import ctaRoutes from "./routes/cta.js"
 // import platformCtaRoutes from "./routes/platformCta.routes.js";
 // import FeedbackRoutes from "./routes/feedback.routes.js";
@@ -37,9 +37,9 @@ import { Server } from "socket.io";
 // import ctaRoutes from "./routes/cta.js"
 // import platformCtaRoutes from "./routes/platformCta.routes.js";
 // import FeedbackRoutes from "./routes/feedback.routes.js";
-// import ctaRoutes from "./routes/cta.js"
-// import platformCtaRoutes from "./routes/platformCta.routes.js";
-// import FeedbackRoutes from "./routes/feedback.routes.js";
+import ctaRoutes from "./routes/cta.js"
+import platformCtaRoutes from "./routes/platformCta.routes.js";
+import FeedbackRoutes from "./routes/feedback.routes.js";
 import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust path if necessary
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
