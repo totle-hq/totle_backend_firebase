@@ -75,7 +75,7 @@ app.use("/admin", adminRoutes);
 app.use('/api', ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
-//<<<<<<< HEAD
+
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
