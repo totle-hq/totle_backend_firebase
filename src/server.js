@@ -21,9 +21,10 @@ import sessionRoutes from "./routes/session.routs.js";
 
 import path from "path";
 import { fileURLToPath } from "url";
-import {syncDatabase} from './config/syncDb.js';
+import {defineModelRelationships, syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
+import sessionRoutes from "./routes/SessionRoutes/session.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 //import sessionRoutes from './routes/sessionRoutes.js';
 import http from "http";
@@ -36,6 +37,11 @@ import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
 import FeedbackRoutes from "./routes/feedback.routes.js";
+import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust path if necessary
+import progressRoutes from "./routes/progressTracker.routes.js";
+import insights from "./routes/insights.routes.js"
+
+// After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -77,7 +83,11 @@ app.use("/api/feedback",FeedbackRoutes);
 app.use("/api/teach",teachRoutes);
 
 app.use("/api/feedback",FeedbackRoutes);
-// app.use("api/progress",progressRoutes);
+app.use('/api/objectives', objectiveRoutes);
+
+app.use("/api/teach",insights);
+app.use("api/progress",progressRoutes);
+
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");

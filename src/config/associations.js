@@ -17,6 +17,9 @@ import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { TestFlag } from "../Models/TestflagModel.js";
 import { Test } from "../Models/test.model.js";
 import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel.js";
+import { Session } from "../Models/SessionModel.js";
+import { BookedSession } from "../Models/BookedSession.js";
+import { FeedbackSummary } from "../Models/feedbacksummary.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -80,6 +83,9 @@ const defineRelationships = () => {
 
   Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id' });
   CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id'});
+    
+  FeedbackSummary.belongsTo(CatalogueNode,{foreignKey:'node_id'});
+  CatalogueNode.hasMany(FeedbackSummary,{foreignKey:'node_id'});
   
   TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
   User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
@@ -93,6 +99,19 @@ const defineRelationships = () => {
 
   Department.belongsTo(Department, { foreignKey: 'parentId', as: 'parentDepartment'});
 
+  Session.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
+  User.hasMany(Session, { foreignKey: 'teacher_id', as: 'teachingSessions'});
+
+  BookedSession.belongsTo(User, { foreignKey: 'learner_id', as: 'student' });
+  CatalogueNode.belongsTo(CatalogueNode, { foreignKey: 'parent_id', as: 'parentNode' });
+
+  CatalogueNode.belongsTo(CatalogueNode, { as: "subject", foreignKey: "parent_id" });
+
+  BookedSession.belongsTo(User, { as: 'teacher', foreignKey: 'teacher_id' })
+
+  BookedSession.belongsTo(CatalogueNode, { as: 'bookedTopic', foreignKey: 'topic_id' })
+
+
 };
 
-export default defineRelationships;
+export default defineRelationships

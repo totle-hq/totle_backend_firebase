@@ -9,6 +9,8 @@ import { BookedSession } from '../Models/BookedSession.js'; // ✅ ADDED
 import { SupportQueriesMasterSeeder } from '../seeders/SupportQueriesSeeder.js';
 // import { seedCatalogueDomains } from '../seeders/catalogueSeeder.js';
 import { ProgressionThresholds } from "../Models/progressionThresholds.model.js";
+import "../Models/CatalogModels/catalogueNode.model.js";
+import "../Models/TeachertopicstatsModel.js";
 
 dotenv.config();
 
@@ -81,6 +83,12 @@ async function createDatabaseIfNeeded(dbName) {
     console.error("❌ Error creating database:", error);
   }
 }
+// At the bottom of syncDb.js
+export async function defineModelRelationships() {
+  const defineRelationships = await import("../config/associations.js");
+  defineRelationships.default();
+  console.log("✅ Sequelize model associations initialized");
+}
 
 export async function syncDatabase() {
   try {
@@ -111,6 +119,11 @@ export async function syncDatabase() {
     const { Blog } = await import("../Models/SurveyModels/BlogModel.js");
     await Blog.sync({ alter: true });
 
+    const { Objective } = await import("../Models/Objectives/objective.model.js");
+await Objective.sync({ alter: true });
+console.log("✅ Objective table synced successfully!");
+
+
     const { Survey } = await import("../Models/SurveyModels/SurveyModel.js");
     await Survey.sync({ alter: true });
 
@@ -125,7 +138,7 @@ export async function syncDatabase() {
     await BookedSession.sync({ alter: true }); // ✅ ADDED: Ensure this table is created
 
     await ProgressionThresholds.sync({ alter: true });
-console.log("✅ ProgressionThresholds table synced successfully!");
+    console.log("✅ ProgressionThresholds table synced successfully!");
 
 
     await sequelize1.sync({ alter: true });

@@ -610,7 +610,7 @@ export const getMyTopicsWithStats = async (req, res) => {
       include: [
         {
           model: CatalogueNode,
-          as: "Topic",
+          // as: "Topic",
           attributes: ["node_id", "name", "parent_id"]
         }
       ]

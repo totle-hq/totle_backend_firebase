@@ -1,3 +1,5 @@
+// src/Models/SessionsummariesModel.js
+
 import { sequelize1 } from "../config/sequelize.js";
 import { DataTypes } from "sequelize";
 
