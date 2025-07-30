@@ -24,7 +24,7 @@ import { fileURLToPath } from "url";
 import {defineModelRelationships, syncDatabase} from './config/syncDb.js';
 import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
-import sessionRoutes from "./routes/SessionRoutes/session.routes.js";
+// import sessionRoutes from "./routes/SessionRoutes/session.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
 //import sessionRoutes from './routes/sessionRoutes.js';
 import http from "http";
@@ -33,10 +33,10 @@ import teachRoutes from "./routes/teach.routes.js"
 import ctaRoutes from "./routes/cta.js"
 import platformCtaRoutes from "./routes/platformCta.routes.js";
 import FeedbackRoutes from "./routes/feedback.routes.js";
-import teachRoutes from "./routes/teach.routes.js"
-import ctaRoutes from "./routes/cta.js"
-import platformCtaRoutes from "./routes/platformCta.routes.js";
-import FeedbackRoutes from "./routes/feedback.routes.js";
+// import teachRoutes from "./routes/teach.routes.js"
+// import ctaRoutes from "./routes/cta.js"
+// import platformCtaRoutes from "./routes/platformCta.routes.js";
+// import FeedbackRoutes from "./routes/feedback.routes.js";
 import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust path if necessary
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
@@ -107,7 +107,7 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-     await syncDatabase();  // Automatically run the syncDatabase on server start
+    //  await syncDatabase();  // Automatically run the syncDatabase on server start
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;

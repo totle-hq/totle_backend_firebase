@@ -60,42 +60,103 @@ export const reportSession = async (req, res) => {
   }
 };
 
+// export const offerSlot = async (req, res) => {
+//   try {
+//     const teacher_id = req.user.id; // assuming user is authenticated
+//     const { topic_id, date, timeRange } = req.body;
+// const user=await User.findByPk(teacher_id)
+// const teacher_location=user.location;
+// if(!teacher_location || teacher_location===null){
+//   console.log("teacher location not found")
+//      return res.status(400).json({ message: "please fill the location in profile to offer a slot" });
+// }
+//     if (!topic_id || !date || !timeRange) {
+//       console.log("Missing topic_id, date or timeRange", { topic_id, date, timeRange });
+//       return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
+//     } // Parse time range like "14:00 - 15:00"
+//     const [startTimeStr, endTimeStr] = timeRange.split("-");
+//     const scheduled_at = new Date(`${date} ${startTimeStr}`);
+//     const completed_at = new Date(`${date} ${endTimeStr}`);
+//     const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
+// console.log(scheduled_at,completed_at);
+//     const now = new Date();
+//     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+// if (scheduled_at < twoHoursLater) {
+//       return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
+//     }
+
+//     // Optional: prevent double booking on same time for same teacher
+//     const overlapping = await Session.findOne({
+//       where: {
+//         teacher_id,
+//         status: "available",
+//         scheduled_at: {
+//           [Op.lt]: completed_at
+//         },
+//         completed_at: {
+//           [Op.gt]: scheduled_at
+//         }
+//       }
+//     });
+
+//     if (overlapping) {
+//       return res.status(400).json({ message: "You already have an offered slot during this time." });
+//     }
+
+//     const session = await Session.create({
+//       teacher_id,
+//       topic_id,
+//       scheduled_at,
+//       completed_at,
+//       duration_minutes,
+//       status: "available",
+//    });
+
+//     return res.status(201).json({ message: "Slot offered successfully", session });
+
+//   } catch (err) {
+//     console.error("Offer slot error:", err);
+//     return res.status(500).json({ error: "SERVER_ERROR" });
+//   }
+// };
+
+
+// Helper to convert UTC date to IST
 export const offerSlot = async (req, res) => {
   try {
-    const teacher_id = req.user.id; // assuming user is authenticated
-    const { topic_id, date, timeRange } = req.body;
-const user=await User.findByPk(teacher_id)
-const teacher_location=user.location;
-if(!teacher_location || teacher_location===null){
-  console.log("teacher location not found")
-     return res.status(400).json({ message: "please fill the location in profile to offer a slot" });
-}
-    if (!topic_id || !date || !timeRange) {
-      console.log("Missing topic_id, date or timeRange", { topic_id, date, timeRange });
-      return res.status(400).json({ message: "Missing topic_id, date or timeRange." });
-    } // Parse time range like "14:00 - 15:00"
+    const teacher_id = req.user.id;
+    const { topic_ids, date, timeRange } = req.body; // ✅ topic_ids is now an array
+
+    const user = await User.findByPk(teacher_id);
+    const teacher_location = user.location;
+
+    if (!teacher_location) {
+      return res.status(400).json({ message: "Please fill in your location in profile to offer a slot." });
+    }
+
+    if (!Array.isArray(topic_ids) || topic_ids.length === 0 || !date || !timeRange) {
+      return res.status(400).json({ message: "Missing topic_ids array, date, or timeRange." });
+    }
+
     const [startTimeStr, endTimeStr] = timeRange.split("-");
     const scheduled_at = new Date(`${date} ${startTimeStr}`);
     const completed_at = new Date(`${date} ${endTimeStr}`);
-    const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
-console.log(scheduled_at,completed_at);
+    const duration_minutes = Math.round((completed_at - scheduled_at) / (1000 * 60));
+
     const now = new Date();
     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-if (scheduled_at < twoHoursLater) {
+
+    if (scheduled_at < twoHoursLater) {
       return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
     }
 
-    // Optional: prevent double booking on same time for same teacher
+    // Optional: prevent any existing session overlap (teacher-wide)
     const overlapping = await Session.findOne({
       where: {
         teacher_id,
         status: "available",
-        scheduled_at: {
-          [Op.lt]: completed_at
-        },
-        completed_at: {
-          [Op.gt]: scheduled_at
-        }
+        scheduled_at: { [Op.lt]: completed_at },
+        completed_at: { [Op.gt]: scheduled_at }
       }
     });
 
@@ -103,16 +164,23 @@ if (scheduled_at < twoHoursLater) {
       return res.status(400).json({ message: "You already have an offered slot during this time." });
     }
 
-    const session = await Session.create({
-      teacher_id,
-      topic_id,
-      scheduled_at,
-      completed_at,
-      duration_minutes,
-      status: "available",
-   });
+    // ✅ Create one session for each topic
+    const createdSessions = [];
 
-    return res.status(201).json({ message: "Slot offered successfully", session });
+    for (const topic_id of topic_ids) {
+      const session = await Session.create({
+        teacher_id,
+        topic_id,
+        scheduled_at,
+        completed_at,
+        duration_minutes,
+        status: "available"
+      });
+
+      createdSessions.push(session);
+    }
+
+    return res.status(201).json({ message: "Slots offered successfully", sessions: createdSessions });
 
   } catch (err) {
     console.error("Offer slot error:", err);
@@ -120,8 +188,6 @@ if (scheduled_at < twoHoursLater) {
   }
 };
 
-
-// Helper to convert UTC date to IST
 const convertUTCToIST = (utcDate) => {
   const istOffsetMs = 5.5 * 60 * 60 * 1000;
   return new Date(new Date(utcDate).getTime() + istOffsetMs);
@@ -132,16 +198,15 @@ const formatDate = (dateObj) => {
   return dateObj.toISOString().split("T")[0];
 };
 
+
 export const getAvailabilityChart = async (req, res) => {
   try {
     const teacher_id = req.user.id;
 
-    // 1. Calculate today's date and 7 days ahead in UTC
     const today = new Date();
     const endDate = new Date();
     endDate.setDate(today.getDate() + 7);
 
-    // 2. Fetch sessions between today and 7 days from now
     const sessions = await Session.findAll({
       where: {
         teacher_id,
@@ -153,31 +218,46 @@ export const getAvailabilityChart = async (req, res) => {
       order: [["scheduled_at", "ASC"]],
     });
 
-    // 3. Build empty chart for next 7 days
+    // Build default availability object
     const availability = {};
     for (let i = 0; i < 7; i++) {
       const date = new Date();
       date.setDate(today.getDate() + i);
       const dateKey = formatDate(convertUTCToIST(date));
-      availability[dateKey] = []; // default empty array
+      availability[dateKey] = [];
     }
 
-    // 4. Map sessions to respective IST dates
-    sessions.forEach((session) => {
-      const istStart = session.scheduled_at;
-      const istEnd = session.completed_at;
-      const dateKey = formatDate(istStart);
+    // Track duplicate times
+    const scheduledSet = new Set();
+    const completedSet = new Set();
+
+    for (const session of sessions) {
+      const istScheduled = session.scheduled_at;
+      const istCompleted = session.completed_at;
+
+      const scheduledKey = new Date(istScheduled).toISOString();
+      const completedKey = new Date(istCompleted).toISOString();
+      const dateKey = formatDate(convertUTCToIST(istScheduled));
+
+      // If scheduled_at or completed_at already added, skip this session
+      if (scheduledSet.has(scheduledKey) || completedSet.has(completedKey)) {
+        continue;
+      }
 
       if (availability[dateKey]) {
         availability[dateKey].push({
           id: session.id,
           topic_id: session.topic_id,
-          scheduled_at: istStart.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-          completed_at: istEnd.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          scheduled_at: istScheduled.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          completed_at: istCompleted.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
           status: session.status,
         });
+
+        // Mark this time as used
+        scheduledSet.add(scheduledKey);
+        completedSet.add(completedKey);
       }
-    });
+    }
 
     return res.status(200).json({ availability });
   } catch (err) {
@@ -186,11 +266,14 @@ export const getAvailabilityChart = async (req, res) => {
   }
 };
 
+
+
+
 export const updateAvailabilitySlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const sessionId = req.params.id;
-    const { date, timeRange,topic_id } = req.body;
+    const { date, timeRange, topic_ids = [] } = req.body;
 
     const session = await Session.findByPk(sessionId);
 
@@ -199,50 +282,116 @@ export const updateAvailabilitySlot = async (req, res) => {
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split("-");
-    const scheduled_at = new Date(`${date} ${startTimeStr}`);
-    const completed_at = new Date(`${date} ${endTimeStr}`);
-   const duration_minutes=Math.round((completed_at)-scheduled_at)/(1000*60);
+    const newScheduledAt = new Date(`${date} ${startTimeStr}`);
+    const newCompletedAt = new Date(`${date} ${endTimeStr}`);
+    const duration_minutes = Math.round((newCompletedAt - newScheduledAt) / (1000 * 60));
+
     const now = new Date();
     const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-
-    if (scheduled_at < twoHoursLater) {
+    if (newScheduledAt < twoHoursLater) {
       return res.status(400).json({ error: "Updated slot must be at least 2 hours ahead." });
     }
 
-    session.scheduled_at = scheduled_at;
-    session.completed_at = completed_at;
-    session.topic_id=topic_id;
-     session.duration_minutes=duration_minutes;
-    await session.save();
+    // 1. Find all existing sessions for the slot (same scheduled/completed time and teacher)
+    const existingSessions = await Session.findAll({
+      where: {
+        teacher_id,
+        status: "available",
+        scheduled_at: session.scheduled_at,
+        completed_at: session.completed_at,
+      },
+    });
 
-    return res.status(200).json({ message: "Slot updated successfully", session });
+    // 2. Get existing topic_ids
+    const existingTopicIds = existingSessions.map((s) => s.topic_id);
 
+    // 3. Find which topic_ids to add or remove
+    const toAdd = topic_ids.filter((id) => !existingTopicIds.includes(id));
+    const toKeep = topic_ids.filter((id) => existingTopicIds.includes(id));
+    const toRemove = existingTopicIds.filter((id) => !topic_ids.includes(id));
+
+    // 4. Update sessions to keep
+    for (const s of existingSessions) {
+      if (toKeep.includes(s.topic_id)) {
+        s.scheduled_at = newScheduledAt;
+        s.completed_at = newCompletedAt;
+        s.duration_minutes = duration_minutes;
+        await s.save();
+      }
+    }
+
+    // 5. Delete sessions for removed topic_ids
+    await Session.destroy({
+      where: {
+        teacher_id,
+        status: "available",
+        topic_id: toRemove,
+        scheduled_at: session.scheduled_at,
+        completed_at: session.completed_at,
+      },
+    });
+
+    // 6. Create new sessions for added topic_ids
+    const newSessions = toAdd.map((topic_id) => ({
+      teacher_id,
+      topic_id,
+      scheduled_at: newScheduledAt,
+      completed_at: newCompletedAt,
+      status: "available",
+      duration_minutes,
+    }));
+
+    if (newSessions.length > 0) {
+      await Session.bulkCreate(newSessions);
+    }
+
+    return res.status(200).json({
+      message: "Slot updated successfully for all selected topics",
+      added: toAdd,
+      removed: toRemove,
+      updated: toKeep,
+    });
   } catch (err) {
     console.error("Update slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
+
 export const deleteAvailabilitySlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const sessionId = req.params.id;
 
+    // 1. Find the reference session
     const session = await Session.findByPk(sessionId);
 
     if (!session || session.teacher_id !== teacher_id || session.status !== "available") {
       return res.status(404).json({ error: "Slot not found or unauthorized" });
     }
 
-    await session.destroy();
+    const { scheduled_at, completed_at } = session;
 
-    return res.status(200).json({ message: "Slot deleted successfully" });
+    // 2. Delete all sessions with same slot time for this teacher
+    const deletedCount = await Session.destroy({
+      where: {
+        teacher_id,
+        status: "available",
+        scheduled_at,
+        completed_at,
+      },
+    });
+
+    return res.status(200).json({
+      message: "Slot deleted successfully",
+      deleted_sessions: deletedCount,
+    });
 
   } catch (err) {
     console.error("Delete slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
-
 
 
 

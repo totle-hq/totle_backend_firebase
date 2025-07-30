@@ -542,8 +542,8 @@ const subjectsummary=await FeedbackSummary.findAll({
       engagement_yn:domainDetails?.engagement_percent ||0,
       pace_trend:{
         fast:domainDetails?.pace_fast||0,
-        normal:domainDetails.pace_normal||0,
-        slow:domainDetails.pace_slow||0,
+        normal:domainDetails?.pace_normal||0,
+        slow:domainDetails?.pace_slow||0,
       }
     }
   };
@@ -595,12 +595,16 @@ if (!feedbackMap[domainName][subjectName]) {
 
 let name="";
 const user=await User.findByPk(fb.learner_id);
+  const rating = fb.star_rating || 0;
+      let commentLabel = "NEUTRAL";
+      if (rating > 2.5) commentLabel = "POSITIVE";
+      else if (rating < 2.5) commentLabel = "NEGATIVE";
 name=[user.firstName,user.lastName].filter(Boolean).join(" ");
       feedbackMap[domainName][subjectName][topicKey].feedback.push({
         learner_name: name || "Anonymous",
         text: fb.text_feedback,
         rating: fb.star_rating || 0,
-        comment: fb.flag_reason || "",
+        comment: commentLabel || "",
       });
     }
 

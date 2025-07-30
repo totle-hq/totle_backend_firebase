@@ -26,7 +26,7 @@ const Department = sequelize1.define('departments', {
   },
   status:{
     type: DataTypes.ENUM('active', 'disabled'),
-    allowNull: false,
+    allowNull: true,
   },
   parentId: {
     type: DataTypes.UUID,
