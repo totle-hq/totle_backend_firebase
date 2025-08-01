@@ -1,16 +1,8 @@
 import jwt from "jsonwebtoken";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
-import { StreamChat } from "stream-chat";
 import dotenv from "dotenv";
 dotenv.config();
-
-// console.log("🔐 STREAM_SECRET:", process.env.STREAM_API_SECRET);
-
-const serverClient = StreamChat.getInstance(
-  process.env.STREAM_API_KEY,
-  process.env.STREAM_API_SECRET
-);
 
 export const getSessionStreamDetails = async (req, res) => {
   try {
@@ -37,17 +29,21 @@ export const getSessionStreamDetails = async (req, res) => {
 
     const role = learner ? "learner" : "teacher";
 
-    const token = serverClient.createToken(userRecord.id);
+    // Create JWT token for WebSocket auth (optional)
+    const socketToken = jwt.sign(
+      { userId: userRecord.id, name: fullName, sessionId, role },
+      process.env.JWT_SECRET,
+      { expiresIn: "2h" }
+    );
 
-    return res.json({
-      apiKey: process.env.STREAM_API_KEY,
-      token,
+    return res.status(200).json({
+      sessionId,
+      token: socketToken,
       user: { id: userRecord.id, name: fullName },
-      callId: sessionId,
       role,
     });
   } catch (err) {
-    console.error("Stream token error:", err);
-    res.status(500).json({ error: "Failed to get Stream session token" });
+    console.error("❌ WebRTC session init error:", err);
+    res.status(500).json({ error: "Failed to get WebRTC session details" });
   }
 };
