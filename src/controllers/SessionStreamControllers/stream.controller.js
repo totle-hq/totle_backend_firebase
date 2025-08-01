@@ -1,6 +1,16 @@
 import jwt from "jsonwebtoken";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
+import { StreamChat } from "stream-chat";
+import dotenv from "dotenv";
+dotenv.config();
+
+// console.log("🔐 STREAM_SECRET:", process.env.STREAM_API_SECRET);
+
+const serverClient = StreamChat.getInstance(
+  process.env.STREAM_API_KEY,
+  process.env.STREAM_API_SECRET
+);
 
 export const getSessionStreamDetails = async (req, res) => {
   try {
@@ -27,11 +37,7 @@ export const getSessionStreamDetails = async (req, res) => {
 
     const role = learner ? "learner" : "teacher";
 
-    const token = jwt.sign(
-      { user_id: id },
-      process.env.STREAM_API_SECRET,
-      { algorithm: "HS256", expiresIn: "2h" }
-    );
+    const token = serverClient.createToken(userRecord.id);
 
     return res.json({
       apiKey: process.env.STREAM_API_KEY,
