@@ -125,7 +125,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
     return res.status(200).json({
       success: true,
       session: {
-        session_id: session.id,
+        session_id: session.session_id,
         studentName: session.learner_id
           ? `${session.student.firstName} ${session.student.lastName}`
           : "Unknown",

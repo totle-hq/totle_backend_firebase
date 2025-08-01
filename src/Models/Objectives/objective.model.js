@@ -32,6 +32,7 @@ export const Objective = sequelize1.define('Objective', {
     defaultValue: false,
   },
 }, {
+  schema: 'admin',
   tableName: 'objectives',
   timestamps: true,
 });

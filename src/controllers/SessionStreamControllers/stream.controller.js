@@ -8,20 +8,24 @@ export const getSessionStreamDetails = async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { id } = req.user;
+    console.log("🔍 Fetching session stream details for sessionId:", sessionId, "and userId:", id);
 
     const userRecord = await User.findOne({
       where: { id },
       attributes: ["id", "firstName", "lastName", "email"],
     });
 
+    // console.log("userRecord:", userRecord);
     if (!userRecord) {
       return res.status(404).json({ error: "User not found" });
     }
 
     const fullName = `${userRecord.firstName} ${userRecord.lastName}`;
 
-    const learner = await BookedSession.findOne({ where: { learner_id: id, id: sessionId } });
-    const teacher = await BookedSession.findOne({ where: { teacher_id: id, id: sessionId } });
+    const learner = await BookedSession.findOne({ where: { learner_id: id, session_id: sessionId } });
+    console.log("learner:", learner);
+    const teacher = await BookedSession.findOne({ where: { teacher_id: id, session_id: sessionId } });
+    console.log("teacher:", teacher);
 
     if (!learner && !teacher) {
       return res.status(403).json({ error: "You are not authorized to join this session" });

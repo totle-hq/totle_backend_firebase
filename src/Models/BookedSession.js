@@ -27,6 +27,10 @@ export const BookedSession = sequelize1.define(
       type: DataTypes.STRING,
       allowNull: false,
     },
+    session_id:{
+      type: DataTypes.UUID,
+      allowNull: true,
+    }
   },
   {
     schema: 'user',

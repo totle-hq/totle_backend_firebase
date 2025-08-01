@@ -158,6 +158,7 @@ export const bookFreeSession = async (req, res) => {
       teacher_id: nextSlot.teacher_id,
       topic_id,
       topic: topicName.name || "Unknown",
+      session_id: nextSlot.id
     });
 
     await Session.update(
