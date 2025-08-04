@@ -43,7 +43,7 @@ import FeedbackRoutes from "./routes/feedback.routes.js";
 import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust path if necessary
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
-import keyResultRoutes from './routes/Objectives/keyResult.routes.js'; // adjust path if necessary
+import keyResultRoutes from './routes/Objectives/keyresult.routes.js'; // adjust path if necessary
 
 // After other `app.use` statements for /api/*
 
