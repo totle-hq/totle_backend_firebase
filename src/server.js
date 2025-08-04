@@ -117,7 +117,7 @@ const startServer = async () => {
     const io = new Server(server, {
       cors: {
         origin: [
-          'totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co','https://totle.netlify.app/',
+          'totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co','https://totle.netlify.app',
           'https://mail.google.com','http://localhost:3001','http://localhost:3000'
         ],
         credentials: true,
