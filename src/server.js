@@ -126,14 +126,38 @@ const startServer = async () => {
     });
     global.io = io;
 
-    io.on("connection", (socket) => {
-      console.log("🔌 WebSocket connected:", socket.id);
+io.on("connection", (socket) => {
+  console.log("🔌 WebSocket connected:", socket.id);
 
-      socket.on("disconnect", () => {
-        console.log("❌ WebSocket disconnected:", socket.id);
-        // Optionally: emit isLoggedIn: false if user mapping is added
-      });
+  // Join signaling room
+  socket.on("join", ({ sessionId, userId, role }) => {
+    socket.join(sessionId);
+    console.log(`🟢 ${role} ${userId} joined session ${sessionId}`);
+  });
+
+  // Forward signal (offer, answer, candidate)
+  socket.on("signal", ({ sessionId, userId, type, data }) => {
+    console.log(`📡 Signal ${type} from ${userId} in session ${sessionId}`);
+    socket.to(sessionId).emit("signal", {
+      sessionId,
+      userId,
+      type,
+      data,
     });
+  });
+
+  // Handle hangup
+  socket.on("hangup", ({ sessionId, userId }) => {
+    console.log(`🔴 Hangup by ${userId} in session ${sessionId}`);
+    socket.to(sessionId).emit("hangup");
+  });
+
+  // Disconnect
+  socket.on("disconnect", () => {
+    console.log("❌ WebSocket disconnected:", socket.id);
+  });
+});
+
 
     server.listen(PORT, () => console.log(`🚀 Server running with WebSocket on port ${PORT}`));
 
