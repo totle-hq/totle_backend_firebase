@@ -2,7 +2,7 @@ import { DataTypes } from 'sequelize';
 import { sequelize1 } from '../config/sequelize.js';
 import { CatalogueNode } from './CatalogModels/catalogueNode.model.js'; 
 import { User } from './UserModels/UserModel.js'; 
-
+import { Session } from './SessionModel.js';
 const Feedback = sequelize1.define('learner_session_feedback', {
   id: {
     type: DataTypes.UUID,
@@ -112,5 +112,8 @@ Feedback.belongsTo(CatalogueNode, {
   foreignKey: 'topic_id',
   as: 'topicNode',
 });
-
+Feedback.belongsTo(Session, {
+  foreignKey: "session_id",
+  as: "session",
+});
 export default Feedback;

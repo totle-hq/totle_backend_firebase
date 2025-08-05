@@ -44,7 +44,8 @@ import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
 import keyResultRoutes from './routes/Objectives/keyResult.routes.js'; // adjust path if necessary
-
+import nucleusRoutes from "./routes/nucleus.routes.js";
+import attendenceRoutes from "./routes/attendance.routes.js"
 // After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,6 +89,9 @@ app.use('/api/objectives', keyResultRoutes); // Use the key result routes
 app.use("/api/teach",insights);
 app.use("/api/progress",progressRoutes);
 
+
+app.use("/api/nucleus", nucleusRoutes);
+app.use("/api/attendance",attendenceRoutes); // Marking when user left the session 
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
