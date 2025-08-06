@@ -16,10 +16,13 @@ export const getAllUserDetails = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const offset = (page - 1) * limit;
 
+    const sortBy = req.query.sortBy || "firstName";
+    const order = req.query.order === "desc" ? "DESC" : "ASC";
+
     const { count: totalUsers, rows: users } = await User.findAndCountAll({
       offset,
       limit,
-      order: [["createdAt", "DESC"]],
+      order: [[sortBy, order]],
       attributes: [
         "id",
         "firstName",
@@ -41,41 +44,9 @@ export const getAllUserDetails = async (req, res) => {
 
     const userIds = users.map((u) => u.id);
 
-    // Attendance stats from session_attendance
-    const attendanceRecords = await SessionAttendance.findAll({
-      where: { user_id: { [Op.in]: userIds } },
-      attributes: ['user_id', 'status'],
-    });
-
-    const attendanceMap = {};
-    attendanceRecords.forEach(record => {
-      const { user_id, status } = record;
-      if (!attendanceMap[user_id]) {
-        attendanceMap[user_id] = { present: 0, absent: 0, missed: 0 };
-      }
-      attendanceMap[user_id][status]++;
-    });
-
-    // Language map
-    const langIdsSet = new Set();
-    users.forEach((user) => {
-      (user.known_language_ids || []).forEach((id) => langIdsSet.add(id));
-      if (user.preferred_language_id)
-        langIdsSet.add(user.preferred_language_id);
-    });
-
-    const languages = await Language.findAll({
-      where: { language_id: { [Op.in]: [...langIdsSet] } },
-      attributes: ["language_id", "language_name"],
-    });
-
-    const languageMap = {};
-    languages.forEach(
-      (lang) => (languageMap[lang.language_id] = lang.language_name)
-    );
-
-    // Bulk fetch related data
     const [
+      attendanceRecords,
+      languages,
       tests,
       testFlags,
       progress,
@@ -84,6 +55,11 @@ export const getAllUserDetails = async (req, res) => {
       teacherStats,
       bookedSessions,
     ] = await Promise.all([
+      SessionAttendance.findAll({
+        where: { user_id: { [Op.in]: userIds } },
+        attributes: ["user_id", "status"],
+      }),
+      Language.findAll(),
       Test.findAll({
         where: {
           user_id: { [Op.in]: userIds },
@@ -131,7 +107,19 @@ export const getAllUserDetails = async (req, res) => {
       }),
     ]);
 
-    // Aggregation helpers
+    const languageMap = {};
+    languages.forEach((lang) => {
+      languageMap[lang.language_id] = lang.language_name;
+    });
+
+    const attendanceMap = {};
+    attendanceRecords.forEach(({ user_id, status }) => {
+      if (!attendanceMap[user_id]) {
+        attendanceMap[user_id] = { present: 0, absent: 0, missed: 0 };
+      }
+      attendanceMap[user_id][status]++;
+    });
+
     const testStatsMap = {};
     tests.forEach(({ user_id, result }) => {
       if (!testStatsMap[user_id])
@@ -155,12 +143,14 @@ export const getAllUserDetails = async (req, res) => {
     const completedMap = {};
     const activeSessionMap = {};
     sessions.forEach((s) => {
-      const userIdsInvolved = [s.student_id, s.teacher_id];
-      userIdsInvolved.forEach((uid) => {
+      const ids = [s.student_id, s.teacher_id];
+      ids.forEach((uid) => {
         if (!uid) return;
         sessionMap[uid] = (sessionMap[uid] || 0) + 1;
-        if (s.status === "completed") completedMap[uid] = (completedMap[uid] || 0) + 1;
-        if (s.status === "available" && s.student_id === uid) activeSessionMap[uid] = (activeSessionMap[uid] || 0) + 1;
+        if (s.status === "completed")
+          completedMap[uid] = (completedMap[uid] || 0) + 1;
+        if (s.status === "available" && s.student_id === uid)
+          activeSessionMap[uid] = (activeSessionMap[uid] || 0) + 1;
       });
     });
 
@@ -169,7 +159,8 @@ export const getAllUserDetails = async (req, res) => {
     feedbacks.forEach((fb) => {
       const bridgerId = fb.bridger_id;
       const { teacher_id, student_id } = fb.session || {};
-      if (bridgerId) feedbackByUser[bridgerId] = (feedbackByUser[bridgerId] || 0) + 1;
+      if (bridgerId)
+        feedbackByUser[bridgerId] = (feedbackByUser[bridgerId] || 0) + 1;
       [teacher_id, student_id].forEach((id) => {
         if (id) feedbackAgainstUser[id] = (feedbackAgainstUser[id] || 0) + 1;
       });
@@ -177,7 +168,13 @@ export const getAllUserDetails = async (req, res) => {
 
     const teachingMap = {};
     teacherStats.forEach(({ teacherId, tier, sessionCount }) => {
-      if (!teachingMap[teacherId]) teachingMap[teacherId] = { Bridger: 0, Expert: 0, Master: 0, Legend: 0 };
+      if (!teachingMap[teacherId])
+        teachingMap[teacherId] = {
+          Bridger: 0,
+          Expert: 0,
+          Master: 0,
+          Legend: 0,
+        };
       teachingMap[teacherId][tier] += sessionCount;
     });
 
@@ -188,9 +185,18 @@ export const getAllUserDetails = async (req, res) => {
 
     const results = users.map((user) => {
       const id = user.id;
-      const teaching = teachingMap[id] || { Bridger: 0, Expert: 0, Master: 0, Legend: 0 };
+      const teaching = teachingMap[id] || {
+        Bridger: 0,
+        Expert: 0,
+        Master: 0,
+        Legend: 0,
+      };
       const totalTeaching = Object.values(teaching).reduce((a, b) => a + b, 0);
-      const attendance = attendanceMap[id] || { present: 0, missed: 0, absent: 0 };
+      const attendance = attendanceMap[id] || {
+        present: 0,
+        missed: 0,
+        absent: 0,
+      };
       return {
         id,
         name: `${user.firstName} ${user.lastName || ""}`.trim(),
@@ -200,7 +206,8 @@ export const getAllUserDetails = async (req, res) => {
           (id) => languageMap[id] || `ID: ${id}`
         ),
         preferred_language: user.preferred_language_id
-          ? languageMap[user.preferred_language_id] || `ID: ${user.preferred_language_id}`
+          ? languageMap[user.preferred_language_id] ||
+            `ID: ${user.preferred_language_id}`
           : null,
         gender: user.gender,
         dob: user.dob,
@@ -227,6 +234,22 @@ export const getAllUserDetails = async (req, res) => {
       };
     });
 
+    // Optional: Sort again in-memory if sortBy is a derived field
+    const derivedFields = [
+      "missedSessions",
+      "testsPassed",
+      "testsFailed",
+      "goals_added",
+      "teacher_sessions_total",
+    ];
+    if (derivedFields.includes(sortBy)) {
+      results.sort((a, b) => {
+        const aVal = a[sortBy] || 0;
+        const bVal = b[sortBy] || 0;
+        return order === "DESC" ? bVal - aVal : aVal - bVal;
+      });
+    }
+
     return res.json({
       currentPage: page,
       totalPages: Math.ceil(totalUsers / limit),
@@ -240,7 +263,7 @@ export const getAllUserDetails = async (req, res) => {
 };
 
 
-export const setUserBlacklistOrActive = async (req, res) =>{
+export const setUserBlacklistOrActive = async (req, res) => {
   const { user_id } = req.params;
   const { status } = req.body; // expected: "blacklist" or "active"
 
@@ -272,4 +295,3 @@ export const setUserBlacklistOrActive = async (req, res) =>{
     return res.status(500).json({ message: "Internal server error." });
   }
 };
-
