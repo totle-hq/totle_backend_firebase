@@ -18,7 +18,7 @@ export const createFeature = async (req, res) => {
     }
        const highestPriorityfeature = await Feature.findOne({
           where: { epicId },
-          order: [['priority', 'ASC']],
+          order: [['priority', 'DESC']],
         });
     
         const newPriority = highestPriorityfeature ? highestPriorityfeature.priority + 1 : 1;

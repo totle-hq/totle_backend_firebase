@@ -1,8 +1,9 @@
 import { DataTypes } from 'sequelize';
-import sequelize from '../../config/database.js';
-import { Objective } from './objective.model.js';
 
-export const KeyResult = sequelize.define('KeyResult', {
+import { Objective } from './objective.model.js';
+import { sequelize1 } from '../../config/sequelize.js';
+
+export const KeyResult = sequelize1.define('KeyResult', {
   keyResultId: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,

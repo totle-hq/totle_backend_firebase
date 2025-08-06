@@ -25,7 +25,7 @@ export const createKeyResult = async (req, res) => {
     }
    const highestPrioritykeyresult = await KeyResult.findOne({
   where: { objectiveId }, // 👈 local to current objective
-  order: [['priority', 'ASC']],
+  order: [['priority', 'DESC']],
 });
 
 

@@ -29,7 +29,7 @@ export const createObjective = async (req, res) => {
 
     const objectiveCode = await generateObjectiveCode();
         const highestPriorityObjective = await Objective.findOne({
-      order: [['priority', 'ASC']],
+      order: [['priority', 'DESC']],
     });
 
     const newPriority = highestPriorityObjective ? highestPriorityObjective.priority + 1 : 1;

@@ -47,7 +47,7 @@ export const getEpicsByKeyResult = async (req, res) => {
 
     const epics = await Epic.findAll({
       where: { keyResultId },
-      order: [['priority', 'ASC']],
+      order: [['priority', 'DESC']],
     });
 
     return res.status(200).json({ success: true, data: epics });

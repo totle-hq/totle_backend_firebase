@@ -16,7 +16,7 @@ export const createTask = async (req, res) => {
     }
     const highestPriorityTask = await Task.findOne({
         where: { featureId }, 
-      order: [['priority', 'ASC']],
+      order: [['priority', 'DESC']],
     });
 
     const newPriority = highestPriorityTask ? highestPriorityTask.priority + 1 : 1;
