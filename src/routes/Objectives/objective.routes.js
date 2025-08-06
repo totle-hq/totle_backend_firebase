@@ -5,7 +5,8 @@ import {
   getObjectiveById,
   updateObjective,
   archiveObjective,
-  deleteObjective, // ✅ Add this
+  deleteObjective,
+  updateObjectivePriority, // ✅ Add this
 } from '../../controllers/Objectives/objective.controller.js';
 
 
@@ -29,5 +30,6 @@ router.patch('/:id/archive', archiveObjective);
 // ❌ PERMANENT DELETE
 router.delete('/:id', deleteObjective);
 
+router.put("/priority/:objectiveId",updateObjectivePriority);
 
 export default router;

@@ -27,6 +27,14 @@ export const Objective = sequelize1.define('Objective', {
     type: DataTypes.UUID,
     allowNull: false,
   },
+  
+  priority: {
+  type: DataTypes.INTEGER,
+  allowNull: false,
+  defaultValue: 1,
+  comment: 'Lower number = higher priority',
+},
+
   isArchived: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,

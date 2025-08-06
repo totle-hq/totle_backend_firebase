@@ -12,6 +12,10 @@ import { ProgressionThresholds } from "../Models/progressionThresholds.model.js"
 import "../Models/CatalogModels/catalogueNode.model.js";
 import "../Models/TeachertopicstatsModel.js";
 import { KeyResult } from '../Models/Objectives/keyresult.model.js'; // ✅ Add this line
+import { Feature } from '../Models/Objectives/Feature.model.js';
+
+import { Epic } from '../Models/Objectives/epics.model.js';
+import { Task } from '../Models/Objectives/Task.model.js';
 
 dotenv.config();
 
@@ -121,11 +125,19 @@ export async function syncDatabase() {
     await Blog.sync({ alter: true });
 
     const { Objective } = await import("../Models/Objectives/objective.model.js");
-await Objective.sync({ alter: true });
-console.log("✅ Objective table synced successfully!");
+// await Objective.sync({ alter: true });
+// console.log("✅ Objective table synced successfully!");
 
 await KeyResult.sync({ alter: true });
 console.log("✅ KeyResult table synced successfully!");
+await Epic.sync({ alter: true });
+console.log("✅ Epics table synced successfully!");
+
+await Feature.sync({ alter: true });
+console.log("✅ Feature table synced successfully!");
+
+await Task.sync({ alter: true });
+console.log("✅ Task table synced successfully!");
 
 
     const { Survey } = await import("../Models/SurveyModels/SurveyModel.js");

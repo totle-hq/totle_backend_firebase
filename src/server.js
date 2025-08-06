@@ -44,6 +44,9 @@ import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
 import keyResultRoutes from './routes/Objectives/keyresult.routes.js'; // adjust path if necessary
+import  epicsRoutes from "./routes/Objectives/epic.routes.js"
+import  featureRoutes from "./routes/Objectives/feature.routes.js"
+import  taskRoutes from "./routes/Objectives/task.routes.js"
 
 // After other `app.use` statements for /api/*
 
@@ -85,6 +88,9 @@ app.use("/api/feedback",FeedbackRoutes);
 
 app.use('/api/objectives', objectiveRoutes);
 app.use('/api/objectives', keyResultRoutes); // Use the key result routes
+app.use("/api/objectives",epicsRoutes);     // use for the epics routes
+app.use("/api/objectives",featureRoutes);   // use for the feature routes
+app.use("/api/objectives",taskRoutes);      // use for the task routes
 app.use("/api/teach",insights);
 app.use("/api/progress",progressRoutes);
 

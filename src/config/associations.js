@@ -35,8 +35,8 @@ const defineRelationships = () => {
   Responses.belongsTo(User, { foreignKey: 'userId' });
 
   // User to Preferred Language Relationship
-  User.belongsTo(Language, { foreignKey: "preferred_language_id", as: "preferredLanguage" });
-  Language.hasMany(User, { foreignKey: "preferred_language_id", as: "users" });
+  // User.belongsTo(Language, { foreignKey: "preferred_language_id", as: "preferredLanguage" });
+  // Language.hasMany(User, { foreignKey: "preferred_language_id", as: "users" });
 
 
   // User to UserMetrics Relationship
@@ -78,7 +78,7 @@ const defineRelationships = () => {
   Department.hasMany(UserDepartment, { foreignKey: 'departmentId' });
   UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
 
-  Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
+  // Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
   User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
 
   Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id' });

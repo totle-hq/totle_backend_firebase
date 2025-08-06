@@ -36,6 +36,12 @@ export const KeyResult = sequelize.define('KeyResult', {
       max: 100,
     },
   },
+    priority: {
+  type: DataTypes.INTEGER,
+  allowNull: false,
+  defaultValue: 1,
+  comment: 'Lower number = higher priority',
+},
   order: {
     type: DataTypes.INTEGER,
     allowNull: false,
@@ -58,6 +64,8 @@ KeyResult.belongsTo(Objective, { foreignKey: 'objectiveId', as: 'objective' });
 
 // Before create hook to generate keyResultCode
 KeyResult.beforeCreate(async (keyResult) => {
+  console.log("Generating KeyResult Code:");
+
   const objective = await Objective.findByPk(keyResult.objectiveId);
   if (!objective || !objective.objectiveCode) {
     throw new Error('Objective code not found');

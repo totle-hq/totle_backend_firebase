@@ -3,7 +3,10 @@
 import express from 'express';
 import {
   createKeyResult,
+  deleteKeyResult,
   getKeyResultsByObjective,
+  updateKeyResult,
+  updatekeyresultPriority,
 } from '../../controllers/Objectives/keyresult.controller.js';
 
 const router = express.Router();
@@ -15,5 +18,9 @@ router.post('/:objectiveId/key-results', createKeyResult);
 // @route   GET /api/objectives/:objectiveId/key-results
 // @desc    Fetch all key results under an objective
 router.get('/:objectiveId/key-results', getKeyResultsByObjective);
+
+router.delete("/:objectiveId/key-results/:keyResultId", deleteKeyResult); 
+router.put("/:objectiveId/key-results/:keyResultId", updateKeyResult);
+router.put("/keyresult/priority/:keyresultId",updatekeyresultPriority);
 
 export default router;

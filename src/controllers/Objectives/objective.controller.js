@@ -1,6 +1,7 @@
 import { Objective } from '../../Models/Objectives/objective.model.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
+import { sequelize1 } from '../../config/sequelize.js';
 
 // Generate next Objective code (e.g., OBJ-0001, OBJ-0002, etc.)
 const generateObjectiveCode = async () => {
@@ -27,6 +28,12 @@ export const createObjective = async (req, res) => {
     }
 
     const objectiveCode = await generateObjectiveCode();
+        const highestPriorityObjective = await Objective.findOne({
+      order: [['priority', 'ASC']],
+    });
+
+    const newPriority = highestPriorityObjective ? highestPriorityObjective.priority + 1 : 1;
+
 
     const newObjective = await Objective.create({
       objectiveId: uuidv4(),
@@ -34,6 +41,7 @@ export const createObjective = async (req, res) => {
       level,
       objectiveCode,
       createdBy,
+      priority: newPriority,
     });
 
     res.status(201).json({ message: 'Objective created successfully', data: newObjective });
@@ -51,7 +59,7 @@ export const getAllObjectives = async (req, res) => {
 
     const objectives = await Objective.findAll({
       where: whereClause,
-      order: [['createdAt', 'ASC']],
+       order: [['priority', 'ASC']]
     });
 
     res.status(200).json({ data: objectives });
@@ -152,7 +160,7 @@ export const deleteObjective = async (req, res) => {
 
     const deleted = await Objective.destroy({
       where: {
-        [Op.or]: [{ objectiveId: id }, { objectiveCode: id }],
+        [Op.or]: [ { objectiveCode: id }],
       },
     });
 
@@ -166,4 +174,75 @@ export const deleteObjective = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error });
   }
 };
+
+// update objective priority
+export const updateObjectivePriority = async (req, res) => {
+  try {
+    const { objectiveId } = req.params;
+    const { newPriority } = req.body;
+
+    const objective = await Objective.findByPk(objectiveId);
+
+    if (!objective) {
+      return res.status(404).json({ message: 'Objective not found' });
+    }
+
+    const oldPriority = objective.priority;
+
+    if (newPriority === oldPriority) {
+      return res.status(200).json({ message: 'Priority unchanged', data: objective });
+    }
+
+    // Start a transaction
+    const t = await sequelize1.transaction();
+
+    try {
+      if (newPriority < oldPriority) {
+       
+        await Objective.update(
+          { priority: sequelize1.literal('priority + 1') },
+          {
+            where: {
+              priority: {
+                [Op.gte]: newPriority,
+                [Op.lt]: oldPriority,
+              },
+            },
+            transaction: t,
+          }
+        );
+      } else {
+ 
+        await Objective.update(
+          { priority: sequelize1.literal('priority - 1') },
+          {
+            where: {
+              priority: {
+                [Op.lte]: newPriority,
+                [Op.gt]: oldPriority,
+              },
+            },
+            transaction: t,
+          }
+        );
+      }
+
+ 
+      objective.priority = newPriority;
+      await objective.save({ transaction: t });
+
+      await t.commit();
+
+      return res.status(200).json({ message: 'Priority updated successfully', data: objective });
+    } catch (err) {
+      await t.rollback();
+      console.error('Transaction failed:', err);
+      return res.status(500).json({ message: 'Failed to update priority' });
+    }
+  } catch (error) {
+    console.error('❌ Error updating objective priority:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
+
 
