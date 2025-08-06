@@ -51,6 +51,11 @@ const User = sequelize1.define(
       type: DataTypes.ENUM("male", "female", "other"),
       allowNull: true,
     },
+    gender_updated_once: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
+    },
     known_language_ids: {
       type: DataTypes.ARRAY(DataTypes.INTEGER), // ✅ Stores multiple language IDs
       allowNull: true,
@@ -94,8 +99,8 @@ const User = sequelize1.define(
     ipAddress: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: 'ip_address', // ✅ maps to snake_case column in DB
-      comment: "User's IP address"
+      field: "ip_address", // ✅ maps to snake_case column in DB
+      comment: "User's IP address",
     },
     profilePictureUrl: {
       type: DataTypes.TEXT, // ✅ Store image as BLOB
@@ -138,7 +143,6 @@ const User = sequelize1.define(
       allowNull: false,
       defaultValue: "learner",
     },
-
   },
   {
     schema: "user", // Private schema
