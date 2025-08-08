@@ -13,21 +13,6 @@ const Department = sequelize1.define('departments', {
     unique: true,
     allowNull: false,
   },
-  code: {
-    type: DataTypes.ENUM(
-      'tenjiku', 'manhattan', 'helix', 'sentinel',
-      'echo', 'kyoto', 'vault', 'legion', 'haven'
-    ),
-    allowNull: false,
-  },
-  headId: {
-    type: DataTypes.UUID,
-    allowNull: true, // FK to Admin
-  },
-  status:{
-    type: DataTypes.ENUM('active', 'disabled'),
-    allowNull: true,
-  },
   parentId: {
     type: DataTypes.UUID,
     allowNull: true, // This makes it a sub-department
