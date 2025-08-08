@@ -688,13 +688,6 @@ export const updateUserProfile = async (req, res) => {
     if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
-    // if (dob) updateData.dob = dob ? new Date(dob).toISOString() : null;
-    // if (gender) updateData.gender = gender;
-    // if (dob && !user.dob) {
-    //   updateData.dob = new Date(dob).toISOString();
-    // } else if (dob && user.dob) {
-    //   return res.status(400).json({ error: true, message: "Date of Birth cannot be changed once set." });
-    // }
     if (dob) {
       const existingDob = user.dob
         ? new Date(user.dob).toISOString().split("T")[0]
@@ -713,69 +706,43 @@ export const updateUserProfile = async (req, res) => {
       }
     }
 
-    // if (gender && !user.gender) {
-    //   updateData.gender = gender;
-    // } else if (gender && user.gender) {
-    //   return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    // }
-    // if (gender) {
-    //   if (!user.gender) {
-    //     updateData.gender = gender;
-    //   } else if (user.gender !== gender) {
-    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    //   }
-    // }
-    // if (gender) {
-    //   if (!user.gender) {
-    //     updateData.gender = gender;
-    //   } else if (user.gender !== gender) {
-    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    //   }
-    // }
-
-    // if (gender) {
-    //   const validGenders = ["Male", "Female", "Other"];
-    //   if (!validGenders.includes(gender)) {
-    //     return res.status(400).json({ error: true, message: "Invalid gender value." });
-    //   }
-
-    //   if (user.gender === null || user.gender === "" || user.gender === "null") {
-    //     updateData.gender = gender;
-    //   } else if (user.gender !== gender) {
-    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    //   }
-    // }
-    try {
-      if (gender) {
-        const validGenders = ["Male", "Female", "Other"];
-        if (!validGenders.includes(gender)) {
-          return res
-            .status(400)
-            .json({ error: true, message: "Invalid gender value." });
-        }
-
-        if (
-          user.gender === null ||
-          user.gender === "" ||
-          user.gender === "null"
-        ) {
-          updateData.gender = gender.toLowerCase();
-        } else if (user.gender !== gender) {
-          return res
-            .status(400)
-            .json({
-              error: true,
-              message: "Gender cannot be changed once set.",
-            });
-        }
-      }
-    } catch (error) {
-      console.error("🔥 Gender update error:", error);
-      return res.status(500).json({
+try {
+  if (gender) {
+    const validGenders = ["Male", "Female", "Other"];
+    if (!validGenders.includes(gender)) {
+      return res.status(400).json({
         error: true,
-        message: "Something went wrong while updating gender.",
+        message: "Invalid gender value.",
       });
     }
+
+    const normalizedGender = gender; // 👈 save as-is
+    const currentGender = user.gender || "";
+
+    if (!user.gender || currentGender === "" || currentGender === "null") {
+      // First-time set
+      updateData.gender = normalizedGender;
+    } else if (currentGender !== normalizedGender) {
+      if (user.gender_updated) {
+        return res.status(400).json({
+          error: true,
+          message: "Gender can only be changed once.",
+        });
+      } else {
+        updateData.gender = normalizedGender;
+        updateData.gender_updated = true;
+      }
+    }
+  }
+} catch (error) {
+  console.error("🔥 Gender update error:", error);
+  return res.status(500).json({
+    error: true,
+    message: "Something went wrong while updating gender.",
+  });
+}
+
+
 
     console.log("Existing gender:", user.gender);
     console.log("Incoming gender:", gender);

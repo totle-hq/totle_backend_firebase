@@ -60,7 +60,7 @@ app.use("/uploads", express.static(path.resolve("src/uploads")));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors({
-  origin: ['totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000','http://localhost:5173'],
+  origin: ['totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co','https://totle.netlify.app','https://totlenucleus.netlify.app', 'https://mail.google.com', 'http://localhost:3001', 'http://localhost:3000','http://localhost:5173'],
   credentials: true,
   allowedHeaders: ["Authorization", "Content-Type"]
 }));
@@ -121,7 +121,7 @@ const startServer = async () => {
     const io = new Server(server, {
       cors: {
         origin: [
-          'totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co',
+          'totle.co','www.totle.co','totle.co/','https://totle.co','www.totle.co/','https://www.totle.co/','https://www.totle.co','https://totle.netlify.app','https://totlenucleus.netlify.app',
           'https://mail.google.com','http://localhost:3001','http://localhost:3000'
         ],
         credentials: true,
