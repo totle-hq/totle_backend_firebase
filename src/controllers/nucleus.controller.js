@@ -19,10 +19,25 @@ export const getAllUserDetails = async (req, res) => {
     const sortBy = req.query.sortBy || "firstName";
     const order = req.query.order === "desc" ? "DESC" : "ASC";
 
+    // Define which fields can be sorted at database level
+    const databaseFields = [
+      "firstName",
+      "lastName",
+      "email",
+      "mobile",
+      "dob",
+      "gender",
+      "status",
+      "isLoggedIn",
+    ];
+
+    // Only apply database sorting if the field exists in the database
+    const shouldSortInDatabase = databaseFields.includes(sortBy);
+
     const { count: totalUsers, rows: users } = await User.findAndCountAll({
       offset,
       limit,
-      order: [[sortBy, order]],
+      ...(shouldSortInDatabase && { order: [[sortBy, order]] }),
       attributes: [
         "id",
         "firstName",
@@ -210,10 +225,21 @@ export const getAllUserDetails = async (req, res) => {
             `ID: ${user.preferred_language_id}`
           : null,
         gender: user.gender,
-        dob: user.dob,
-        ip_location: user.ipAddress
-          ? `${user.ipAddress} ${user.location || ""}`.trim()
-          : "Not Available",
+        dob: user?.dob
+          ? new Date(user.dob).toLocaleDateString("en-GB").split("/").join("-")
+          : null,
+        ip_location:
+          user?.ipAddress && user?.location
+            ? (() => {
+                const cleanLocation = user.location
+                  .replace(/^['"]|['"]$/g, "")
+                  .trim();
+                const parts = cleanLocation.split(",").map((p) => p.trim());
+                const city = parts[0]; // First value is city
+                return `${user.ipAddress} ${city}`;
+              })()
+            : user?.ipAddress || "Not Available",
+
         logged: user.isLoggedIn ? "Active" : "Inactive",
         status: user.status || "Not Set",
         learner_sessions: bookedMap[id] || 0,
@@ -234,22 +260,51 @@ export const getAllUserDetails = async (req, res) => {
       };
     });
 
-    // Optional: Sort again in-memory if sortBy is a derived field
+    // Updated derivedFields array to include ALL calculated fields
     const derivedFields = [
       "missedSessions",
       "testsPassed",
       "testsFailed",
       "goals_added",
       "teacher_sessions_total",
+      "learner_sessions",
+      "active_sessions",
+      "bridger_sessions",
+      "expert_sessions",
+      "master_sessions",
+      "legend_sessions",
+      "testsTaken",
+      "missedTests",
+      "sessionsFlaggedByUser",
+      "sessionsUserGotFlaggedFor",
+      "preferred_language",
+      "known_language_ids",
+      "location",
     ];
-    if (derivedFields.includes(sortBy)) {
+
+    // Sort in-memory for ALL non-database fields
+    if (!shouldSortInDatabase) {
       results.sort((a, b) => {
-        const aVal = a[sortBy] || 0;
-        const bVal = b[sortBy] || 0;
+        let aVal = a[sortBy];
+        let bVal = b[sortBy];
+
+        // Handle different data types
+        if (typeof aVal === "string" && typeof bVal === "string") {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+          return order === "DESC"
+            ? bVal.localeCompare(aVal)
+            : aVal.localeCompare(bVal);
+        }
+
+        // Handle numbers (including undefined/null as 0)
+        aVal = aVal || 0;
+        bVal = bVal || 0;
         return order === "DESC" ? bVal - aVal : aVal - bVal;
       });
     }
 
+    console.log(totalUsers, results);
     return res.json({
       currentPage: page,
       totalPages: Math.ceil(totalUsers / limit),
@@ -262,12 +317,11 @@ export const getAllUserDetails = async (req, res) => {
   }
 };
 
-
 export const setUserBlacklistOrActive = async (req, res) => {
-  const { user_id } = req.params;
-  const { status } = req.body; // expected: "blacklist" or "active"
+  const { user_id, status } = req.body;
 
   const allowedStatuses = ["active", "blacklist"];
+  console.log(req.body);
 
   if (!allowedStatuses.includes(status)) {
     return res.status(400).json({
@@ -277,7 +331,7 @@ export const setUserBlacklistOrActive = async (req, res) => {
 
   try {
     const user = await User.findOne({ where: { id: user_id } });
-
+    console.log(user);
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
@@ -293,5 +347,35 @@ export const setUserBlacklistOrActive = async (req, res) => {
   } catch (err) {
     console.error("Error updating user status:", err);
     return res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    const id = req.query.id;
+    console.log("Received ID for deletion:", id);
+
+    if (!id) {
+      console.warn("No ID provided");
+      return res
+        .status(400)
+        .json({ error: true, message: "User ID is required" });
+    }
+
+    const user = await User.findByPk(id);
+    if (!user) {
+      console.warn(`No user found with ID: ${id}`);
+      return res.status(404).json({ error: true, message: "User not found" });
+    }
+
+    await user.destroy();
+    console.log(`User ${id} deleted successfully`);
+
+    return res.json({ success: true, message: "User deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting user:", err); // This should show the actual Sequelize or DB error
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
