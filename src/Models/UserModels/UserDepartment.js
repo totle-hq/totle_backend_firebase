@@ -16,13 +16,29 @@ const UserDepartment = sequelize1.define('user_departments', {
     type: DataTypes.UUID,
     allowNull: false,
   },
-  role: {
+  roleName: {
     type: DataTypes.TEXT,
     allowNull: false,
   },
   roleType: {
     type: DataTypes.ENUM('read', 'edit', 'manage'),
     defaultValue: 'read',
+  },
+  department_role_id:{
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  email:{
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  password:{
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: true,
   },
   status: {
     type: DataTypes.ENUM('active', 'disabled'),
@@ -35,7 +51,7 @@ const UserDepartment = sequelize1.define('user_departments', {
   },
 }, {
   schema: 'admin',
-  tableName: 'user_departments',
+  tableName: 'user_departments_roles',
   timestamps: true,
   indexes: [
     {

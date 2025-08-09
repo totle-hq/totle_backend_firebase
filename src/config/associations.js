@@ -20,6 +20,7 @@ import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel
 import { Session } from "../Models/SessionModel.js";
 import { BookedSession } from "../Models/BookedSession.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
+import { Role } from "../Models/UserModels/Roles.Model.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -99,6 +100,9 @@ const defineRelationships = () => {
 
   Department.belongsTo(Department, { foreignKey: 'parentId', as: 'parentDepartment'});
 
+  Department.hasMany(Role, { foreignKey: 'departmentId', onDelete: 'CASCADE' });
+  Role.belongsTo(Department, { foreignKey: 'departmentId', onDelete: 'CASCADE' });
+
   Session.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
   User.hasMany(Session, { foreignKey: 'teacher_id', as: 'teachingSessions'});
 
@@ -110,6 +114,8 @@ const defineRelationships = () => {
   BookedSession.belongsTo(User, { as: 'teacher', foreignKey: 'teacher_id' })
 
   BookedSession.belongsTo(CatalogueNode, { as: 'bookedTopic', foreignKey: 'topic_id' })
+
+  
 
 
 };

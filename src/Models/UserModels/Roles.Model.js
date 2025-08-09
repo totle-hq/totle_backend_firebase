@@ -14,6 +14,18 @@ const Role = sequelize1.define('roles', {
     allowNull: false,
     unique: true,
   },
+  departmentName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  departmentId:{
+    type: DataTypes.UUID,
+    allowNull: true,
+    references: {
+      model: 'departments',
+      key: 'id',
+    },
+  },
 },{
     schema: 'admin',
     tableName: 'roles',
@@ -21,3 +33,5 @@ const Role = sequelize1.define('roles', {
     createdAt: 'createdAt',
     updatedAt: 'updatedAt',
 });
+
+export { Role };

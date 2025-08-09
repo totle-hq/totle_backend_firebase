@@ -30,9 +30,9 @@ export const SessionSummaires=sequelize1.define('session_summaries ',{
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
     }
-
-
-
 },{
-    tableName: 'session_summaries',
+  schema: 'admin',
+  tableName: 'session_summaries',
+  timestamps: true,
+  
 })

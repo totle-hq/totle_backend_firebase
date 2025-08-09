@@ -9,6 +9,7 @@ import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user 
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
+import nucleusRoutes from "./routes/UserRoutes/Nucleus.routes.js";
 // import sessionRoutes from "./routes/session.routs.js";
 // import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
 // import boardRoutes from './routes/CatalogRoutes/board.routes.js';
@@ -89,6 +90,8 @@ app.use("/api/teach",insights);
 app.use("/api/progress",progressRoutes);
 
 
+app.use("/api/nucleus", nucleusRoutes);
+
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
 });
@@ -107,9 +110,9 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-    //  await syncDatabase();  // Automatically run the syncDatabase on server start
+     await syncDatabase();  // Automatically run the syncDatabase on server start
 
-     await defineModelRelationships();
+    //  await defineModelRelationships();
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;

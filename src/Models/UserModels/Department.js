@@ -27,6 +27,9 @@ const Department = sequelize1.define('departments', {
 }, {
   schema: 'admin',
   tableName: 'departments',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
 });
 
 export { Department };

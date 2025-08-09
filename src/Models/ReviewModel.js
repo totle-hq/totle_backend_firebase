@@ -34,4 +34,10 @@ export const Review = sequelize1.define("Review", {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+},{
+  schema: "admin",
+  tableName: "reviews",
+  timestamps: true,
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
 });

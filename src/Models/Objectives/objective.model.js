@@ -11,7 +11,6 @@ export const Objective = sequelize1.define('Objective', {
   objectiveCode: {
     type: DataTypes.STRING(12),
     allowNull: false,
-    unique: true,
     comment: 'e.g., OBJ-0001, OBJ-0043 etc.',
   },
   title: {
@@ -35,6 +34,12 @@ export const Objective = sequelize1.define('Objective', {
   schema: 'admin',
   tableName: 'objectives',
   timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['objectiveCode']
+    }
+  ]
 });
 
 // Generate next objectiveCode before creation
