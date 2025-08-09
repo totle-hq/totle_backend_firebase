@@ -166,11 +166,12 @@ export const signupUserAndSendOtp = async (req, res) => {
 };
 
 export const otpVerification = async (req, res) => {
-  const { email, password, firstName } = req.body;
+  const { email, password, firstName, gender } = req.body;
   console.log(req.body);
+
   let otp = parseInt(req.body.otp, 10);
   if (isNaN(otp)) {
-    return { error: true, message: "Invalid OTP format." };
+    return res.status(400).json({ error: true, message: "Invalid OTP format." });
   }
 
   if (!firstName) {
@@ -178,18 +179,26 @@ export const otpVerification = async (req, res) => {
       .status(400)
       .json({ error: true, message: "Firstname is required" });
   }
+
   if (!email || !otp) {
     return res
       .status(400)
       .json({ error: true, message: "Email and OTP are required" });
   }
 
+  // ✅ Optional gender validation
+  if (gender && !["male", "female", "other"].includes(gender.toLowerCase())) {
+    return res.status(400).json({ error: true, message: "Invalid gender value" });
+  }
+
   try {
+    // Step 1: Verify OTP
     const result = await verifyOtp(email, otp);
     if (result.error) {
       return res.status(400).json({ error: true, message: result.message });
     }
 
+    // Step 2: Password check for email signups
     if (email && !password) {
       return res
         .status(400)
@@ -199,26 +208,31 @@ export const otpVerification = async (req, res) => {
         });
     }
 
+    // Step 3: Hash password if provided
     const hashedPassword = password ? await hashPassword(password) : null;
 
-    // Save the verified user to the database
+    // Step 4: Create or update user
     const [user, created] = await User.upsert(
       {
         email: email || null,
         mobile: null,
-        password: email ? hashedPassword : null, // ✅ Store password if email-based signup
+        password: email ? hashedPassword : null,
         isVerified: true,
         firstName: firstName || "",
+        gender: gender?.toLowerCase() || null, // ✅ Save gender
         status: "active",
         updatedAt: new Date(),
       },
       { returning: true }
     );
+
+    // Step 5: Save user metrics
     console.log("Saving UserMetrics for user:", user?.id);
     await UserMetrics.create({ userId: user.id });
+
+    // Step 6: Handle beta users
     let betaFlag = false;
     const betaUserCount = await BetaUsers.count();
-
     if (betaUserCount < 1001) {
       betaFlag = true;
       try {
@@ -227,25 +241,26 @@ export const otpVerification = async (req, res) => {
       } catch (err) {
         console.error("❌ Error inserting into BetaUsers:", err);
       }
-    } else {
-      betaFlag = false;
     }
 
+    // Step 7: Mark OTP as verified
     await OTP.update(
       { isVerified: true },
       { where: { email: email, otp: otp } }
     );
+
+    // Step 8: Send welcome email
     if (email) {
       await sendWelcomeEmail(email, firstName);
     }
 
-    return res
-      .status(200)
-      .json({
-        error: false,
-        message: "OTP verified successfully ✅",
-        betaFlag: betaFlag,
-      });
+    // Step 9: Respond success
+    return res.status(200).json({
+      error: false,
+      message: "OTP verified successfully ✅",
+      betaFlag: betaFlag,
+    });
+
   } catch (error) {
     console.error("Error during OTP verification:", error);
     return res
@@ -253,6 +268,7 @@ export const otpVerification = async (req, res) => {
       .json({ error: true, message: "Internal server error." });
   }
 };
+
 
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
@@ -688,13 +704,6 @@ export const updateUserProfile = async (req, res) => {
     if (email) updateData.email = email;
     if (firstName) updateData.firstName = firstName;
     if (lastName) updateData.lastName = lastName;
-    // if (dob) updateData.dob = dob ? new Date(dob).toISOString() : null;
-    // if (gender) updateData.gender = gender;
-    // if (dob && !user.dob) {
-    //   updateData.dob = new Date(dob).toISOString();
-    // } else if (dob && user.dob) {
-    //   return res.status(400).json({ error: true, message: "Date of Birth cannot be changed once set." });
-    // }
     if (dob) {
       const existingDob = user.dob
         ? new Date(user.dob).toISOString().split("T")[0]
@@ -712,75 +721,7 @@ export const updateUserProfile = async (req, res) => {
           });
       }
     }
-
-    // if (gender && !user.gender) {
-    //   updateData.gender = gender;
-    // } else if (gender && user.gender) {
-    //   return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    // }
-    // if (gender) {
-    //   if (!user.gender) {
-    //     updateData.gender = gender;
-    //   } else if (user.gender !== gender) {
-    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    //   }
-    // }
-    // if (gender) {
-    //   if (!user.gender) {
-    //     updateData.gender = gender;
-    //   } else if (user.gender !== gender) {
-    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    //   }
-    // }
-
-    // if (gender) {
-    //   const validGenders = ["Male", "Female", "Other"];
-    //   if (!validGenders.includes(gender)) {
-    //     return res.status(400).json({ error: true, message: "Invalid gender value." });
-    //   }
-
-    //   if (user.gender === null || user.gender === "" || user.gender === "null") {
-    //     updateData.gender = gender;
-    //   } else if (user.gender !== gender) {
-    //     return res.status(400).json({ error: true, message: "Gender cannot be changed once set." });
-    //   }
-    // }
-    try {
-      if (gender) {
-        const validGenders = ["Male", "Female", "Other"];
-        if (!validGenders.includes(gender)) {
-          return res
-            .status(400)
-            .json({ error: true, message: "Invalid gender value." });
-        }
-
-        if (
-          user.gender === null ||
-          user.gender === "" ||
-          user.gender === "null"
-        ) {
-          updateData.gender = gender.toLowerCase();
-        } else if (user.gender !== gender) {
-          return res
-            .status(400)
-            .json({
-              error: true,
-              message: "Gender cannot be changed once set.",
-            });
-        }
-      }
-    } catch (error) {
-      console.error("🔥 Gender update error:", error);
-      return res.status(500).json({
-        error: true,
-        message: "Something went wrong while updating gender.",
-      });
-    }
-
     console.log("Existing gender:", user.gender);
-    console.log("Incoming gender:", gender);
-    console.log("Gender set in updateData:", updateData.gender);
-
     if (qualification)
       updateData.educational_qualifications = Array.isArray(qualification)
         ? qualification
