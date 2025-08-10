@@ -45,6 +45,9 @@ import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
 import keyResultRoutes from './routes/Objectives/keyresult.routes.js'; // adjust path if necessary
+// user-managemt
+import userMangaeRoutes from "./routes/nucleus.routes.js";
+import attendenceRoutes from "./routes/attendance.routes.js"
 
 // After other `app.use` statements for /api/*
 
@@ -92,6 +95,10 @@ app.use("/api/progress",progressRoutes);
 
 app.use("/api/nucleus", nucleusRoutes);
 
+// user-Managment-suit
+app.use("/api/nucleus", userMangaeRoutes);
+app.use("/api/attendance",attendenceRoutes); // Marking when user left the session 
+
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
 });
@@ -110,9 +117,9 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-     await syncDatabase();  // Automatically run the syncDatabase on server start
+    //  await syncDatabase();  // Automatically run the syncDatabase on server start
 
-    //  await defineModelRelationships();
+     await defineModelRelationships();
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
