@@ -79,21 +79,21 @@ const defineRelationships = () => {
   Department.hasMany(UserDepartment, { foreignKey: 'departmentId' });
   UserDepartment.belongsTo(Department, { foreignKey: 'departmentId' });
 
-  Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher" });
-  User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats" });
+  Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher", onDelete: "CASCADE" });
+  User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats", onDelete: "CASCADE" });
 
-  Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id' });
-  CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id'});
+  Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: 'node_id', onDelete: 'CASCADE' });
+  CatalogueNode.hasMany(Teachertopicstats, { foreignKey: 'node_id', onDelete: 'CASCADE' });
     
-  FeedbackSummary.belongsTo(CatalogueNode,{foreignKey:'node_id'});
-  CatalogueNode.hasMany(FeedbackSummary,{foreignKey:'node_id'});
+  FeedbackSummary.belongsTo(CatalogueNode,{foreignKey:'node_id', onDelete:'CASCADE'});
+  CatalogueNode.hasMany(FeedbackSummary,{foreignKey:'node_id', onDelete:'CASCADE'});
   
   TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
   User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
 
   TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
   Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
-  SupportQueriesModel.belongsTo(User, {foreignKey: "user_id",});
+  SupportQueriesModel.belongsTo(User, {foreignKey: "user_id", onDelete: "CASCADE"});
   User.hasMany(SupportQueriesModel, {foreignKey: "user_id", onDelete: "CASCADE"});
 
   Department.hasMany(Department, { foreignKey: 'parentId', as: 'subDepartments', onDelete: 'CASCADE'});
@@ -106,14 +106,20 @@ const defineRelationships = () => {
   Session.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
   User.hasMany(Session, { foreignKey: 'teacher_id', as: 'teachingSessions'});
 
-  BookedSession.belongsTo(User, { foreignKey: 'learner_id', as: 'student' });
-  CatalogueNode.belongsTo(CatalogueNode, { foreignKey: 'parent_id', as: 'parentNode' });
+  Session.belongsTo(CatalogueNode, { foreignKey: 'topic_id', onDelete: 'CASCADE' });
+  CatalogueNode.hasMany(Session, { foreignKey: 'topic_id', onDelete: 'CASCADE' });
 
-  CatalogueNode.belongsTo(CatalogueNode, { as: "subject", foreignKey: "parent_id" });
 
-  BookedSession.belongsTo(User, { as: 'teacher', foreignKey: 'teacher_id' })
+  BookedSession.belongsTo(User, { foreignKey: 'learner_id', as: 'student', onDelete: 'CASCADE' });
+  CatalogueNode.belongsTo(CatalogueNode, { foreignKey: 'parent_id', as: 'parentNode', onDelete: 'CASCADE' });
 
-  BookedSession.belongsTo(CatalogueNode, { as: 'bookedTopic', foreignKey: 'topic_id' })
+  CatalogueNode.belongsTo(CatalogueNode, { as: "subject", foreignKey: "parent_id", onDelete: "CASCADE" });
+
+  BookedSession.belongsTo(User, { as: 'teacher', foreignKey: 'teacher_id', onDelete: 'CASCADE' });
+
+  BookedSession.belongsTo(CatalogueNode, { as: 'bookedTopic', foreignKey: 'topic_id', onDelete: 'CASCADE' });
+  CatalogueNode.hasMany(BookedSession, { foreignKey: 'topic_id', onDelete: 'CASCADE' });
+
 
   
 
