@@ -6,6 +6,7 @@ import {
   updateFeature,
   deleteFeature,
   updatefeaturePriority,
+  updateFeatureStatus,
 } from '../../controllers/Objectives/feature.controller.js';
 
 const router = express.Router();
@@ -15,4 +16,5 @@ router.get('/epics/:epicId', getFeaturesByEpic);
 router.put('/epics/:epicId/features/:featureId', updateFeature);
 router.delete('/epics/:epicId/features/:featureId', deleteFeature);
 router.put("/feature/priority/:featureId",updatefeaturePriority);
+router.patch('/features/:featureId/status', updateFeatureStatus);
 export default router;

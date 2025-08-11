@@ -160,3 +160,28 @@ export const updatefeaturePriority = async (req, res) => {
   }
 };
 
+// Update only status of Feature
+export const updateFeatureStatus = async (req, res) => {
+  try {
+    const { featureId } = req.params;
+    const { status } = req.body;
+
+    const allowedStatuses = ['to-do', 'inProgress', 'done', 'review'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const feature = await Feature.findByPk(featureId);
+    if (!feature) {
+      return res.status(404).json({ success: false, message: 'Feature not found' });
+    }
+
+    feature.status = status;
+    await feature.save();
+
+    return res.status(200).json({ success: true, data: feature, message: 'Status updated successfully' });
+  } catch (error) {
+    console.error('Failed to update feature status:', error);
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};

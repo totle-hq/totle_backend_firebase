@@ -31,10 +31,15 @@ export const Task = sequelize1.define('Task', {
   defaultValue: 1,
   comment: 'Lower number = higher priority',
 },
-    status:{
-      type:DataTypes.STRING,
-      allowNull:false
-    }
+   status: {
+  type: DataTypes.STRING,
+  allowNull: false,
+  defaultValue: 'to-do',
+  validate: {
+    isIn: [['to-do', 'inProgress', 'done', 'review']],
+  },
+}
+
 }, {
   tableName: 'tasks',
   timestamps: true,

@@ -30,10 +30,15 @@ export const Epic = sequelize1.define('Epic', {
   defaultValue: 1,
   comment: 'Lower number = higher priority',
 },
-  status:{
-    type:DataTypes.STRING,
-    allowNull:false
-  }
+status: {
+  type: DataTypes.STRING,
+  allowNull: false,
+  defaultValue: 'to-do',
+  validate: {
+    isIn: [['to-do', 'inProgress', 'done', 'review']],
+  },
+}
+
 }, {
   tableName: 'epics',
   timestamps: true,

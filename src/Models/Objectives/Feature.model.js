@@ -31,10 +31,15 @@ export const Feature = sequelize1.define('Feature', {
   defaultValue: 1,
   comment: 'Lower number = higher priority',
 },
-    status:{
-      type:DataTypes.STRING,
-      allowNull:false
-    }
+ status: {
+  type: DataTypes.STRING,
+  allowNull: false,
+  defaultValue: 'to-do',
+  validate: {
+    isIn: [['to-do', 'inProgress', 'done', 'review']],
+  },
+}
+
 }, {
   tableName: 'features',
   timestamps: true,

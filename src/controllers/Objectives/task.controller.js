@@ -160,3 +160,28 @@ export const updateTaskpriority = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error });
   }
 };
+// Update only status of Task
+export const updateTaskStatus = async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { status } = req.body;
+
+    const allowedStatuses = ['to-do', 'inProgress', 'done', 'review'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const task = await Task.findByPk(taskId);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    task.status = status;
+    await task.save();
+
+    return res.status(200).json({ success: true, data: task, message: 'Status updated successfully' });
+  } catch (error) {
+    console.error('Failed to update task status:', error);
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};

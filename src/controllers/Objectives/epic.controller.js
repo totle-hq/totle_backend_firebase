@@ -97,6 +97,34 @@ export const deleteEpic = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };
+// controllers/Objectives/epic.controller.js
+
+export const updateEpicStatus = async (req, res) => {
+  try {
+    const { epicId } = req.params;
+    const { status } = req.body;
+
+    // Validate status value
+    const allowedStatuses = ['to-do', 'inProgress', 'done', 'review'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status value' });
+    }
+
+    const epic = await Epic.findByPk(epicId);
+    if (!epic) {
+      return res.status(404).json({ success: false, message: 'Epic not found' });
+    }
+
+    epic.status = status;
+    await epic.save();
+
+    return res.status(200).json({ success: true, data: epic, message: 'Status updated successfully' });
+  } catch (error) {
+    console.error('Failed to update epic status:', error);
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
+};
+
 
 // update the Epic priority
 export const updateEpicpriority = async (req, res) => {
