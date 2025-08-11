@@ -179,7 +179,7 @@ export const updateNode = async (req, res) => {
   try {
     const node = await CatalogueNode.findByPk(req.params.id);
     if (!node) return res.status(404).json({ error: "Node not found" });
-
+    console.log('update node', req.body)
     await node.update(req.body);
 
     const updatedNode = await CatalogueNode.findByPk(node.node_id);
@@ -226,6 +226,7 @@ export const deleteNode = async (req, res) => {
     
     return res.json({ message: "Node deleted" });
   } catch (err) {
+    console.error("Error deleting node:", err);
     return res.status(500).json({ error: err.message });
   }
 };

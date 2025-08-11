@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
+import { SessionAttendance } from "../../Models/SessionAttendance.js";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -33,6 +34,13 @@ export const getSessionStreamDetails = async (req, res) => {
 
     const role = learner ? "learner" : "teacher";
 
+     //  marking present with joining time;
+    await SessionAttendance.upsert({
+      user_id: id,
+      session_id: sessionId,
+      joined_at: new Date(),    
+    });
+    
     // Create JWT token for WebSocket auth (optional)
     const socketToken = jwt.sign(
       { userId: userRecord.id, name: fullName, sessionId, role },

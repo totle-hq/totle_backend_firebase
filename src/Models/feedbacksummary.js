@@ -59,5 +59,7 @@ export const FeedbackSummary = sequelize1.define("feedback_summary", {
     defaultValue: 0,
   },
 }, {
+  schema: "admin",
+  tableName: "feedback_summary",
   timestamps: true,
 });

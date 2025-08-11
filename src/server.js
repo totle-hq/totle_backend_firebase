@@ -9,6 +9,7 @@ import userRoutes from "./routes/UserRoutes/user.routes.js"; // ✅ Import user 
 import adminRoutes from "./routes/UserRoutes/admin.routes.js";
 import languageRoutes from './routes/languages.routes.js'
 import catalogueRoutes from './routes/CatalogRoutes/catalogue.routes.js'; // ✅ Catalogue API
+import nucleusRoutes from "./routes/UserRoutes/Nucleus.routes.js";
 // import sessionRoutes from "./routes/session.routs.js";
 // import gradeRoutes from './routes/CatalogRoutes/grade.routes.js';
 // import boardRoutes from './routes/CatalogRoutes/board.routes.js';
@@ -44,6 +45,9 @@ import objectiveRoutes from './routes/Objectives/objective.routes.js'; // adjust
 import progressRoutes from "./routes/progressTracker.routes.js";
 import insights from "./routes/insights.routes.js"
 import keyResultRoutes from './routes/Objectives/keyresult.routes.js'; // adjust path if necessary
+// user-managemt
+import userMangaeRoutes from "./routes/nucleus.routes.js";
+import attendenceRoutes from "./routes/attendance.routes.js"
 import  epicsRoutes from "./routes/Objectives/epic.routes.js"
 import  featureRoutes from "./routes/Objectives/feature.routes.js"
 import  taskRoutes from "./routes/Objectives/task.routes.js"
@@ -94,6 +98,12 @@ app.use("/api/objectives",taskRoutes);      // use for the task routes
 app.use("/api/teach",insights);
 app.use("/api/progress",progressRoutes);
 
+
+app.use("/api/nucleus", nucleusRoutes);
+
+// user-Managment-suit
+app.use("/api/nucleus", userMangaeRoutes);
+app.use("/api/attendance",attendenceRoutes); // Marking when user left the session 
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");

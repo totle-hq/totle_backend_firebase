@@ -12,6 +12,7 @@ import { ProgressionThresholds } from "../Models/progressionThresholds.model.js"
 import "../Models/CatalogModels/catalogueNode.model.js";
 import "../Models/TeachertopicstatsModel.js";
 import { KeyResult } from '../Models/Objectives/keyresult.model.js'; // ✅ Add this line
+import { autoRolesAndDepartments } from '../controllers/UserControllers/Nucleus.controller.js';
 import { Feature } from '../Models/Objectives/Feature.model.js';
 
 import { Epic } from '../Models/Objectives/epics.model.js';
@@ -165,6 +166,8 @@ console.log("✅ Task table synced successfully!");
     await SupportQueriesMasterSeeder();
     await createSuperAdminIfNeeded();
     // await seedCatalogueDomains();
+    await autoRolesAndDepartments();
+
 
 
   } catch (error) {

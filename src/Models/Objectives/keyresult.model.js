@@ -21,7 +21,7 @@ export const KeyResult = sequelize1.define('KeyResult', {
   keyResultCode: {
     type: DataTypes.STRING(20),
     allowNull: false,
-    unique: true,
+    // unique: true,
     comment: 'e.g., OBJ0001-KR01',
   },
   description: {
@@ -49,6 +49,7 @@ export const KeyResult = sequelize1.define('KeyResult', {
     defaultValue: 0,
   },
 }, {
+  schema: 'admin',
   tableName: 'key_results',
   timestamps: true,
   paranoid: true,
@@ -56,6 +57,10 @@ export const KeyResult = sequelize1.define('KeyResult', {
     {
       fields: ['objectiveId'],
     },
+    {      
+      unique: true,
+      fields: ['keyResultCode'],
+    }
   ],
 });
 

@@ -18,6 +18,13 @@ const PlatformCtaTracking = sequelize1.define("PlatformCtaTracking", {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
   },
-});
+},{
+  schema: "admin",
+  tableName: "platform_cta_tracking",
+  timestamps: true,
+  createdAt: "createdAt",
+  updatedAt: "updatedAt",
+}
+);
 
 export default PlatformCtaTracking;

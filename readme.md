@@ -105,3 +105,35 @@ if (redisClient) {
 // redisClient.connect()
 //   .then(() => console.log("✅ Redis connected"))
 //   .catch((err) => console.error("❌ Redis connection error:", err));
+
+
+## Delete using do block in the for the foreign key errors
+
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'user.sessions'::regclass
+          AND confrelid = 'catalog.catalogue_nodes'::regclass
+    LOOP
+        EXECUTE format('ALTER TABLE "user"."sessions" DROP CONSTRAINT %I;', r.conname);
+    END LOOP;
+END;
+$$;
+
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN
+        SELECT conname
+        FROM pg_constraint
+        WHERE conrelid = 'user.booked_sessions'::regclass
+    LOOP
+        EXECUTE format('ALTER TABLE "user"."booked_sessions" DROP CONSTRAINT %I;', r.conname);
+    END LOOP;
+END
+$$;

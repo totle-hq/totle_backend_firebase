@@ -44,6 +44,7 @@ export const ModerationFlag = sequelize1.define("moderation_flags", {
   }
 
 }, {
+  schema: "admin",
   tableName: "moderation_flags",
 
   timestamps: true
