@@ -155,13 +155,11 @@ export const signupUserAndSendOtp = async (req, res) => {
     return res.status(200).json({ error: false, message: otpResponse.message });
   } catch (error) {
     console.error("🔥 ERROR during signup: ", error);
-    return res
-      .status(500)
-      .json({
-        error: true,
-        message: "Internal Server Error",
-        details: error.message,
-      });
+    return res.status(500).json({
+      error: true,
+      message: "Internal Server Error",
+      details: error.message,
+    });
   }
 };
 
@@ -171,7 +169,9 @@ export const otpVerification = async (req, res) => {
 
   let otp = parseInt(req.body.otp, 10);
   if (isNaN(otp)) {
-    return res.status(400).json({ error: true, message: "Invalid OTP format." });
+    return res
+      .status(400)
+      .json({ error: true, message: "Invalid OTP format." });
   }
 
   if (!firstName) {
@@ -188,7 +188,9 @@ export const otpVerification = async (req, res) => {
 
   // ✅ Optional gender validation
   if (gender && !["male", "female", "other"].includes(gender.toLowerCase())) {
-    return res.status(400).json({ error: true, message: "Invalid gender value" });
+    return res
+      .status(400)
+      .json({ error: true, message: "Invalid gender value" });
   }
 
   try {
@@ -200,12 +202,10 @@ export const otpVerification = async (req, res) => {
 
     // Step 2: Password check for email signups
     if (email && !password) {
-      return res
-        .status(400)
-        .json({
-          error: true,
-          message: "Password is required for email signup",
-        });
+      return res.status(400).json({
+        error: true,
+        message: "Password is required for email signup",
+      });
     }
 
     // Step 3: Hash password if provided
@@ -260,7 +260,6 @@ export const otpVerification = async (req, res) => {
       message: "OTP verified successfully ✅",
       betaFlag: betaFlag,
     });
-
   } catch (error) {
     console.error("Error during OTP verification:", error);
     return res
@@ -268,7 +267,6 @@ export const otpVerification = async (req, res) => {
       .json({ error: true, message: "Internal server error." });
   }
 };
-
 
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
@@ -452,7 +450,6 @@ export const resetPassword = async (req, res) => {
   }
 };
 
-
 export const getUserProfile = async (req, res) => {
   try {
     // Extract token from Authorization header
@@ -472,32 +469,47 @@ export const getUserProfile = async (req, res) => {
       console.log("decoded", decoded.id);
       const userId = decoded.id;
 
-    if (!userId) {
-      return res.status(401).json({ error: true, message: "Unauthorized: Invalid token" });
-    }
+      if (!userId) {
+        return res
+          .status(401)
+          .json({ error: true, message: "Unauthorized: Invalid token" });
+      }
 
-    // ✅ Get IP Address
-    const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const ip_address = rawIp.includes('::ffff:') ? rawIp.split('::ffff:')[1] : rawIp;
+      // ✅ Get IP Address
+      const rawIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
+      const ip_address = rawIp.includes("::ffff:")
+        ? rawIp.split("::ffff:")[1]
+        : rawIp;
 
-    // ✅ Update user's IP address in DB
-    await User.update({ ip_address }, { where: { id: userId } });
+      // ✅ Update user's IP address in DB
+      await User.update({ ip_address }, { where: { id: userId } });
 
-    // Fetch user from the database
-    const user = await User.findOne({
-      where: { id: userId },
-      attributes: [
-        'id', 'firstName', 'lastName', 'email', 'dob', 'gender',
-        'known_language_ids', 'preferred_language_id',
-        'educational_qualifications', 'status', 'currentOccupation',
-        'skills', 'years_of_experience', 'location', 'profilePictureUrl',
-        'ip_address'  // ✅ Include IP in return if needed
-      ]
-    });
+      // Fetch user from the database
+      const user = await User.findOne({
+        where: { id: userId },
+        attributes: [
+          "id",
+          "firstName",
+          "lastName",
+          "email",
+          "dob",
+          "gender",
+          "known_language_ids",
+          "preferred_language_id",
+          "educational_qualifications",
+          "status",
+          "currentOccupation",
+          "skills",
+          "years_of_experience",
+          "location",
+          "profilePictureUrl",
+          "ip_address", // ✅ Include IP in return if needed
+        ],
+      });
 
-    if (!user) {
-      return res.status(404).json({ error: true, message: "User not found" });
-    }
+      if (!user) {
+        return res.status(404).json({ error: true, message: "User not found" });
+      }
 
       return res
         .status(200)
@@ -509,7 +521,9 @@ export const getUserProfile = async (req, res) => {
     }
   } catch (error) {
     console.error("Error fetching user profile:", error);
-    return res.status(500).json({ error: true, message: "Internal Server Error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
   }
 };
 
@@ -612,8 +626,7 @@ export const getAllBetaUsers = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Failed to retrieve beta users." });
   }
-  
-}
+};
 import useragent from "useragent";
 import { getClientIp } from "request-ip"; // ✅ required for IP extraction
 
@@ -640,12 +653,10 @@ export const updateUserProfile = async (req, res) => {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (jwtError) {
       console.error("❌ JWT Verification Error:", jwtError);
-      return res
-        .status(401)
-        .json({
-          error: true,
-          message: "Unauthorized: Invalid or expired token",
-        });
+      return res.status(401).json({
+        error: true,
+        message: "Unauthorized: Invalid or expired token",
+      });
     }
 
     const userId = decoded.id || decoded.userId || decoded.uid;
@@ -661,7 +672,6 @@ export const updateUserProfile = async (req, res) => {
       lastName,
       email,
       dob,
-      gender,
       knownLanguages,
       preferredLanguage,
       qualification,
@@ -692,7 +702,9 @@ export const updateUserProfile = async (req, res) => {
       updateData.profilePictureUrl = result.secure_url;
       updateData.profile_picture_id = result.public_id;
 
-      const betaUser = await BetaUsers.findOne({ where: { email: user.email } });
+      const betaUser = await BetaUsers.findOne({
+        where: { email: user.email },
+      });
       if (betaUser) {
         await BetaUsers.update(
           { profilePictureUrl: result.secure_url },
@@ -713,12 +725,10 @@ export const updateUserProfile = async (req, res) => {
       if (!existingDob) {
         updateData.dob = newDob;
       } else if (existingDob !== newDob) {
-        return res
-          .status(400)
-          .json({
-            error: true,
-            message: "Date of Birth cannot be changed once set.",
-          });
+        return res.status(400).json({
+          error: true,
+          message: "Date of Birth cannot be changed once set.",
+        });
       }
     }
     console.log("Existing gender:", user.gender);
@@ -747,20 +757,32 @@ export const updateUserProfile = async (req, res) => {
     }
 
     if (knownLanguages) {
+      // Always parse JSON if it comes as a string
+      if (typeof knownLanguages === "string") {
+        try {
+          knownLanguages = JSON.parse(knownLanguages);
+        } catch (e) {
+          // If it's just a single number string, wrap it in array
+          knownLanguages = [Number(knownLanguages)];
+        }
+      }
+
       knownLanguages = Array.isArray(knownLanguages)
         ? knownLanguages
             .map((lang) => Number(lang))
             .filter((lang) => !isNaN(lang))
         : [];
+
       if (knownLanguages.length > 0) {
         const knownLanguagesList = await Language.findAll({
           where: { language_id: knownLanguages },
           attributes: ["language_id"],
         });
-        if (knownLanguagesList.length > 0)
+        if (knownLanguagesList.length > 0) {
           updateData.known_language_ids = knownLanguagesList.map(
             (lang) => lang.language_id
           );
+        }
       }
     }
 
@@ -787,12 +809,10 @@ export const updateUserProfile = async (req, res) => {
     });
 
     if (updatedRowCount === 0) {
-      return res
-        .status(404)
-        .json({
-          error: true,
-          message: "User not found or no changes detected.",
-        });
+      return res.status(404).json({
+        error: true,
+        message: "User not found or no changes detected.",
+      });
     }
 
     const updatedUser = await User.findOne({ where: { id: userId } });
@@ -874,20 +894,16 @@ export const sendContactEmail = async (req, res) => {
     await transporter.sendMail(mailOptions);
 
     console.log("✅ Contact Email Sent!");
-    return res
-      .status(200)
-      .json({
-        error: false,
-        message: "Message sent successfully! We will get back to you soon.",
-      });
+    return res.status(200).json({
+      error: false,
+      message: "Message sent successfully! We will get back to you soon.",
+    });
   } catch (error) {
     console.error("❌ Error sending contact email:", error);
-    return res
-      .status(500)
-      .json({
-        error: true,
-        message: "Error sending email. Please try again later.",
-      });
+    return res.status(500).json({
+      error: true,
+      message: "Error sending email. Please try again later.",
+    });
   }
 };
 
@@ -995,12 +1011,10 @@ export const getUpdates = async (req, res) => {
     if (!created) {
       // Already exists — update interests only if they were newly selected
       await existing.update(updateFields);
-      return res
-        .status(200)
-        .json({
-          error: false,
-          message: "✅ Preferences updated successfully!",
-        });
+      return res.status(200).json({
+        error: false,
+        message: "✅ Preferences updated successfully!",
+      });
     }
 
     return res
