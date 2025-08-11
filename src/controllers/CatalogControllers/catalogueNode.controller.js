@@ -63,6 +63,9 @@ const updateAddressRecursively = async (node) => {
 
 
 const findUniformDomainParent = async (node) => {
+  if(node.is_domain && node.metadata?.uniform) {
+    return node; // Found the uniform domain parent
+  }
   if (!node?.parent_id) return null;
 
   const parent = await CatalogueNode.findByPk(node.parent_id);
