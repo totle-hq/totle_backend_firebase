@@ -40,6 +40,38 @@ const newPriority = highestPriorityEpic ? highestPriorityEpic.priority + 1 : 1;
   }
 };
 
+const isUUID = (str) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+// ✅ Get Epic by ID
+export const getEpicById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let whereClause;
+
+    if (isUUID(id)) {
+      whereClause = {epicId: id };
+    } else {
+      whereClause = { epicCode: id };
+    }
+
+    const epic = await Epic.findOne({ where: whereClause });
+
+    if (!epic) {
+      return res.status(404).json({ message: 'epic not found' });
+    }
+
+    res.status(200).json({ data: epic });
+  } catch (error) {
+    console.error('❌ Error fetching objective:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
+
+
+
 // ✅ Get Epics by KeyResult
 export const getEpicsByKeyResult = async (req, res) => {
   try {

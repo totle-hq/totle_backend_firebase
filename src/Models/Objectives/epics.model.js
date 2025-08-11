@@ -24,7 +24,7 @@ export const Epic = sequelize1.define('Epic', {
     type: DataTypes.STRING,
     allowNull: false,
   },
-    priority: {
+  priority: {
   type: DataTypes.INTEGER,
   allowNull: false,
   defaultValue: 1,

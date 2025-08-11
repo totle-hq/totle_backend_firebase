@@ -59,6 +59,38 @@ export const createKeyResult = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 };
+// Controller function
+const isUUID = (str) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+// ✅ Get Objective by ID
+export const getKeyResultById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let whereClause;
+
+    if (isUUID(id)) {
+      whereClause = {keyResultId: id };
+    } else {
+      whereClause = { keyResultCode: id };
+    }
+
+    const keyResult = await KeyResult.findOne({ where: whereClause });
+
+    if (!keyResult) {
+      return res.status(404).json({ message: 'KeyResult not found' });
+    }
+
+    res.status(200).json({ data: keyResult });
+  } catch (error) {
+    console.error('❌ Error fetching objective:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
+
 
 
 /**

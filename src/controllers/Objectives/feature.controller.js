@@ -33,6 +33,35 @@ export const createFeature = async (req, res) => {
   }
 };
 
+const isUUID = (str) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+// ✅ Get Epic by ID
+export const getFeatureById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let whereClause;
+
+    if (isUUID(id)) {
+      whereClause = {featureId: id };
+    } else {
+      whereClause = { featureCode: id };
+    }
+
+    const feature = await Feature.findOne({ where: whereClause });
+
+    if (!feature) {
+      return res.status(404).json({ message: 'feature not found' });
+    }
+
+    res.status(200).json({ data: feature });
+  } catch (error) {
+    console.error('❌ Error fetching objective:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
 // ✅ Get all Features under an Epic
 export const getFeaturesByEpic = async (req, res) => {
   try {

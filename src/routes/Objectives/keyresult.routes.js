@@ -7,6 +7,7 @@ import {
   getKeyResultsByObjective,
   updateKeyResult,
   updatekeyresultPriority,
+  getKeyResultById
 } from '../../controllers/Objectives/keyresult.controller.js';
 
 const router = express.Router();
@@ -14,6 +15,7 @@ const router = express.Router();
 // @route   POST /api/objectives/:objectiveId/key-results
 // @desc    Create a key result for an objective
 router.post('/:objectiveId/key-results', createKeyResult);
+router.get('/key-results/:id/detail',getKeyResultById)
 
 // @route   GET /api/objectives/:objectiveId/key-results
 // @desc    Fetch all key results under an objective

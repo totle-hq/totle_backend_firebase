@@ -70,18 +70,27 @@ export const getAllObjectives = async (req, res) => {
 };
 
 // ✅ Get Objective by ID
+const isUUID = (str) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
+};
+
+// ✅ Get Objective by ID
 export const getObjectiveById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const objective = await Objective.findOne({
-      where: {
-        [Op.or]: [
-          { objectiveId: id },
-          { objectiveCode: id },
-        ],
-      },
-    });
+    let whereClause;
+
+    if (isUUID(id)) {
+      // If id looks like a UUID, search by objectiveId
+      whereClause = { objectiveId: id };
+    } else {
+      // Otherwise search by objectiveCode
+      whereClause = { objectiveCode: id };
+    }
+
+    const objective = await Objective.findOne({ where: whereClause });
 
     if (!objective) {
       return res.status(404).json({ message: 'Objective not found' });
@@ -89,7 +98,7 @@ export const getObjectiveById = async (req, res) => {
 
     res.status(200).json({ data: objective });
   } catch (error) {
-    console.error('❌ Error fetching objective by ID:', error);
+    console.error('❌ Error fetching objective:', error);
     res.status(500).json({ message: 'Internal server error', error });
   }
 };
