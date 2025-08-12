@@ -1,3 +1,4 @@
+import { Admin } from "../../Models/UserModels/AdminModel.js";
 import { Department } from "../../Models/UserModels/Department.js";
 import { Role } from "../../Models/UserModels/Roles.Model.js";
 import { UserDepartment } from "../../Models/UserModels/UserDepartment.js";
@@ -80,44 +81,66 @@ export const getAllRoles = async (req, res) => {
 
 export const generateProfileBasedOnRole = async (req, res) => {
     try {
-        const { departmentId, roleId, name, email, password } = req.body;
-        if(!departmentId) return res.status(400).json({ message: "Please select the department." });
+    const { id } = req.user;
+    const { name,email, departmentId, password, roleId } = req.body;
 
-        if(!roleId) return res.status(400).json({ message: "Please select the role." });
-        
-        if(!name) return res.status(400).json({ message: "Please enter the name." });
-        
-        if(!email) return res.status(400).json({ message: "Please enter the email." });
-        
-        if(!password) return res.status(400).json({ message: "Please enter the password." });
-        
-        let roletext = await Role.findOne({ where: { id: roleId } });
-        if (!roletext) return res.status(400).json({ message: "Invalid role selected." });
-        
-        const newProfile = await UserDepartment.create({
-            departmentId,
-            roleName: roletext.name,
-            department_role_id: roleId,
-            name,
-            email,
-            password,
-        });
 
-        res.status(201).json({ message: "Profile created successfully", profile: newProfile });
+    const superAdmin = await Admin.findByPk(id);
+    console.info(superAdmin.global_role);
+    if (!superAdmin || (superAdmin.global_role !== 'Superadmin' && superAdmin.global_role !== 'Founder')) {
+        console.info("Acess denied", superAdmin.global_role)
+      return res.status(403).json({ message: "Access denied: Invalid superadmin" });
     }
-    catch (error) {
-        console.error("Error in generateProfile:", error);
-        res.status(500).json({ message: "Internal Server Error" });
+
+    if (!name || !departmentId) {
+      return res.status(400).json({ message: "Role name and department ID are required" });
     }
+
+    const department = await Department.findByPk(departmentId);
+    if (!department) {
+      return res.status(404).json({ message: "Department not found" });
+    }
+
+    // Check if the role already exists
+    const existingRole = await UserDepartment.findOne({
+      where: { departmentId, roleName: name, status: 'active' },
+    });
+
+    if (existingRole) {
+      return res.status(409).json({ message: "Role already exists in this department" });
+    }
+    const role = await Role.findByPk(roleId);
+    if (!role) {
+      return res.status(404).json({ message: "Role not found." });
+    }
+
+    // Create the new role
+    const newRole = await UserDepartment.create({
+      departmentId,
+      roleName: role.name, // Use roleName from Role model or fallback to name
+      department_role_id: roleId,
+      headId: id, // Assuming the creator is the head
+      status: 'active', // Default status on creation
+      name: name,
+      email: email,
+      password: password,
+      tags: [],
+    });
+
+    return res.status(201).json({ message: "Role created successfully", role: newRole });
+  } catch (error) {
+    console.error("Error creating role:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
 };
 
 export const getAllUsersForRoles = async (req, res) => {
     try {
-        const { departmentId } = req.query;
+        const { departmentId } = req.params;
         let profiles = await UserDepartment.findAll({
             where: { departmentId },
             order: [['createdAt', 'DESC']],
-            attributes: ['id', 'name', 'email', 'roleName', 'status'],
+            attributes: ['roleId', 'name', 'email', 'roleName', 'status', 'departmentId'],
         });
         if (profiles.length === 0) {
             return res.status(404).json({ message: "No profiles found for this department." });

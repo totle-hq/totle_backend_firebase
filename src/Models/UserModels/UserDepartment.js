@@ -7,6 +7,7 @@ const UserDepartment = sequelize1.define('user_departments', {
     type: DataTypes.UUID,
     allowNull: false,
     primaryKey: true,
+    defaultValue: DataTypes.UUIDV4
   },
   headId: {
     type: DataTypes.UUID,
