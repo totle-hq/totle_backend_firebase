@@ -51,7 +51,8 @@ import attendenceRoutes from "./routes/attendance.routes.js"
 import  epicsRoutes from "./routes/Objectives/epic.routes.js"
 import  featureRoutes from "./routes/Objectives/feature.routes.js"
 import  taskRoutes from "./routes/Objectives/task.routes.js"
-
+// WeekOverlayRoutes
+import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js"
 // After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
@@ -104,6 +105,10 @@ app.use("/api/nucleus", nucleusRoutes);
 // user-Managment-suit
 app.use("/api/nucleus", userMangaeRoutes);
 app.use("/api/attendance",attendenceRoutes); // Marking when user left the session 
+
+// WeekOverlay-calander
+app.use("/api/WeekOverlay",WeekOverlayRoutes);
+
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
