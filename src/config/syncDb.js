@@ -126,8 +126,8 @@ export async function syncDatabase() {
     await Blog.sync({ alter: true });
 
     const { Objective } = await import("../Models/Objectives/objective.model.js");
-// await Objective.sync({ alter: true });
-// console.log("✅ Objective table synced successfully!");
+await Objective.sync({ alter: true });
+console.log("✅ Objective table synced successfully!");
 
 await KeyResult.sync({ alter: true });
 console.log("✅ KeyResult table synced successfully!");

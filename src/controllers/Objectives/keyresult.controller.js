@@ -124,9 +124,11 @@ export const deleteKeyResult = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Key Result not found' });
     }
     // Delete the key result
-    await KeyResult.destroy({
-      where: { keyResultId, objectiveId },
-    });
+   await KeyResult.destroy({
+  where: { keyResultId, objectiveId },
+  force: true
+});
+
     return res.status(200).json({ success: true, message: 'Key Result deleted successfully' });
   } catch (error) {
   
