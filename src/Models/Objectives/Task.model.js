@@ -41,6 +41,7 @@ export const Task = sequelize1.define('Task', {
 }
 
 }, {
+  schema: 'admin',
   tableName: 'tasks',
   timestamps: true,
 });

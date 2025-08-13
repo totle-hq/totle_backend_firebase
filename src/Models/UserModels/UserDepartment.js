@@ -25,10 +25,10 @@ const UserDepartment = sequelize1.define('user_departments', {
     type: DataTypes.ENUM('read', 'edit', 'manage'),
     defaultValue: 'read',
   },
-  department_role_id:{
-    type: DataTypes.UUID,
-    allowNull: true,
-  },
+  // department_role_id:{
+  //   type: DataTypes.UUID,
+  //   allowNull: true,
+  // },
   email:{
     type: DataTypes.STRING,
     allowNull: true,
@@ -58,7 +58,7 @@ const UserDepartment = sequelize1.define('user_departments', {
     {
       unique: true,
       fields: ['roleName', 'departmentId'], // ✅ Valid unique constraint
-    },
+    },{ unique: true, fields: ['email', 'departmentId'] }
   ],
 });
 

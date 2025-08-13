@@ -41,6 +41,7 @@ status: {
 
 }, {
   tableName: 'epics',
+  schema: 'admin',
   timestamps: true,
 });
 

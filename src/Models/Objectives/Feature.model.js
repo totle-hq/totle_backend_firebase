@@ -41,6 +41,7 @@ export const Feature = sequelize1.define('Feature', {
 }
 
 }, {
+  schema: 'admin',
   tableName: 'features',
   timestamps: true,
 });

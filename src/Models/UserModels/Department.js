@@ -13,23 +13,19 @@ const Department = sequelize1.define('departments', {
     unique: true,
     allowNull: false,
   },
-  parentId: {
-    type: DataTypes.UUID,
-    allowNull: true, // This makes it a sub-department
-    references: {
-      model: 'departments',
-      key: 'id',
-    },
-    onDelete: 'CASCADE',
+  code: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    comment: 'Stable department code (e.g., TECH, OPS, HR)',
   },
-  createdAt: DataTypes.DATE,
-  updatedAt: DataTypes.DATE,
+  codename: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  }
 }, {
   schema: 'admin',
   tableName: 'departments',
   timestamps: true,
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
 });
 
 export { Department };
