@@ -1671,3 +1671,27 @@ export const getSubDepartmentRoles = async (req, res) => {
     return res.status(500).json({ message: 'Internal Server Error', error: error.message });
   }
 };
+
+export const editSuperadminPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+      return res.status(400).json({ message: "newPassword is required" });
+    }
+
+    const admin = await Admin.findByPk(id);
+    if (!admin || admin.global_role !== "Superadmin") {
+      return res.status(404).json({ message: "Superadmin not found" });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await admin.update({ password: hashed });
+
+    return res.status(200).json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("editSuperadminPassword error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
