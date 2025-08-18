@@ -56,6 +56,8 @@ import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js"
 // paid teacher
 import getPaidTeacher from "./routes/SessionRoutes/PaidSession.routes.js"
 
+import EndeavorRoutes from "./routes/EndeavorRoutes/Endeavor.routes.js";
+
 // After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
@@ -113,6 +115,9 @@ app.use("/api/attendance",attendenceRoutes); // Marking when user left the sessi
 app.use("/api/WeekOverlay",WeekOverlayRoutes);
 // paid-teacher
 app.use('/api/marketplace',getPaidTeacher);
+
+//Endeavor
+app.use("/catalogue", EndeavorRoutes);
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
