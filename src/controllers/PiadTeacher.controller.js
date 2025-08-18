@@ -238,7 +238,7 @@ export const getTeachersForTopic = async (req, res) => {
     }).filter(teacher => teacher.hasAvailableSlots);
 
     console.log("Final filtered teacher count:", teacherData.length);
-    
+    console.log("topicPrice:",topicPrices);
     return res.json({ 
       teachers: teacherData,
       topicName: topicName,
@@ -474,7 +474,7 @@ export const BookPaidSlot = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Internal server error during booking process",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      
     });
   }
 };
@@ -665,7 +665,7 @@ export const confirmBooking = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to confirm booking",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      
     });
   }
 };
@@ -752,7 +752,7 @@ export const handlePaymentFailure = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to handle payment failure",
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      
     });
   }
 };

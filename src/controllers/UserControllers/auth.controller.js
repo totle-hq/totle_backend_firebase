@@ -772,18 +772,13 @@ export const updateUserProfile = async (req, res) => {
             .map((lang) => Number(lang))
             .filter((lang) => !isNaN(lang))
         : [];
-
-      if (knownLanguages.length > 0) {
         const knownLanguagesList = await Language.findAll({
           where: { language_id: knownLanguages },
           attributes: ["language_id"],
         });
-        if (knownLanguagesList.length > 0) {
           updateData.known_language_ids = knownLanguagesList.map(
             (lang) => lang.language_id
           );
-        }
-      }
     }
 
     // ✅ Client metadata handling (IP, deviceType, browser, OS)
