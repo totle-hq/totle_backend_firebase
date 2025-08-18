@@ -48,7 +48,7 @@ import keyResultRoutes from './routes/Objectives/keyresult.routes.js'; // adjust
 // user-managemt
 import userMangaeRoutes from "./routes/nucleus.routes.js";
 import attendenceRoutes from "./routes/attendance.routes.js"
-
+import marketplaceRoutes from "./routes/MarketplaceRoutes/marrketplace.routes.js"
 // After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
@@ -79,7 +79,7 @@ app.use("/admin", adminRoutes);
 app.use('/api', ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
-
+app.use("/api/marketplace",marketplaceRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
@@ -117,7 +117,7 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-     await syncDatabase();  // Automatically run the syncDatabase on server start
+    //  await syncDatabase();  // Automatically run the syncDatabase on server start
 
      await defineModelRelationships();
 

@@ -8,7 +8,7 @@ export const PresentNodeStats = sequelize1.define('PresentNodeStats', {
     allowNull: false,
     primaryKey: true,
   },
-  nodeId: {
+  node_id: {
     type: DataTypes.UUID,
     allowNull: false,
     comment: 'References catalogueNode.node_id',
@@ -29,7 +29,7 @@ export const PresentNodeStats = sequelize1.define('PresentNodeStats', {
   indexes: [
     {
       unique: true,
-      fields: ['nodeId']
+      fields: ['node_id']
     }
   ]
 });

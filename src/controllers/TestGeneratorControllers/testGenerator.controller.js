@@ -303,7 +303,8 @@ export const evaluateTest = async (req, res) => {
     await Teachertopicstats.create({
       teacherId,
       node_id:topicId,
-      tier: 'Bridger',
+      tier:'free',
+      level: 'Bridger',
       sessionCount: 0,
       rating: 0
     });

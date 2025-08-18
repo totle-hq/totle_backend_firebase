@@ -7,41 +7,39 @@ import { AbsentNodeStats } from "../Models/analytics/AbsentNodeStatsmodel.js";
 export const searchCatalogue = async (req, res) => {
   try {
     const { term } = req.query;
-
+console.log(term);
     if (!term || term.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: "Search term is required"
+        message: "Search term is required",
       });
     }
 
     const searchTerm = term.trim();
     const now = new Date();
 
+    // Search for nodes matching the term
     const nodes = await CatalogueNode.findAll({
       where: {
-        name: { [Op.iLike]: `%${searchTerm}%` } 
-      }
+        name: { [Op.iLike]: `%${searchTerm}%` },
+      },
     });
 
     if (nodes.length > 0) {
+      // Found matches → update PresentNodeStats
       for (const node of nodes) {
-
-        const [stat, created] = await PresentNodeStats.findOrCreate({
-          where: { nodeId: node.nodeId },
+        const [stat] = await PresentNodeStats.findOrCreate({
+          where: { node_id: node.node_id },
           defaults: {
-            nodeId: node.nodeId,
-            name: node.name,
-            searchVolume: 0,
-            firstSeen: now,
-            lastSeen: now
-          }
+            nodeId: node.node_id,
+            searchCount: 0,
+            lastSearched: now,
+          },
         });
 
-        
         await stat.update({
-          searchVolume: stat.searchVolume + 1,
-          lastSeen: now
+          searchCount: stat.searchCount + 1,
+          lastSearched: now,
         });
       }
 
@@ -49,39 +47,39 @@ export const searchCatalogue = async (req, res) => {
         success: true,
         found: true,
         count: nodes.length,
-        data: nodes
+        data: nodes,
       });
     }
 
-    
+    // No matches → update AbsentNodeStats
     const [missingStat, missingCreated] = await AbsentNodeStats.findOrCreate({
-      where: { name: searchTerm },
+      where: { searchTerm },
       defaults: {
-        name: searchTerm,
-        searchVolume: 0,
+        searchTerm,
+        searchCount: 0,
         firstSeen: now,
-        lastSeen: now
-      }
+        lastSearched: now,
+      },
     });
 
     await missingStat.update({
-      searchVolume: missingStat.searchVolume + 1,
-      lastSeen: now
+      searchCount: missingStat.searchCount + 1,
+      lastSearched: now,
     });
 
     return res.status(200).json({
       success: true,
       found: false,
       message: "Topic not found in catalogue",
-      statsUpdated: !missingCreated
+      statsUpdated: !missingCreated,
     });
 
   } catch (error) {
     console.log(error)
-    logger.error(" Error searching catalogue:", error);
+    logger.error("Error searching catalogue:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error"
+      message: "Internal server error",
     });
   }
 };
