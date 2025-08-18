@@ -17,7 +17,9 @@ import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
 import { TabSwitchEvent } from "../../Models/TabswitchModel.js";
 import { TestFlag } from "../../Models/TestflagModel.js";
 import { findSubjectAndDomain } from "../../utils/getsubject.js";
-
+import Razorpay from "razorpay";
+import crypto from "crypto";
+import { Payment } from "../../Models/PaymentModels.js";
 
 /**
  * POST /api/tests/generate
@@ -25,32 +27,251 @@ import { findSubjectAndDomain } from "../../utils/getsubject.js";
  */
 
 
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// ✅ NEW: Check if user has paid for a test
+const checkTestPayment = async (userId, topicId) => {
+  const payment = await Payment.findOne({
+    where: {
+      user_id: userId,
+      entity_type: 'test',
+      entity_id: topicId,
+      status: 'success'
+    }
+  });
+  return !!payment;
+};
+const generateReceiptId = (topicId, userId) => {
+  const timestamp = Date.now().toString().slice(-8); // Last 8 digits
+  const topicShort = topicId.slice(-8); // Last 8 chars of topic ID
+  const userShort = userId.slice(-8); // Last 8 chars of user ID
+  return `t_${topicShort}_${userShort}_${timestamp}`.slice(0, 40);
+};
+// ✅ NEW: Initiate payment for test
+export const initiateTestPayment = async (req, res) => {
+  try {
+    const { topicId } = req.body;
+    const userId = req.user.id;
+
+    if (!topicId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Topic ID is required" 
+      });
+    }
+
+    // Check if user already has a successful payment for this test
+    const existingPayment = await checkTestPayment(userId, topicId);
+    if (existingPayment) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Payment already completed for this test" 
+      });
+    }
+
+    // Verify topic exists
+    const topic = await CatalogueNode.findByPk(topicId);
+    if (!topic || !topic.is_topic) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Invalid topic" 
+      });
+    }
+
+    const amount = 9900; // ₹99 in paise
+    const currency = "INR";
+    
+    // ✅ FIXED: Generate short receipt (≤40 characters)
+    const receipt = generateReceiptId(topicId, userId);
+
+    // Create Razorpay order
+    const order = await razorpay.orders.create({
+      amount,
+      currency,
+      receipt,
+      notes: {
+        user_id: userId,
+        topic_id: topicId,
+        topic_name: topic.name,
+        entity_type: 'test'
+      }
+    });
+
+    // Save payment record
+    const payment = await Payment.create({
+      user_id: userId,
+      entity_type: 'test',
+      entity_id: topicId,
+      order_id: order.id,
+      amount,
+      currency,
+      status: 'created'
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment initiated successfully",
+      data: {
+        key: process.env.RAZORPAY_KEY_ID,
+        order_id: order.id,
+        amount,
+        currency,
+        topic_name: topic.name,
+        payment_id: payment.payment_id,
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error initiating test payment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to initiate payment",
+      error: error.message
+    });
+  }
+};
+
+export const verifyTestPayment = async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      topicId
+    } = req.body;
+
+    const userId = req.user.id;
+
+    // Verify signature
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment signature"
+      });
+    }
+
+    // Update payment record
+    const payment = await Payment.findOne({
+      where: {
+        user_id: userId,
+        entity_type: 'test',
+        entity_id: topicId,
+        order_id: razorpay_order_id
+      }
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment record not found"
+      });
+    }
+
+    payment.razorpay_payment_id = razorpay_payment_id;
+    payment.razorpay_signature = razorpay_signature;
+    payment.status = 'success';
+    await payment.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment verified successfully",
+      data: {
+        payment_id: payment.payment_id,
+        status: 'success'
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error verifying test payment:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to verify payment",
+      error: error.message
+    });
+  }
+};
+
+
+
+export const checkTestPaymentStatus = async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const userId = req.user.id;
+
+    const hasValidPayment = await checkTestPayment(userId, topicId);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        paid: hasValidPayment,
+        amount_required: hasValidPayment ? 0 : 9900
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error checking payment status:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to check payment status",
+      error: error.message
+    });
+  }
+};
 
 // ✅ generateTest with ID mapping fixed
+// ✅ UPDATED: Modified generateTest with payment verification
 export const generateTest = async (req, res) => {
   try {
     const { topicId } = req.body;
-    const token = req.headers.authorization?.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = decoded.id;
+    const userId = req.user.id; // Now using req.user from authMiddleware
+    
+    if (!userId || !topicId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing userId or topicId." 
+      });
+    }
+
+    // ✅ NEW: Check payment before generating test
+    const hasValidPayment = await checkTestPayment(userId, topicId);
+    if (!hasValidPayment) {
+      return res.status(402).json({
+        success: false,
+        message: "Payment required to take this test. Please pay ₹99 to continue.",
+        payment_required: true,
+        amount: 9900 // in paise
+      });
+    }
+
+    // Get subject and domain info
     const { subject, domain } = await findSubjectAndDomain(topicId);
     const subjectName = subject?.name || "";
     const subjectDescription = subject?.description || "";
     const domainName = domain?.name || "";
     const domainDescription = domain?.description || "";
 
-    console.log(subject,domain);
-    if (!userId || !topicId) {
-      return res.status(400).json({ success: false, message: "Missing userId or topicId." });
-    }
- 
+    console.log(subject, domain);
+
     const topic = await CatalogueNode.findByPk(topicId);
     
     if (!topic || !topic.is_topic) {
-      return res.status(404).json({ success: false, message: "Invalid topic." });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Invalid topic." 
+      });
     }
+
     const topicDescription = topic.description || "";
- 
     const topicParams = topic.metadata || {};
 
     const learnerProfile = await getUserLearningMetrics(userId);
@@ -61,7 +282,7 @@ export const generateTest = async (req, res) => {
     let attempts = 0;
 
     console.log("details", topic.name, topicDescription, subjectName, subjectDescription, domainName, domainDescription, topicParams);
- 
+
     while (finalQuestions.length < 20 && attempts < 5) {
       const { questions, answers } = await generateQuestions({
         subject: subjectName,
@@ -80,29 +301,29 @@ export const generateTest = async (req, res) => {
       for (let i = 0; i < questions.length && finalQuestions.length < 20; i++) {
         const q = questions[i];
         const ans = answers.find(a => a.id === q.id);
- 
+
         if (!seenTexts.has(q.text) && ans) {
           seenTexts.add(q.text);
           const newId = finalQuestions.length + 1;
- 
+
           finalQuestions.push({ id: newId, text: q.text, options: q.options });
           finalAnswers.push({ id: newId, correct_answer: ans.correct_answer });
         }
       }
- 
+
       attempts++;
     }
- 
+
     if (finalQuestions.length !== 20) {
       return res.status(500).json({
         success: false,
         message: "Could not generate enough unique questions.",
       });
     }
- 
+
     const time_limit_minutes = 30;
     const count = await Test.count() + 1;
- 
+
     const savedTest = await Test.create({
       sl_no: count,
       topic_name: topic.name,
@@ -126,7 +347,7 @@ export const generateTest = async (req, res) => {
       },
       status: "generated",
     });
- 
+
     return res.status(200).json({
       success: true,
       message: "Test generated successfully.",
@@ -147,7 +368,7 @@ export const generateTest = async (req, res) => {
     });
   }
 };
- 
+
 
 
 
@@ -155,24 +376,57 @@ export const generateTest = async (req, res) => {
 export const startTest = async (req, res) => {
   try {
     const { test_id } = req.params;
+    const userId = req.user.id;
 
     const test = await Test.findByPk(test_id);
     if (!test) {
-      return res.status(404).json({ success: false, message: "Test not found" });
+      return res.status(404).json({ 
+        success: false, 
+        message: "Test not found" 
+      });
+    }
+
+    // Verify the test belongs to the user
+    if (test.user_id !== userId) {
+      return res.status(403).json({ 
+        success: false, 
+        message: "Access denied" 
+      });
+    }
+
+    // Double-check payment status
+    const hasValidPayment = await checkTestPayment(userId, test.topic_uuid);
+    if (!hasValidPayment) {
+      return res.status(402).json({
+        success: false,
+        message: "Payment required to start this test",
+        payment_required: true
+      });
     }
 
     if (test.status !== "generated") {
-      return res.status(400).json({ success: false, message: "Test cannot be started in its current state" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "Test cannot be started in its current state" 
+      });
     }
 
     test.status = "started";
     test.started_at = new Date();
     await test.save();
 
-    return res.status(200).json({ success: true, message: "Test started", data: test });
+    return res.status(200).json({ 
+      success: true, 
+      message: "Test started", 
+      data: test 
+    });
   } catch (error) {
     console.error("❌ Error starting test:", error);
-    return res.status(500).json({ success: false, message: "Failed to start test", error: error.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to start test", 
+      error: error.message 
+    });
   }
 };
 
