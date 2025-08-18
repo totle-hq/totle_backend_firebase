@@ -18,6 +18,7 @@ export const getCatalogueChildrenUpToDomain = async (req, res) => {
         "metadata",
         "created_at",
         "updated_at",
+        "address_of_node"
       ],
     });
 
