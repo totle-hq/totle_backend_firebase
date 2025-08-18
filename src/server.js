@@ -53,6 +53,9 @@ import  featureRoutes from "./routes/Objectives/feature.routes.js"
 import  taskRoutes from "./routes/Objectives/task.routes.js"
 // WeekOverlayRoutes
 import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js"
+// paid teacher
+import getPaidTeacher from "./routes/SessionRoutes/PaidSession.routes.js"
+
 // After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
@@ -108,7 +111,8 @@ app.use("/api/attendance",attendenceRoutes); // Marking when user left the sessi
 
 // WeekOverlay-calander
 app.use("/api/WeekOverlay",WeekOverlayRoutes);
-
+// paid-teacher
+app.use('/api/marketplace',getPaidTeacher);
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");

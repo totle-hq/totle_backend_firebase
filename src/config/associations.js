@@ -21,6 +21,7 @@ import { Session } from "../Models/SessionModel.js";
 import { BookedSession } from "../Models/BookedSession.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { Role } from "../Models/UserModels/Roles.Model.js";
+import { Payment } from "../Models/PaymentModels.js";
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -36,8 +37,8 @@ const defineRelationships = () => {
   Responses.belongsTo(User, { foreignKey: 'userId' });
 
   // User to Preferred Language Relationship
-  // User.belongsTo(Language, { foreignKey: "preferred_language_id", as: "preferredLanguage" });
-  // Language.hasMany(User, { foreignKey: "preferred_language_id", as: "users" });
+  User.belongsTo(Language, { foreignKey: "preferred_language_id", as: "preferredLanguage" });
+  Language.hasMany(User, { foreignKey: "preferred_language_id", as: "users" });
 
 
   // User to UserMetrics Relationship
@@ -121,7 +122,25 @@ const defineRelationships = () => {
   CatalogueNode.hasMany(BookedSession, { foreignKey: 'topic_id', onDelete: 'CASCADE' });
 
 
-  
+  // 
+  User.hasMany(FeedbackSummary, { foreignKey: 'teacher_id', as: 'feedbackSummaries' });
+  FeedbackSummary.belongsTo(User, { foreignKey: 'teacher_id', as: 'teacher' });
+// payments 
+    Payment.belongsTo(Session, {
+    foreignKey: "entity_id",
+    constraints: false,
+    as: "sessionPayment",
+  });
+
+  Payment.belongsTo(Test, {
+    foreignKey: "entity_id",
+    constraints: false,
+    as: "testPayment",
+  });
+
+  User.hasMany(Payment, { foreignKey: "user_id" });
+  Payment.belongsTo(User, { foreignKey: "user_id" });
+
 
 
 };
