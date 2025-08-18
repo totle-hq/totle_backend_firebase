@@ -53,6 +53,9 @@ import  featureRoutes from "./routes/Objectives/feature.routes.js"
 import  taskRoutes from "./routes/Objectives/task.routes.js"
 // WeekOverlayRoutes
 import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js"
+// paid teacher
+import getPaidTeacher from "./routes/SessionRoutes/PaidSession.routes.js"
+
 // After other `app.use` statements for /api/*
 
 const __filename = fileURLToPath(import.meta.url);
@@ -108,7 +111,8 @@ app.use("/api/attendance",attendenceRoutes); // Marking when user left the sessi
 
 // WeekOverlay-calander
 app.use("/api/WeekOverlay",WeekOverlayRoutes);
-
+// paid-teacher
+app.use('/api/marketplace',getPaidTeacher);
 
 app.get("/", (req, res) => {
   res.send("✅ TOTLE Backend API is running!");
@@ -128,9 +132,9 @@ app.get("/db", async (req, res) => {
 const startServer = async () => {
   try {
     // Step 1: Run the syncDatabase function to set up the database before starting the server
-    await syncDatabase();  // Automatically run the syncDatabase on server start
+    // await syncDatabase();  // Automatically run the syncDatabase on server start
 
-    // await defineModelRelationships();
+    await defineModelRelationships();
 
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
