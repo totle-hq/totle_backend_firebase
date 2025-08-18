@@ -13,10 +13,10 @@ import "../Models/CatalogModels/catalogueNode.model.js";
 import "../Models/TeachertopicstatsModel.js";
 import { KeyResult } from '../Models/Objectives/keyresult.model.js'; // ✅ Add this line
 import { autoRolesAndDepartments } from '../controllers/UserControllers/Nucleus.controller.js';
-import { AbsentNodeStats } from '../Models/analytics/AbsentNodeStatsmodel.js';
-import { PresentNodeStats } from '../Models/analytics/PresentNodeStatsmodel.js';
 import { Teachertopicstats } from '../Models/TeachertopicstatsModel.js';
 import { fixTeacherTopicStatsTier } from '../utils/marketplacefunction.js';
+import { Session } from '../Models/SessionModel.js';
+
 
 dotenv.config();
 
@@ -129,11 +129,9 @@ export async function syncDatabase() {
     await fixTeacherTopicStatsTier();
       await Teachertopicstats.sync({alter:true});
     console.log("✅ teacher topic stats table synced successfully!");    
-await AbsentNodeStats.sync({ alter: true });
-console.log("✅ Objective table synced successfully!");
 
-await PresentNodeStats.sync({ alter: true });
-console.log("✅ Objective table synced successfully!");
+
+
 await Objective.sync({ alter: true });
 
 console.log("✅ Objective table synced successfully!");
@@ -158,7 +156,7 @@ console.log("✅ KeyResult table synced successfully!");
     await ProgressionThresholds.sync({ alter: true });
     console.log("✅ ProgressionThresholds table synced successfully!");
 
-
+Session.sync({alter:true});
     await sequelize1.sync({ alter: true });
 
     console.log("✅ All tables synced successfully!");

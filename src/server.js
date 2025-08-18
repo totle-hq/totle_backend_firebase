@@ -19,7 +19,6 @@ import nucleusRoutes from "./routes/UserRoutes/Nucleus.routes.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
 // import { Server } from "socket.io";
-import searchRoutes from "./routes/search.routes.js"
 import path from "path";
 import { fileURLToPath } from "url";
 import {defineModelRelationships, syncDatabase} from './config/syncDb.js';
@@ -86,7 +85,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/session",sessionRoutes);
 app.use("/api/teach",teachRoutes);
 app.use("/api/feedback",FeedbackRoutes);
-app.use("/api/search",searchRoutes)
+
 app.use('/api/objectives', objectiveRoutes);
 app.use('/api/objectives', keyResultRoutes); // Use the key result routes
 app.use("/api/teach",insights);

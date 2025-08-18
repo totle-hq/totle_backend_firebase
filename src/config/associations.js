@@ -21,7 +21,7 @@ import { Session } from "../Models/SessionModel.js";
 import { BookedSession } from "../Models/BookedSession.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { Role } from "../Models/UserModels/Roles.Model.js";
-import { PresentNodeStats } from "../Models/analytics/PresentNodeStatsmodel.js";
+
 // import { Category } from "../Models/CatalogModels/CategoryModel.js";
 // import { Grade } from "../Models/CatalogModels/GradeModel.js";
 // import { Subject } from "../Models/CatalogModels/SubjectModel.js";
@@ -92,8 +92,6 @@ const defineRelationships = () => {
   TestFlag.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
   User.hasMany(TestFlag, { foreignKey: 'user_id', as: 'testFlags' });
 
-PresentNodeStats.belongsTo(CatalogueNode, { foreignKey: 'node_id', as: 'node', onDelete: 'CASCADE' });
-CatalogueNode.hasMany(PresentNodeStats, { foreignKey: 'node_id',  as: 'presentStats', onDelete: 'CASCADE'});
 
   TestFlag.belongsTo(Test, { foreignKey: 'test_id', as: 'test' });
   Test.hasMany(TestFlag, { foreignKey: 'test_id', as: 'flags' });
@@ -130,4 +128,4 @@ CatalogueNode.hasMany(PresentNodeStats, { foreignKey: 'node_id',  as: 'presentSt
 
 };
 
-export default defineRelationships
+export default defineRelationships;
