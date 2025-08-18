@@ -17,6 +17,10 @@ import { Feature } from '../Models/Objectives/Feature.model.js';
 
 import { Epic } from '../Models/Objectives/epics.model.js';
 import { Task } from '../Models/Objectives/Task.model.js';
+import { Teachertopicstats } from '../Models/TeachertopicstatsModel.js';
+import { fixTeacherTopicStatsTier } from '../utils/marketplacefunction.js';
+import { Session } from '../Models/SessionModel.js';
+
 
 dotenv.config();
 
@@ -126,7 +130,14 @@ export async function syncDatabase() {
     await Blog.sync({ alter: true });
 
     const { Objective } = await import("../Models/Objectives/objective.model.js");
+    await fixTeacherTopicStatsTier();
+      await Teachertopicstats.sync({alter:true});
+    console.log("✅ teacher topic stats table synced successfully!");    
+
+
+
 await Objective.sync({ alter: true });
+
 console.log("✅ Objective table synced successfully!");
 
 await KeyResult.sync({ alter: true });
@@ -157,7 +168,7 @@ console.log("✅ Task table synced successfully!");
     await ProgressionThresholds.sync({ alter: true });
     console.log("✅ ProgressionThresholds table synced successfully!");
 
-
+Session.sync({alter:true});
     await sequelize1.sync({ alter: true });
 
     console.log("✅ All tables synced successfully!");
