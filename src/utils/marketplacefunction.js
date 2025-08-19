@@ -1,7 +1,7 @@
 import { Sequelize } from "sequelize";
 import { Session } from "../Models/SessionModel.js";
 import { sequelize1 } from "../config/sequelize.js";
-import { Language } from "../Models/LanguageModel.js";
+
 import { User } from "../Models/UserModels/UserModel.js";
 
 // Updated Projections Function
@@ -10,7 +10,7 @@ export const getProjections = async (monthSessions, filters = {}) => {
     const { tier, level, languageId, sessionFilters = {} } = filters;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-
+console.log(monthSessions);
     // 1. VALIDATE INPUT
     monthSessions = Number(monthSessions) || 0;
     const currentDate = today.getDate();
@@ -24,23 +24,26 @@ export const getProjections = async (monthSessions, filters = {}) => {
       monthProgress: `${Math.round(monthProgress * 100)}%`
     });
 
-    // 2. GET HISTORICAL DATA
+    // 2. BUILD WHERE CLAUSES
     const baseWhere = { status: 'completed', ...sessionFilters };
     delete baseWhere.topic_id;
 
-    const teacherWhere = {
-      ...(tier && tier !== 'all' && { tier }),
-      ...(level && level !== 'All' && { level }),
-      ...(languageId && { preferred_language_id: languageId })
-    };
+    if (tier && tier !== 'all') {
+      baseWhere.session_tier = tier;
+    }
+    if (level && level !== 'All') {
+      baseWhere.session_level = level;
+    }
+
+    const teacherInclude = (languageId
+      ? [{ model: User, as: 'teacher', where: { preferred_language_id: languageId }, attributes: [], required: true }]
+      : []);
 
     // 3. CALCULATE DATA AGE
     const oldestSession = await Session.findOne({
       attributes: [[Sequelize.fn('MIN', Sequelize.col('completed_at')), 'oldest']],
       where: baseWhere,
-      ...(Object.keys(teacherWhere).length > 0 && {
-        include: [{ model: User, as: 'teacher', where: teacherWhere, attributes: [], required: true }]
-      }),
+      ...(teacherInclude.length > 0 && { include: teacherInclude }),
       raw: true
     });
 
@@ -51,10 +54,10 @@ export const getProjections = async (monthSessions, filters = {}) => {
     const dataAgeDays = Math.floor((today - new Date(oldestSession.oldest)) / (1000 * 60 * 60 * 24));
     
     // 4. PROJECTION LOGIC
-    if (dataAgeDays < 90) { // New data
+    if (dataAgeDays < 90) {
       return calculateNewDataProjections(monthSessions, currentDate, totalDaysInMonth);
-    } else { // Established data
-      return await calculateHistoricalProjections(baseWhere, teacherWhere, monthSessions, monthProgress);
+    } else {
+      return await calculateHistoricalProjections(baseWhere, teacherInclude, monthSessions, monthProgress);
     }
   } catch (error) {
     console.error("Error in getProjections:", error);
@@ -66,28 +69,33 @@ export const getProjections = async (monthSessions, filters = {}) => {
   }
 };
 
+
 // Helper Functions
 function calculateBasicProjections(monthSessions, currentDate, totalDaysInMonth) {
-  const remainingDays = totalDaysInMonth - currentDate;
-  const dailyRate = monthSessions / (currentDate || 1);
-  
+  const daysPassed = Math.max(1, currentDate); // avoid divide by 0
+  const dailyRate = monthSessions / daysPassed;
+  const projectedMonthTotal = dailyRate * totalDaysInMonth;
+
   return {
-    nextDay: Math.ceil(dailyRate * 1.1),
-    nextWeek: Math.ceil(dailyRate * 7 * 1.2),
-    nextMonth: Math.ceil(monthSessions + (dailyRate * remainingDays * 1.3))
+    nextDay: Math.max(1, Math.ceil(dailyRate)),         // tomorrow ≈ daily rate
+    nextWeek: Math.max(1, Math.ceil(dailyRate * 7)),    // 7-day rate
+    nextMonth: Math.ceil(projectedMonthTotal)           // full month projection
   };
 }
 
 function calculateNewDataProjections(monthSessions, currentDate, totalDaysInMonth) {
-  const remainingDays = totalDaysInMonth - currentDate;
-  const dailyRate = Math.max(1, monthSessions / (currentDate || 1));
-  
+  const daysPassed = Math.max(1, currentDate);
+  const dailyRate = monthSessions / daysPassed;
+  const projectedMonthTotal = dailyRate * totalDaysInMonth;
+
   return {
-    nextDay: Math.ceil(dailyRate * 1.2),
-    nextWeek: Math.ceil(dailyRate * 7 * 1.3),
-    nextMonth: Math.ceil(monthSessions + (dailyRate * remainingDays * 1.5))
+    nextDay: Math.max(1, Math.ceil(dailyRate * 1.2)),       // add a buffer
+    nextWeek: Math.max(1, Math.ceil(dailyRate * 7 * 1.2)),  // slightly higher
+    nextMonth: Math.ceil(projectedMonthTotal * 1.2)         // boosted projection
   };
 }
+
+
 
 async function calculateHistoricalProjections(baseWhere, teacherWhere, monthSessions, monthProgress) {
   const threeMonthStart = new Date();

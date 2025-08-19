@@ -525,101 +525,106 @@ export const getTrendData = async (req, res) => {
     });
   }
 };
+
 export const getSummary = async (req, res) => {
   try {
     const { domainId, topicId, tier, level, language } = req.query;
 
-    // 1. CACHE KEY
-    const cacheKey = `summary:${domainId}:${topicId}:${tier}:${level}:${language}`;
+    // SAFE CACHE KEY
+    const safeTier = tier || 'all';
+    const safeLevel = level || 'All';
+    const safeLang = language || 'all';
+    const cacheKey = `summary:${domainId || 'none'}:${topicId || 'none'}:${safeTier}:${safeLevel}:${safeLang}`;
+
+    // 1. CHECK CACHE (totals + topics only)
     const cachedData = await redisClient.get(cacheKey);
-    if (cachedData) return res.json(JSON.parse(cachedData));
+    let cachedResult = cachedData ? JSON.parse(cachedData) : null;
 
-    // 2. LANGUAGE FILTER
-    let languageFilter = {};
-    if (language && language !== 'all') {
-      const languageRecord = await Language.findOne({
-        where: { language_name: language },
-        attributes: ["language_id"],
-        raw: true,
-      });
-
-      if (!languageRecord) {
-        const emptyResult = {
-          totals: { tillDate: 0, thatDay: 0, thatWeek: 0, thatMonth: 0 },
-          projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 },
-          topics: [],
-        };
-        await redisClient.set(cacheKey, JSON.stringify(emptyResult), 'EX', 60);
-        return res.json(emptyResult);
-      }
-      languageFilter = { preferred_language_id: languageRecord.language_id };
-    }
-
-    // 3. FETCH TOPICS
     let topics = [];
-    if (topicId) {
-      const topic = await CatalogueNode.findOne({
-        where: { node_id: topicId, is_topic: true },
-        attributes: ["node_id", "name"],
-        raw: true,
-      });
-      topics = topic ? [topic] : [];
-    } else if (domainId) {
-      topics = await CatalogueNode.findAll({
-        where: { parent_id: domainId, is_topic: true },
-        attributes: ["node_id", "name"],
-        raw: true,
-      });
-    }
+    let countResults = {};
 
-    if (!topics.length && (topicId || domainId)) {
-      const emptyResult = {
-        totals: { tillDate: 0, thatDay: 0, thatWeek: 0, thatMonth: 0 },
-        projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 },
-        topics: [],
+    if (!cachedResult) {
+      // 2. LANGUAGE FILTER
+      let languageFilter = {};
+      if (language && language !== 'all') {
+        const languageRecord = await Language.findOne({
+          where: { language_name: language },
+          attributes: ["language_id"],
+          raw: true,
+        });
+        if (!languageRecord) {
+          const emptyResult = {
+            totals: { tillDate: 0, thatDay: 0, thatWeek: 0, thatMonth: 0 },
+            topics: [],
+          };
+          await redisClient.set(cacheKey, JSON.stringify(emptyResult), 'EX', 60);
+          return res.json({ ...emptyResult, projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 } });
+        }
+        languageFilter = { preferred_language_id: languageRecord.language_id };
+      }
+
+      // 3. FETCH TOPICS
+      if (topicId) {
+        const topic = await CatalogueNode.findOne({
+          where: { node_id: topicId, is_topic: true },
+          attributes: ["node_id", "name"],
+          raw: true,
+        });
+        topics = topic ? [topic] : [];
+      } else if (domainId) {
+        topics = await CatalogueNode.findAll({
+          where: { parent_id: domainId, is_topic: true },
+          attributes: ["node_id", "name"],
+          raw: true,
+        });
+      }
+
+      if (!topics.length && (topicId || domainId)) {
+        const emptyResult = { totals: { tillDate: 0, thatDay: 0, thatWeek: 0, thatMonth: 0 }, topics: [] };
+        await redisClient.set(cacheKey, JSON.stringify(emptyResult), 'EX', 300);
+        return res.json({ ...emptyResult, projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 } });
+      }
+
+      // 4. BASE FILTERS
+      const sessionWhere = { status: "completed" };
+      if (level && level !== "All") sessionWhere.session_level = level;
+      if (tier && tier !== "all") sessionWhere.session_tier = tier;
+      if (topics.length) sessionWhere.topic_id = topics.map(t => t.node_id);
+
+      // 5. PARALLEL FETCH
+      countResults = await getSessionCountsOptimized(sessionWhere, languageFilter);
+      const [teacherStats, topicDetails] = await Promise.all([
+        getTeacherStatsByTopicOptimized(topics.map(t => t.node_id), { languageId: languageFilter.preferred_language_id }),
+        getTopicDetailsOptimized(topics, { tier, level, languageId: languageFilter.preferred_language_id })
+      ]);
+
+      cachedResult = {
+        totals: countResults,
+        topics: topicDetails,
       };
-      await redisClient.set(cacheKey, JSON.stringify(emptyResult), 'EX', 300);
-      return res.json(emptyResult);
+
+      // CACHE totals + topics only
+      await redisClient.set(cacheKey, JSON.stringify(cachedResult), 'EX', 300);
     }
 
-    // 4. BASE FILTERS
-    const sessionWhere = { status: "completed" };
-    if (level && level !== "All") sessionWhere.session_level = level;
-    if (tier && tier !== "all") sessionWhere.session_tier = tier;
-    if (topics.length) sessionWhere.topic_id = topics.map(t => t.node_id);
+    // 6. ALWAYS CALCULATE PROJECTIONS LIVE
+    const projections = await getProjections(
+      cachedResult.totals.thatMonth,
+      { tier, level, languageId: cachedResult.totals.languageId || undefined, sessionFilters: {} }
+    );
 
-    // 5. PARALLEL FETCH - CORRECTED VERSION
-    // First get the counts synchronously since projections depend on it
-    const countResults = await getSessionCountsOptimized(sessionWhere, languageFilter);
-    
-    // Then run the remaining parallel operations
-    const [teacherStats, projections, topicDetails] = await Promise.all([
-      getTeacherStatsByTopicOptimized(topics.map(t => t.node_id), {
-        languageId: languageFilter.preferred_language_id
-      }),
-      getProjections(
-        countResults.thatMonth, // Now countResults is available
-        { tier, level, languageId: languageFilter.preferred_language_id, sessionFilters: sessionWhere }
-      ),
-      getTopicDetailsOptimized(topics, {
-        tier, level, languageId: languageFilter.preferred_language_id
-      })
-    ]);
-
-    // 6. CACHE & RETURN
-    const result = {
-      totals: countResults,
-      projections,
-      topics: topicDetails,
-    };
-    await redisClient.set(cacheKey, JSON.stringify(result), 'EX', 300);
-    res.json(result);
+    // 7. RETURN FULL RESULT
+    res.json({
+      ...cachedResult,
+      projections
+    });
 
   } catch (error) {
     console.error("Error fetching summary:", error);
     res.status(500).json({ error: "Failed to fetch summary", details: error.message });
   }
 };
+
 
 
 // Optimized counting function
@@ -727,7 +732,7 @@ async function getTopicDetailsOptimized(topics, filters) {
   }));
 }
 
-// Optimized session counts by topic
+
 async function getSessionCountsByTopicOptimized(topicIds, filters) {
   const now = new Date();
   const today = new Date(now.setHours(0, 0, 0, 0));
@@ -737,17 +742,17 @@ async function getSessionCountsByTopicOptimized(topicIds, filters) {
 
   const query = `
     SELECT 
-      topic_id,
-      COUNT(id) AS total,
-      COUNT(CASE WHEN completed_at >= :today THEN 1 END) AS today,
-      COUNT(CASE WHEN completed_at >= :weekStart THEN 1 END) AS week,
-      COUNT(CASE WHEN completed_at >= :monthStart THEN 1 END) AS month
+      s.topic_id,
+      COUNT(s.id) AS total,   -- FIXED: qualified column
+      COUNT(CASE WHEN s.completed_at >= :today THEN 1 END) AS today,
+      COUNT(CASE WHEN s.completed_at >= :weekStart THEN 1 END) AS week,
+      COUNT(CASE WHEN s.completed_at >= :monthStart THEN 1 END) AS month
     FROM "user".sessions s
     ${filters.languageId ? 'JOIN "user"."users" u ON s.teacher_id = u.id AND u.preferred_language_id = :languageId' : ''}
-    WHERE topic_id IN (:topicIds)
-    ${filters.level && filters.level !== 'All' ? 'AND session_level = :level' : ''}
-    ${filters.tier && filters.tier !== 'all' ? 'AND session_tier = :tier' : ''}
-    GROUP BY topic_id
+    WHERE s.topic_id IN (:topicIds)
+    ${filters.level && filters.level !== 'All' ? 'AND s.session_level = :level' : ''}
+    ${filters.tier && filters.tier !== 'all' ? 'AND s.session_tier = :tier' : ''}
+    GROUP BY s.topic_id
   `;
 
   const results = await sequelize.query(query, {
@@ -773,6 +778,7 @@ async function getSessionCountsByTopicOptimized(topicIds, filters) {
     return acc;
   }, {});
 }
+
 
 
 
