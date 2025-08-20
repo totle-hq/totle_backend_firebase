@@ -854,6 +854,7 @@ export const updateWelcome = async (req, res) => {
 
 export const sendContactEmail = async (req, res) => {
   const { name, email, message } = req.body;
+  console.log('email', email);
 
   if (!name || !email || !message) {
     return res
@@ -873,8 +874,9 @@ export const sendContactEmail = async (req, res) => {
 
     // Email Content
     const mailOptions = {
-      from: email, // Sender Email
-      to: "support@totle.co", // Destination Email
+      from: process.env.EMAIL_USER, // Sender Email
+      to: ["support@totle.co", "totleedtech@gmail.com"], // Destination Email
+      replyTo: email,
       subject: `New Contact Form Submission from ${name}`,
       html: `
         <h3>Contact Form Submission</h3>
