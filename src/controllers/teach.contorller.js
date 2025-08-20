@@ -405,22 +405,22 @@ export const validateEligibility = async (req, res) => {
       });
     }
 
-    const { tier, rating, sessionCount } = stat;
+    const { level, rating, sessionCount } = stat;
 
     let eligible = false;
     let reason = 'Eligibility criteria not met';
 
-    if (['Expert', 'Master', 'Legend'].includes(tier)) {
+    if (['Expert', 'Master', 'Legend'].includes(level)) {
       eligible = true;
-      reason = `Eligible for paid sessions at ${tier} tier`;
-    } else if (tier === 'Bridger' && rating >= 4.5 && sessionCount >= 20) {
+      reason = `Eligible for paid sessions at ${level} level`;
+    } else if (level === 'Bridger' && rating >= 4.5 && sessionCount >= 20) {
       eligible = true;
       reason = 'Eligible based on performance (high rating + session count)';
     }
 
     return res.status(200).json({
       eligible,
-      tier,
+      level,
       rating,
       sessionCount,
       reason
@@ -461,11 +461,11 @@ export const getSessionSummary = async (req, res) => {
   }
 };
 
-const tierProgression = {
+const levelProgression = {
   Bridger: { next: 'Expert', sessions: 20, rating: 4.2 },
   Expert: { next: 'Master', sessions: 50, rating: 4.5 },
   Master: { next: 'Legend', sessions: 100, rating: 4.7 },
-  Legend: null // No next tier
+  Legend: null // No next level
 };
 
 
@@ -493,25 +493,25 @@ export const getMyProgression = async (req, res) => {
 
     const result = await Promise.all(
       stats.map(async (stat) => {
-        const { tier, rating, sessionCount } = stat;
+        const { level, rating, sessionCount } = stat;
         const topicId = stat.Topic?.node_id;
         const topicName = stat.Topic?.name || "Unknown";
 
         // Find subject and domain
         const { subject, domain } = await findSubjectAndDomain(topicId);
 
-        const progression = tierProgression[tier]; // You should have this map defined
+        const progression = levelProgression[level]; // You should have this map defined
 
         if (!progression) {
           return {
             topicId,
             topicName,
-            currentTier: tier,
+            currentlevel: level,
             rating,
             sessionCount,
-            nextTier: null,
-            sessionsToNextTier: 0,
-            meetsRatingForNextTier: null,
+            nextlevel: null,
+            sessionsToNextlevel: 0,
+            meetsRatingForNextlevel: null,
             subject,
             domain
           };
@@ -523,12 +523,12 @@ export const getMyProgression = async (req, res) => {
         return {
           topicId,
           topicName,
-          currentTier: tier,
+          currentlevel: level,
           rating,
           sessionCount,
-          nextTier: progression.next,
-          sessionsToNextTier: sessionsRemaining,
-          meetsRatingForNextTier: meetsRating,
+          nextlevel: progression.level,
+          sessionsToNextlevel: sessionsRemaining,
+          meetsRatingForNextlevel: meetsRating,
           subject,
           domain
         };

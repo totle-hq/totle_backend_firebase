@@ -1,5 +1,5 @@
 // This file is Online Redis
-// For Local Redis, you can comment out the code block below and uncomment the local Redis client code.
+// // For Local Redis, you can comment out the code block below and uncomment the local Redis client code.
 import { createClient } from "redis";
 
 const redisUrl = process.env.REDIS_URL;

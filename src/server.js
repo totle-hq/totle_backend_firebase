@@ -19,7 +19,6 @@ import nucleusRoutes from "./routes/UserRoutes/Nucleus.routes.js";
 // import { getLanguages } from "./controllers/language.controller.js";
 // import { createServer } from "http";
 // import { Server } from "socket.io";
-
 import path from "path";
 import { fileURLToPath } from "url";
 import {defineModelRelationships, syncDatabase} from './config/syncDb.js';
@@ -48,6 +47,7 @@ import keyResultRoutes from './routes/Objectives/keyresult.routes.js'; // adjust
 // user-managemt
 import userMangaeRoutes from "./routes/nucleus.routes.js";
 import attendenceRoutes from "./routes/attendance.routes.js"
+import marketplaceRoutes from "./routes/MarketplaceRoutes/marrketplace.routes.js"
 import  epicsRoutes from "./routes/Objectives/epic.routes.js"
 import  featureRoutes from "./routes/Objectives/feature.routes.js"
 import  taskRoutes from "./routes/Objectives/task.routes.js"
@@ -88,7 +88,7 @@ app.use("/admin", adminRoutes);
 app.use('/api', ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/catalogue", catalogueRoutes);
-
+app.use("/api/marketplace",marketplaceRoutes);
 app.use("/api/tests", testRoutes); // ✅ expose test endpoints
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
