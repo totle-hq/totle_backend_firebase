@@ -10,144 +10,6 @@ import { User } from "../../Models/UserModels/UserModel.js";
 
 const CACHE_TTL = 300;
 
-// Helper function to calculate median
-function calculateMedian(values) {
-  if (!values.length) return 0;
-  
-  values.sort((a, b) => a - b);
-  const half = Math.floor(values.length / 2);
-  
-  if (values.length % 2) {
-    return values[half];
-  }
-  
-  return (values[half - 1] + values[half]) / 2;
-}
-
-export const getDomainEtaToPaid = async (req, res) => {
-  try {
-    const { domainId } = req.query;
-    
-    // 1. Get all topics in the domain
-    const topics = await CatalogueNode.findAll({
-      where: { 
-        parent_id: domainId,
-        is_topic: true 
-      },
-      attributes: ['node_id'],
-      raw: true
-    });
-
-    if (!topics.length) {
-      return res.json({ 
-        averageDays: 0, 
-        sampleSize: 0,
-        message: "No topics found in this domain"
-      });
-    }
-
-    const topicIds = topics.map(t => t.node_id);
-
-    // 2. Find teachers who have completed ALL topics in this domain
-    const qualifiedTeachers = await Teachertopicstats.findAll({
-      attributes: ['teacher_id'],
-      where: {
-        topic_id: { [Op.in]: topicIds },
-        status: 'completed'
-      },
-      group: ['teacher_id'],
-      having: Sequelize.literal(`COUNT(DISTINCT topic_id) = ${topicIds.length}`),
-      raw: true
-    });
-
-    if (!qualifiedTeachers.length) {
-      return res.json({ 
-        averageDays: 0, 
-        sampleSize: 0,
-        message: "No teachers have completed all topics in this domain"
-      });
-    }
-
-    const teacherIds = qualifiedTeachers.map(t => t.teacher_id);
-
-    // 3. Get their transition timelines (only for those who became paid)
-    const transitions = await User.findAll({
-      attributes: [
-        'id',
-        [Sequelize.fn('DATEDIFF', 
-          Sequelize.col('paid_at'), 
-          Sequelize.col('free_to_paid_started_at')
-        ), 'days_to_paid']
-      ],
-      where: {
-        id: { [Op.in]: teacherIds },
-        paid_at: { [Op.not]: null },
-        free_to_paid_started_at: { [Op.not]: null }
-      },
-      raw: true
-    });
-
-    if (!transitions.length) {
-      return res.json({ 
-        averageDays: 0, 
-        sampleSize: 0,
-        message: "No teachers have completed the free-to-paid transition"
-      });
-    }
-
-    // 4. Calculate weighted average (weighted by number of topics completed)
-    const teacherTopicCounts = await Teachertopicstats.findAll({
-      attributes: [
-        'teacher_id',
-        [Sequelize.fn('COUNT', Sequelize.col('topic_id')), 'topic_count']
-      ],
-      where: {
-        teacher_id: { [Op.in]: teacherIds },
-        status: 'completed'
-      },
-      group: ['teacher_id'],
-      raw: true
-    });
-
-    const weightedData = transitions.map(t => {
-      const teacherCount = teacherTopicCounts.find(tc => tc.teacher_id === t.id)?.topic_count || 1;
-      return {
-        days: t.days_to_paid,
-        weight: teacherCount
-      };
-    });
-
-    const totalWeight = weightedData.reduce((sum, item) => sum + item.weight, 0);
-    const weightedSum = weightedData.reduce((sum, item) => sum + (item.days * item.weight), 0);
-    const averageDays = Math.round(weightedSum / totalWeight);
-
-    // 5. Additional stats
-    const minDays = Math.min(...weightedData.map(item => item.days));
-    const maxDays = Math.max(...weightedData.map(item => item.days));
-    const medianDays = calculateMedian(weightedData.map(item => item.days));
-
-    res.json({ 
-      averageDays,
-      sampleSize: transitions.length,
-      minDays,
-      maxDays,
-      medianDays,
-      totalTeachersInDomain: qualifiedTeachers.length,
-      teachersTransitioned: transitions.length,
-      completionRate: parseFloat(((transitions.length / qualifiedTeachers.length) * 100).toFixed(1))
-    });
-
-  } catch (error) {
-    console.error("Error calculating domain ETA:", error);
-    res.status(500).json({ 
-      error: "Failed to calculate domain ETA",
-      details: error.message 
-    });
-  }
-};
-
-
-
 export const upgradeToPaid = async (req, res) => {
   try {
     const { teacherId, nodeId } = req.body; 
@@ -195,8 +57,6 @@ export const getTopEntities = async (req, res) => {
     if (!['topic', 'domain'].includes(entity)) {
       return res.status(400).json({ error: 'Invalid entity type' });
     }
-
-    const dateCondition = getDateRangeCondition(range || 'week');
 
     if (entity === 'topic') {
       const whereClauses = ["cn.is_topic = true"];
@@ -251,7 +111,11 @@ export const getTopEntities = async (req, res) => {
       );
 
       return res.json(topicsWithSparklines);
-    } else {
+    } 
+    
+    // --- DOMAIN BRANCH ---
+    else {
+      const dateCondition = getDateRangeCondition(range || 'week', 's'); // 👈 alias fixed!
       const whereClauses = ["d.is_domain = true"];
       const joinClauses = [
         `JOIN "catalog"."catalogue_nodes" cn ON cn.parent_id = d.node_id AND cn.is_topic = true`,
@@ -284,7 +148,7 @@ export const getTopEntities = async (req, res) => {
         FROM "catalog"."catalogue_nodes" d
         ${joinClauses.join('\n')}
         WHERE ${whereClauses.join(' AND ')}
-        ${dateCondition ? `AND ${dateCondition.replace(/s\./g, '')}` : ''}
+        ${dateCondition ? `AND ${dateCondition}` : ''}
         GROUP BY d.node_id
         ORDER BY "sessionCount" DESC
         LIMIT 10
@@ -318,6 +182,7 @@ export const getTopEntities = async (req, res) => {
   }
 };
 
+
 async function getTopicSparklineData(topicId, range) {
   const dateCondition = getDateRangeCondition(range);
   
@@ -325,14 +190,13 @@ async function getTopicSparklineData(topicId, range) {
     SELECT 
       ${getTimeGroup(range, 'sessions')} AS time_group,
       COUNT(id) AS value
-    FROM "user"."sessions"
+    FROM "user"."sessions" sessions
     WHERE 
       status = 'completed'
       AND topic_id = :topicId
       ${dateCondition ? `AND ${dateCondition.replace(/s\./g, '')}` : ''}
     GROUP BY time_group
     ORDER BY time_group
-    LIMIT 10
   `;
 
   const results = await sequelize.query(query, {
@@ -343,21 +207,23 @@ async function getTopicSparklineData(topicId, range) {
   return results.map(r => r.value);
 }
 
+
 async function getDomainSparklineData(domainId, range) {
-  const dateCondition = getDateRangeCondition(range);
-  
+  const dateCondition = getDateRangeCondition(range, 's');
+
   const query = `
     SELECT 
       ${getTimeGroup(range, 's')} AS time_group,
       COUNT(DISTINCT s.id) AS value
     FROM "catalog"."catalogue_nodes" cn
-    JOIN "user"."sessions" s ON s.topic_id = cn.node_id AND s.status = 'completed'
+    JOIN "user"."sessions" s 
+      ON s.topic_id = cn.node_id 
+      AND s.status = 'completed'
     WHERE cn.parent_id = :domainId
-    AND cn.is_topic = true
-    ${dateCondition ? `AND ${dateCondition}` : ''}
+      AND cn.is_topic = true
+      ${dateCondition ? `AND ${dateCondition}` : ''}
     GROUP BY time_group
     ORDER BY time_group
-    LIMIT 10
   `;
 
   const results = await sequelize.query(query, {
@@ -365,8 +231,57 @@ async function getDomainSparklineData(domainId, range) {
     type: sequelize.QueryTypes.SELECT
   });
 
-  return results.map(r => r.value);
+  // Build buckets for full time range
+  const buckets = buildTimeBuckets(range);
+  const valuesByTime = Object.fromEntries(
+    results.map(r => [formatTimeKey(r.time_group, range), parseInt(r.value, 10)])
+  );
+
+  return buckets.map(t => valuesByTime[t] || 0);
 }
+
+
+function buildTimeBuckets(range) {
+  const now = new Date();
+  let buckets = [];
+
+  if (range === 'today') {
+    
+    for (let h = 0; h < 24; h++) {
+      const d = new Date(now);
+      d.setHours(h, 0, 0, 0);
+      buckets.push(d.toISOString().slice(0, 13) + ':00'); // "YYYY-MM-DDTHH:00"
+    }
+  } else if (range === 'week') {
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      buckets.push(d.toISOString().slice(0, 10));
+    }
+  } else if (range === 'month') {
+
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(now.getDate() - i);
+      buckets.push(d.toISOString().slice(0, 10)); // "YYYY-MM-DD"
+    }
+  }
+
+  return buckets;
+}
+
+
+function formatTimeKey(dbValue, range) {
+  const d = new Date(dbValue);
+  if (range === 'today') {
+    return d.toISOString().slice(0, 13) + ':00';
+  } else {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
+
 
 function getTimeGroup(range, tableAlias = '') {
   const prefix = tableAlias ? `${tableAlias}.` : '';
@@ -382,27 +297,36 @@ function getTimeGroup(range, tableAlias = '') {
   }
 }
 
-function getDateRangeCondition(range) {
+function getDateRangeCondition(range, alias = '') {
   const now = new Date();
+  const prefix = alias ? `${alias}.` : '';
   let condition = '';
 
   switch (range) {
-    case 'today':
-      const todayStart = new Date(now.setHours(0, 0, 0, 0));
-      condition = `completed_at >= '${todayStart.toISOString()}'`;
+    case 'today': {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      condition = `${prefix}completed_at >= '${todayStart.toISOString()}'`;
       break;
-    case 'week':
-      const weekStart = new Date(now.setDate(now.getDate() - 7));
-      condition = `completed_at >= '${weekStart.toISOString()}'`;
+    }
+    case 'week': {
+      const weekStart = new Date();
+      weekStart.setDate(now.getDate() - 7);
+      condition = `${prefix}completed_at >= '${weekStart.toISOString()}'`;
       break;
-    case 'month':
-      const monthStart = new Date(now.setMonth(now.getMonth() - 1));
-      condition = `completed_at >= '${monthStart.toISOString()}'`;
+    }
+    case 'month': {
+      const monthStart = new Date();
+      monthStart.setMonth(now.getMonth() - 1);
+      condition = `${prefix}completed_at >= '${monthStart.toISOString()}'`;
       break;
+    }
   }
 
   return condition;
 }
+
+
 
 export const getTrendData = async (req, res) => {
   try {
@@ -526,26 +450,47 @@ export const getTrendData = async (req, res) => {
   }
 };
 
+async function fetchReverseLoadsMap(topicIds) {
+  if (!topicIds || !topicIds.length) return {};
+  const rows = await Teachertopicstats.findAll({
+    attributes: [
+      'node_id',
+      [Sequelize.fn('COUNT', Sequelize.col('node_id')), 'cnt']
+    ],
+    where: {
+      node_id: topicIds,
+      level: 'Bridger',
+      tier: 'free',
+      [Sequelize.Op.or]: [
+        { paid_at: null },
+        { paid_at: { [Sequelize.Op.gt]: new Date() } }
+      ]
+    },
+    group: ['node_id'],
+    raw: true
+  });
+
+  const map = {};
+  rows.forEach(r => { map[r.node_id] = Number(r.cnt) || 0; });
+ 
+  topicIds.forEach(id => { if (map[id] == null) map[id] = 0; });
+  return map;
+}
+
 export const getSummary = async (req, res) => {
   try {
     const { domainId, topicId, tier, level, language } = req.query;
-
-    // SAFE CACHE KEY
     const safeTier = tier || 'all';
     const safeLevel = level || 'All';
     const safeLang = language || 'all';
     const cacheKey = `summary:${domainId || 'none'}:${topicId || 'none'}:${safeTier}:${safeLevel}:${safeLang}`;
-
-    // 1. CHECK CACHE (totals + topics only)
     const cachedData = await redisClient.get(cacheKey);
     let cachedResult = cachedData ? JSON.parse(cachedData) : null;
-
     let topics = [];
     let countResults = {};
-
     if (!cachedResult) {
-      // 2. LANGUAGE FILTER
-      let languageFilter = {};
+
+      let teacherIdsForLanguage = null;
       if (language && language !== 'all') {
         const languageRecord = await Language.findOne({
           where: { language_name: language },
@@ -560,10 +505,25 @@ export const getSummary = async (req, res) => {
           await redisClient.set(cacheKey, JSON.stringify(emptyResult), 'EX', 60);
           return res.json({ ...emptyResult, projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 } });
         }
-        languageFilter = { preferred_language_id: languageRecord.language_id };
+
+        const teacherRecords = await User.findAll({
+          where: { preferred_language_id: languageRecord.language_id },
+          attributes: ['id'],
+          raw: true
+        });
+        teacherIdsForLanguage = teacherRecords.map(u => u.id);
+
+        if (!teacherIdsForLanguage.length) {
+          const emptyResult = {
+            totals: { tillDate: 0, thatDay: 0, thatWeek: 0, thatMonth: 0 },
+            topics: [],
+          };
+          await redisClient.set(cacheKey, JSON.stringify(emptyResult), 'EX', 60);
+          return res.json({ ...emptyResult, projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 } });
+        }
       }
 
-      // 3. FETCH TOPICS
+    
       if (topicId) {
         const topic = await CatalogueNode.findOne({
           where: { node_id: topicId, is_topic: true },
@@ -585,55 +545,98 @@ export const getSummary = async (req, res) => {
         return res.json({ ...emptyResult, projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 } });
       }
 
-      // 4. BASE FILTERS
+ 
       const sessionWhere = { status: "completed" };
       if (level && level !== "All") sessionWhere.session_level = level;
       if (tier && tier !== "all") sessionWhere.session_tier = tier;
       if (topics.length) sessionWhere.topic_id = topics.map(t => t.node_id);
 
-      // 5. PARALLEL FETCH
-      countResults = await getSessionCountsOptimized(sessionWhere, languageFilter);
-      const [teacherStats, topicDetails] = await Promise.all([
-        getTeacherStatsByTopicOptimized(topics.map(t => t.node_id), { languageId: languageFilter.preferred_language_id }),
-        getTopicDetailsOptimized(topics, { tier, level, languageId: languageFilter.preferred_language_id })
+      countResults = await getSessionCountsOptimized(sessionWhere, teacherIdsForLanguage);
+      const topicIdsArr = topics.map(t => t.node_id);
+
+      const [teacherStats, topicDetails, revLoadMap] = await Promise.all([
+        getTeacherStatsByTopicOptimized(topicIdsArr, teacherIdsForLanguage), 
+        getTopicDetailsOptimized(topics, { tier, level, teacherIds: teacherIdsForLanguage }),
+        fetchReverseLoadsMap(topicIdsArr) 
       ]);
+
+      const topicsWithRevLoad = (topicDetails || []).map(t => ({
+        ...t,
+        revLoad: revLoadMap[t.topicId] || 0
+      }));
 
       cachedResult = {
         totals: countResults,
-        topics: topicDetails,
+        topics: topicsWithRevLoad,
       };
 
-      // CACHE totals + topics only
+    
       await redisClient.set(cacheKey, JSON.stringify(cachedResult), 'EX', 300);
+    } else {
+
+      if (cachedResult.topics?.length && cachedResult.topics[0]?.revLoad === undefined) {
+        const ids = cachedResult.topics.map(t => t.topicId).filter(Boolean);
+        const revLoadMap = await fetchReverseLoadsMap(ids);
+        cachedResult.topics = cachedResult.topics.map(t => ({
+          ...t,
+          revLoad: revLoadMap[t.topicId] || 0
+        }));
+        await redisClient.set(cacheKey, JSON.stringify(cachedResult), 'EX', 300);
+      }
     }
 
-    // 6. ALWAYS CALCULATE PROJECTIONS LIVE
+
     const projections = await getProjections(
       cachedResult.totals.thatMonth,
       { tier, level, languageId: cachedResult.totals.languageId || undefined, sessionFilters: {} }
     );
 
-    // 7. RETURN FULL RESULT
-    res.json({
+ 
+    const topicsWithPerTopicProj = await Promise.all(
+      (cachedResult.topics || []).map(async (t) => {
+        try {
+          const month = t.sessions?.month ?? 0;
+          const perTopicProj = await getProjections(month, {
+            tier,
+            level,
+            languageId: cachedResult.totals.languageId || undefined,
+            sessionFilters: { topic_id: t.topicId } 
+          });
+          return { ...t, projections: perTopicProj };
+        } catch (e) {
+   
+          return { ...t, projections: { nextDay: 0, nextWeek: 0, nextMonth: 0 } };
+        }
+      })
+    );
+
+
+    return res.json({
       ...cachedResult,
+      topics: topicsWithPerTopicProj,
       projections
     });
 
   } catch (error) {
     console.error("Error fetching summary:", error);
-    res.status(500).json({ error: "Failed to fetch summary", details: error.message });
+    return res.status(500).json({ error: "Failed to fetch summary", details: error.message });
   }
 };
 
 
 
-// Optimized counting function
-async function getSessionCountsOptimized(whereClause, languageFilter) {
+
+async function getSessionCountsOptimized(whereClause, teacherIds) {
   const now = new Date();
   const today = new Date(now.setHours(0, 0, 0, 0));
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - today.getDay());
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  let languageFilter = '';
+  if (teacherIds && teacherIds.length) {
+    languageFilter = `AND s.teacher_id IN (:teacherIds)`;
+  }
 
   const query = `
     SELECT 
@@ -642,21 +645,18 @@ async function getSessionCountsOptimized(whereClause, languageFilter) {
       COUNT(CASE WHEN completed_at >= :weekStart THEN 1 END) AS week,
       COUNT(CASE WHEN completed_at >= :monthStart THEN 1 END) AS month
     FROM "user".sessions s
-    ${languageFilter.preferred_language_id ? 
-      'JOIN "user".users u ON s.teacher_id = u.id AND u.preferred_language_id = :languageId' : ''}
     WHERE ${buildWhereClause(whereClause)}
+    ${languageFilter}
   `;
 
-  const replacements = {
-    today: today.toISOString(),
-    weekStart: weekStart.toISOString(),
-    monthStart: monthStart.toISOString(),
-    ...(languageFilter.preferred_language_id ? { languageId: languageFilter.preferred_language_id } : {}),
-    ...whereClause
-  };
-
   const [results] = await sequelize.query(query, {
-    replacements,
+    replacements: {
+      today: today.toISOString(),
+      weekStart: weekStart.toISOString(),
+      monthStart: monthStart.toISOString(),
+      teacherIds,
+      ...whereClause
+    },
     type: Sequelize.QueryTypes.SELECT
   });
 
@@ -668,20 +668,8 @@ async function getSessionCountsOptimized(whereClause, languageFilter) {
   };
 }
 
-// Helper to build WHERE clause safely
-function buildWhereClause(conditions) {
-  return Object.entries(conditions)
-    .map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return `s.${key} IN (:${key})`;
-      }
-      return `s.${key} = :${key}`;
-    })
-    .join(' AND ');
-}
 
-// Optimized teacher stats
-async function getTeacherStatsByTopicOptimized(topicIds, filters) {
+async function getTeacherStatsByTopicOptimized(topicIds, teacherIds) {
   if (!topicIds.length) return {};
 
   const query = `
@@ -691,16 +679,13 @@ async function getTeacherStatsByTopicOptimized(topicIds, filters) {
       COUNT(CASE WHEN tts.tier = 'paid' THEN 1 END) AS paid,
       COUNT(CASE WHEN tts.tier = 'free' THEN 1 END) AS free
     FROM "catalog"."teacher_topic_stats" tts
-    ${filters.languageId ? 'JOIN "user"."users" u ON tts.teacher_id = u.id AND u.preferred_language_id = :languageId' : ''}
     WHERE tts.node_id IN (:topicIds)
+      ${teacherIds && teacherIds.length ? 'AND tts.teacher_id IN (:teacherIds)' : ''}
     GROUP BY tts.node_id
   `;
 
   const results = await sequelize.query(query, {
-    replacements: {
-      topicIds,
-      languageId: filters.languageId
-    },
+    replacements: { topicIds, teacherIds },
     type: Sequelize.QueryTypes.SELECT
   });
 
@@ -714,44 +699,40 @@ async function getTeacherStatsByTopicOptimized(topicIds, filters) {
   }, {});
 }
 
-// Optimized topic details
-async function getTopicDetailsOptimized(topics, filters) {
-  if (!topics.length) return [];
-
-  const topicIds = topics.map(t => t.node_id);
-  const [sessionCounts, teacherStats] = await Promise.all([
-    getSessionCountsByTopicOptimized(topicIds, filters),
-    getTeacherStatsByTopicOptimized(topicIds, filters)
-  ]);
-
-  return topics.map(topic => ({
-    topicId: topic.node_id,
-    topicName: topic.name,
-    sessions: sessionCounts[topic.node_id] || { today: 0, week: 0, month: 0, total: 0 },
-    teachers: teacherStats[topic.node_id] || { qualified: 0, paid: 0, free: 0 }
-  }));
-}
-
 
 async function getSessionCountsByTopicOptimized(topicIds, filters) {
+  if (!topicIds.length) return {};
+
   const now = new Date();
   const today = new Date(now.setHours(0, 0, 0, 0));
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - today.getDay());
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
+  const teacherFilter = filters.teacherIds && filters.teacherIds.length
+    ? 'AND s.teacher_id IN (:teacherIds)'
+    : '';
+
+  const levelFilter = filters.level && filters.level !== 'All'
+    ? 'AND s.session_level = :level'
+    : '';
+
+  const tierFilter = filters.tier && filters.tier !== 'all'
+    ? 'AND s.session_tier = :tier'
+    : '';
+
   const query = `
     SELECT 
       s.topic_id,
-      COUNT(s.id) AS total,   -- FIXED: qualified column
+      COUNT(s.id) AS total,
       COUNT(CASE WHEN s.completed_at >= :today THEN 1 END) AS today,
       COUNT(CASE WHEN s.completed_at >= :weekStart THEN 1 END) AS week,
       COUNT(CASE WHEN s.completed_at >= :monthStart THEN 1 END) AS month
     FROM "user".sessions s
-    ${filters.languageId ? 'JOIN "user"."users" u ON s.teacher_id = u.id AND u.preferred_language_id = :languageId' : ''}
     WHERE s.topic_id IN (:topicIds)
-    ${filters.level && filters.level !== 'All' ? 'AND s.session_level = :level' : ''}
-    ${filters.tier && filters.tier !== 'all' ? 'AND s.session_tier = :tier' : ''}
+    ${teacherFilter}
+    ${levelFilter}
+    ${tierFilter}
     GROUP BY s.topic_id
   `;
 
@@ -761,9 +742,9 @@ async function getSessionCountsByTopicOptimized(topicIds, filters) {
       today: today.toISOString(),
       weekStart: weekStart.toISOString(),
       monthStart: monthStart.toISOString(),
-      ...(filters.languageId ? { languageId: filters.languageId } : {}),
-      ...(filters.level && filters.level !== 'All' ? { level: filters.level } : {}),
-      ...(filters.tier && filters.tier !== 'all' ? { tier: filters.tier } : {})
+      teacherIds: filters.teacherIds,
+      level: filters.level,
+      tier: filters.tier
     },
     type: Sequelize.QueryTypes.SELECT
   });
@@ -779,6 +760,34 @@ async function getSessionCountsByTopicOptimized(topicIds, filters) {
   }, {});
 }
 
+function buildWhereClause(conditions) {
+  return Object.entries(conditions)
+    .map(([key, value]) => {
+      if (Array.isArray(value)) {
+        return `s.${key} IN (:${key})`;
+      }
+      return `s.${key} = :${key}`;
+    })
+    .join(' AND ');
+}
+async function getTopicDetailsOptimized(topics, filters) {
+  if (!topics.length) return [];
+
+  const topicIds = topics.map(t => t.node_id);
+  const [sessionCounts, teacherStats] = await Promise.all([
+    getSessionCountsByTopicOptimized(topicIds, filters),
+    getTeacherStatsByTopicOptimized(topicIds, filters.teacherIds)
+  ]);
+
+  return topics.map(topic => ({
+    topicId: topic.node_id,
+    topicName: topic.name,
+    sessions: sessionCounts[topic.node_id] || { today: 0, week: 0, month: 0, total: 0 },
+    teachers: teacherStats[topic.node_id] || { qualified: 0, paid: 0, free: 0 }
+  }));
+}
+
+
 
 
 
@@ -790,7 +799,7 @@ export const getReverseMappingLoad = async (req, res) => {
       return res.status(400).json({ error: 'Topic ID is required' });
     }
 
-    // Count Bridger-level free tier teachers for this topic
+  
     const bridgerCount = await Teachertopicstats.count({
       where: {
         node_id: topicId,
@@ -813,35 +822,6 @@ export const getReverseMappingLoad = async (req, res) => {
     });
   }
 }
-
-
-
-
-async function getProgressionStatsByTopic(topicIds) {
-  const results = await Teachertopicstats.findAll({
-    attributes: [
-      'node_id',
-      [Sequelize.fn('AVG', 
-        Sequelize.literal('EXTRACT(EPOCH FROM (paid_at - created_at))/86400')
-      ), 'avgDays']
-    ],
-    where: { 
-      node_id: topicIds,
-      tier: 'paid',
-      paid_at: { [Op.ne]: null }
-    },
-    group: ['node_id'],
-    raw: true
-  });
-
-  return results.reduce((acc, row) => {
-    acc[row.node_id] = parseFloat(row.avgDays).toFixed(1);
-    return acc;
-  }, {});
-}
-
-
-
 export const getTeacherStats = async (req, res) => {
   try {
     const { topicId } = req.query;
@@ -884,7 +864,7 @@ export const getPaidETA = async (req, res) => {
   try {
     const { topicId } = req.query;
     
-    // First check if any paid teachers exist for this topic
+
     const hasPaidTeachers = await Teachertopicstats.count({
       where: { 
         node_id: topicId,
@@ -899,7 +879,7 @@ export const getPaidETA = async (req, res) => {
       });
     }
 
-    // Calculate average days if teachers exist
+   
     const result = await Teachertopicstats.findOne({
       where: { 
         node_id: topicId,

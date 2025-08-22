@@ -4,42 +4,34 @@ import { sequelize1 } from "../config/sequelize.js";
 
 import { User } from "../Models/UserModels/UserModel.js";
 
-// Updated Projections Function
+
 export const getProjections = async (monthSessions, filters = {}) => {
   try {
     const { tier, level, languageId, sessionFilters = {} } = filters;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-console.log(monthSessions);
-    // 1. VALIDATE INPUT
+
+
     monthSessions = Number(monthSessions) || 0;
     const currentDate = today.getDate();
     const totalDaysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const monthProgress = currentDate / totalDaysInMonth;
 
-    console.log('Projection Inputs:', {
-      monthSessions,
-      currentDate,
-      totalDaysInMonth,
-      monthProgress: `${Math.round(monthProgress * 100)}%`
-    });
-
-    // 2. BUILD WHERE CLAUSES
+ 
     const baseWhere = { status: 'completed', ...sessionFilters };
-    delete baseWhere.topic_id;
 
-    if (tier && tier !== 'all') {
-      baseWhere.session_tier = tier;
-    }
-    if (level && level !== 'All') {
-      baseWhere.session_level = level;
+    if (Array.isArray(baseWhere.topic_id)) {
+      baseWhere.topic_id = { [Sequelize.Op.in]: baseWhere.topic_id };
     }
 
-    const teacherInclude = (languageId
+
+    if (tier && tier !== 'all') baseWhere.session_tier = tier;
+    if (level && level !== 'All') baseWhere.session_level = level;
+
+    const teacherInclude = languageId
       ? [{ model: User, as: 'teacher', where: { preferred_language_id: languageId }, attributes: [], required: true }]
-      : []);
+      : [];
 
-    // 3. CALCULATE DATA AGE
+ 
     const oldestSession = await Session.findOne({
       attributes: [[Sequelize.fn('MIN', Sequelize.col('completed_at')), 'oldest']],
       where: baseWhere,
@@ -52,34 +44,34 @@ console.log(monthSessions);
     }
 
     const dataAgeDays = Math.floor((today - new Date(oldestSession.oldest)) / (1000 * 60 * 60 * 24));
-    
-    // 4. PROJECTION LOGIC
+
+   
     if (dataAgeDays < 90) {
       return calculateNewDataProjections(monthSessions, currentDate, totalDaysInMonth);
     } else {
-      return await calculateHistoricalProjections(baseWhere, teacherInclude, monthSessions, monthProgress);
+      return await calculateHistoricalProjections(baseWhere, teacherInclude, monthSessions, totalDaysInMonth);
     }
+
   } catch (error) {
     console.error("Error in getProjections:", error);
     return {
-      nextDay: Math.max(1, Math.ceil(monthSessions / 30)),
-      nextWeek: Math.max(1, Math.ceil(monthSessions / 4)),
-      nextMonth: Math.max(monthSessions + 1, Math.ceil(monthSessions * 1.3))
+      nextDay: Math.max(0, Math.ceil(monthSessions / 30)),
+      nextWeek: Math.max(0, Math.ceil(monthSessions / 4)),
+      nextMonth: Math.max(0, Math.ceil(monthSessions * 1.1))
     };
   }
 };
 
 
-// Helper Functions
 function calculateBasicProjections(monthSessions, currentDate, totalDaysInMonth) {
-  const daysPassed = Math.max(1, currentDate); // avoid divide by 0
+  const daysPassed = Math.max(1, currentDate);
   const dailyRate = monthSessions / daysPassed;
   const projectedMonthTotal = dailyRate * totalDaysInMonth;
 
   return {
-    nextDay: Math.max(1, Math.ceil(dailyRate)),         // tomorrow ≈ daily rate
-    nextWeek: Math.max(1, Math.ceil(dailyRate * 7)),    // 7-day rate
-    nextMonth: Math.ceil(projectedMonthTotal)           // full month projection
+    nextDay: Math.max(0, Math.round(dailyRate)),
+    nextWeek: Math.max(0, Math.round(dailyRate * 7)),
+    nextMonth: Math.round(projectedMonthTotal)
   };
 }
 
@@ -88,40 +80,141 @@ function calculateNewDataProjections(monthSessions, currentDate, totalDaysInMont
   const dailyRate = monthSessions / daysPassed;
   const projectedMonthTotal = dailyRate * totalDaysInMonth;
 
+  const growthFactor = 1.1; 
   return {
-    nextDay: Math.max(1, Math.ceil(dailyRate * 1.2)),       // add a buffer
-    nextWeek: Math.max(1, Math.ceil(dailyRate * 7 * 1.2)),  // slightly higher
-    nextMonth: Math.ceil(projectedMonthTotal * 1.2)         // boosted projection
+    nextDay: Math.max(0, Math.round(dailyRate * growthFactor)),
+    nextWeek: Math.max(0, Math.round(dailyRate * 7 * growthFactor)),
+    nextMonth: Math.round(projectedMonthTotal * growthFactor)
   };
 }
 
+async function calculateHistoricalProjections(baseWhere, teacherInclude, monthSessions, totalDaysInMonth) {
+  const today = new Date();
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - 6); // last 6 months
 
-
-async function calculateHistoricalProjections(baseWhere, teacherWhere, monthSessions, monthProgress) {
-  const threeMonthStart = new Date();
-  threeMonthStart.setMonth(threeMonthStart.getMonth() - 3);
-  
-  const threeMonthCount = await Session.count({
+  // 1. Get all sessions in the last 6 months
+  const sessions = await Session.findAll({
+    attributes: ['completed_at'],
     where: {
       ...baseWhere,
-      completed_at: { [Sequelize.Op.gte]: threeMonthStart }
+      completed_at: { [Sequelize.Op.gte]: startDate }
     },
-    ...(Object.keys(teacherWhere).length > 0 && {
-      include: [{ model: User, as: 'teacher', where: teacherWhere, attributes: [], required: true }]
-    })
+    ...(teacherInclude.length > 0 && { include: teacherInclude }),
+    raw: true
   });
 
-  const threeMonthAvg = threeMonthCount / 3;
-  const expectedMonthly = threeMonthAvg * (1 + (0.5 * monthProgress)); // Scale growth with month progress
+  if (!sessions.length) {
+    return {
+      nextDay: Math.max(0, Math.round(monthSessions / totalDaysInMonth)),
+      nextWeek: Math.max(0, Math.round(monthSessions / 4)),
+      nextMonth: Math.round(monthSessions) // flat, no growth
+    };
+  }
+
+  // ---- Aggregate sessions ----
+  const weekCounts = {};
+  const monthCounts = {};
+  const dailyCounts = {};
+
+  sessions.forEach(s => {
+    const date = new Date(s.completed_at);
+    const dayKey = date.toDateString();
+    dailyCounts[dayKey] = (dailyCounts[dayKey] || 0) + 1;
+
+    const weekKey = `${date.getFullYear()}-W${getWeekNumber(date)}`;
+    weekCounts[weekKey] = (weekCounts[weekKey] || 0) + 1;
+
+    const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    monthCounts[monthKey] = (monthCounts[monthKey] || 0) + 1;
+  });
+
+  // ---- Daily Projection ----
+  const todayDay = today.getDay();
+  const last4SameWeekdays = Object.entries(dailyCounts)
+    .map(([k, v]) => ({ date: new Date(k), count: v }))
+    .filter(d => d.date.getDay() === todayDay)
+    .sort((a, b) => a.date - b.date)
+    .slice(-4)
+    .map(d => d.count);
+
+  let dailyAvg = getWeightedAverage(last4SameWeekdays, [0.5, 0.3, 0.2, 0.1]);
+  const dailyTrend = getChangeRate(last4SameWeekdays);
+  dailyAvg = Math.max(0, Math.round(dailyAvg * (1 + dailyTrend)));
+
+  // ---- Weekly Projection ----
+  const currentWeekKey = `${today.getFullYear()}-W${getWeekNumber(today)}`;
+  const currentWeekCount = weekCounts[currentWeekKey] || 0;
+
+  const lastFullWeeks = Object.keys(weekCounts)
+    .sort()
+    .filter(k => k !== currentWeekKey)
+    .slice(-4);
+
+  const lastFullWeeksCounts = lastFullWeeks.map(k => weekCounts[k]);
+  let weeklyAvg = getWeightedAverage(lastFullWeeksCounts, [0.5, 0.3, 0.2]);
+  const weeklyTrend = getChangeRate(lastFullWeeksCounts);
+
+  // normalize current week (scale to full week)
+  const normalizedCurrentWeek = today.getDay() > 0 ? (currentWeekCount / today.getDay()) * 7 : currentWeekCount;
+  let projectedWeek = Math.max(0, Math.round((weeklyAvg * (1 + weeklyTrend) + normalizedCurrentWeek) / 2));
+
+  // if no activity at all → force down to 0
+  if (currentWeekCount === 0 && weeklyAvg < 1) {
+    projectedWeek = 0;
+  }
+
+  // ---- Monthly Projection ----
+  const currentMonthKey = `${today.getFullYear()}-${today.getMonth() + 1}`;
+  const currentMonthCount = monthCounts[currentMonthKey] || 0;
+
+  const lastFullMonths = Object.keys(monthCounts)
+    .sort()
+    .filter(k => k !== currentMonthKey)
+    .slice(-3);
+
+  const lastFullMonthsCounts = lastFullMonths.map(k => monthCounts[k]);
+  let monthlyAvg = getWeightedAverage(lastFullMonthsCounts, [0.6, 0.25, 0.15]);
+  const monthlyTrend = getChangeRate(lastFullMonthsCounts);
+
+  const normalizedCurrentMonth = (today.getDate() > 0) ? (currentMonthCount / today.getDate()) * totalDaysInMonth : 0;
+  let projectedMonth = Math.max(0, Math.round((monthlyAvg * (1 + monthlyTrend) + normalizedCurrentMonth) / 2));
+
+  if (currentMonthCount === 0 && monthlyAvg < 1) {
+    projectedMonth = 0;
+  }
 
   return {
-    nextDay: Math.ceil((threeMonthAvg / 30) * 1.2),
-    nextWeek: Math.ceil((threeMonthAvg / 4) * 1.3),
-    nextMonth: Math.ceil(Math.max(
-      monthSessions * 1.2, // Minimum 20% growth
-      expectedMonthly      // Or historical trend
-    ))
+    nextDay: dailyAvg,
+    nextWeek: projectedWeek,
+    nextMonth: projectedMonth
   };
+}
+
+function getWeightedAverage(values, weights) {
+  if (!values.length) return 0;
+  let total = 0, weightSum = 0;
+  for (let i = 0; i < values.length; i++) {
+    const w = weights[i] || (1 / values.length);
+    total += values[i] * w;
+    weightSum += w;
+  }
+  return total / weightSum;
+}
+
+function getChangeRate(values) {
+  if (values.length < 2) return 0;
+  let changes = [];
+  for (let i = 1; i < values.length; i++) {
+    const prev = values[i - 1] || 1;
+    changes.push((values[i] - prev) / prev);
+  }
+  return changes.reduce((a, b) => a + b, 0) / changes.length;
+}
+
+function getWeekNumber(d) {
+  const onejan = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
 }
 
 export async function fixTeacherTopicStatsTier() {
