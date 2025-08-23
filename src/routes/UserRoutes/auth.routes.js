@@ -1,5 +1,5 @@
 import express from "express";
-import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile ,updateProfileMeta} from "../../controllers/UserControllers/auth.controller.js";
+import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, verifyToken, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile ,updateProfileMeta, SummaryOfHomePage} from "../../controllers/UserControllers/auth.controller.js";
 import upload from "../../middlewares/multer.js";
 import { loginLimiter, signupLimiter } from "../../middlewares/rateLimiter.js";
 import authMiddleware from "../../middlewares/authMiddleware.js";
@@ -52,6 +52,7 @@ router.get("/queryList", getQueriesList);
 router.get("/queryStats",getSupportQueries);
 router.patch("/queries/:id",updateQueryStatus);
 router.patch("/queriesByPriority/:id", updateQueryPriority);
-router.get("/queries/summary", countQueriesByStatus)
+router.get("/queries/summary", countQueriesByStatus);
+router.get("/summary/homepage", SummaryOfHomePage);
 
 export default router;

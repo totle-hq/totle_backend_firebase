@@ -19,6 +19,12 @@ import { Language } from "../../Models/LanguageModel.js";
 import { MarketplaceSuggestion } from "../../Models/SurveyModels/MarketplaceModel.js";
 import { UserMetrics } from "../../Models/UserModels/UserMetricsModel.js";
 import { UAParser } from "ua-parser-js";
+import useragent from "useragent";
+import { getClientIp } from "request-ip"; // ✅ required for IP extraction
+import { SessionAttendance } from "../../Models/SessionAttendance.js";
+import { Session } from "../../Models/SessionModel.js";
+import { col, fn, Op, Sequelize } from "sequelize";
+import { Test } from "../../Models/test.model.js";
 
 dotenv.config();
 
@@ -627,8 +633,6 @@ export const getAllBetaUsers = async (req, res) => {
       .json({ success: false, message: "Failed to retrieve beta users." });
   }
 };
-import useragent from "useragent";
-import { getClientIp } from "request-ip"; // ✅ required for IP extraction
 
 export const updateUserProfile = async (req, res) => {
   try {
@@ -1024,5 +1028,80 @@ export const getUpdates = async (req, res) => {
       .json({ error: true, message: "Internal Server Error" });
   }
 };
+
+
+export const SummaryOfHomePage = async (req, res) => {
+  try {
+    // ✅ Get total users count
+    const userCount = await User.count();
+
+    // ✅ Get all unique session_ids from SessionAttendance where users were present
+    const attendedSessions = await SessionAttendance.findAll({
+      where: {
+        status: 'present', // Only count attended sessions
+        session_id: { [Op.ne]: null }
+      },
+      attributes: ['session_id'],
+      group: ['session_id'],
+      raw: true
+    });
+
+    // ✅ Extract unique session IDs
+    const attendedSessionIds = attendedSessions.map(s => s.session_id);
+
+    // ✅ Count how many attended sessions there are
+    const attendedSessionCount = attendedSessionIds.length;
+
+    // ✅ Calculate total duration for attended sessions only
+    const sessionData = await Session.findOne({
+      attributes: [
+        [fn('SUM', col('duration_minutes')), 'total_minutes']
+      ],
+      where: {
+        id: { [Op.in]: attendedSessionIds }
+      },
+      raw: true
+    });
+
+    const totalMinutes = parseInt(sessionData?.total_minutes || 0);
+
+     const mentorsByTopic = await Test.findAll({
+      where: {
+        eligible_for_bridger: true,
+        topic_uuid: { [Sequelize.Op.ne]: null }
+      },
+      attributes: [
+        "topic_uuid",
+        [fn("COUNT", fn("DISTINCT", col("user_id"))), "eligible_user_count"]
+      ],
+      group: ["topic_uuid"],
+      raw: true
+    });
+
+    // ✅ Calculate total unique mentors across all topics
+    const totalMentorCount = await Test.count({
+      distinct: true,
+      col: "user_id",
+      where: {
+        eligible_for_bridger: true,
+        topic_uuid: { [Sequelize.Op.ne]: null }
+      }
+    });
+
+    return res.status(200).json({
+      users: userCount,
+      sessions: attendedSessionCount,
+      minutes: totalMinutes,
+      mentors: totalMentorCount
+    });
+
+  } catch (error) {
+    console.error("❌ Error in SummaryOfHomePage:", error);
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
+  }
+};
+
 
 export { googleAuth, googleCallback, logout, verifyToken };
