@@ -69,7 +69,7 @@ export const getTeachersForTopic = async (req, res) => {
     });
     console.log("Available sessions in next 7 days:", availableSessionCount);
 
-    const topicPrices = topicNode.prices || { bridger: 0, expert: 0, master: 0, legend: 0 };
+    const topicPrices = topicNode.prices || { bridgers: 0, experts: 0, masters: 0, legends: 0 };
 
     const allLanguages = await Language.findAll({
       attributes: ["language_id", "language_name"],
@@ -88,7 +88,7 @@ export const getTeachersForTopic = async (req, res) => {
           model: Teachertopicstats,
           as: "topicStats",
           where: { node_id: topicId },
-          attributes: ["tier"],
+          attributes: ["level"],  // ✅ FIXED: Use 'level' instead of 'tier'
           required: false
         },
         {
@@ -142,7 +142,7 @@ export const getTeachersForTopic = async (req, res) => {
           model: Teachertopicstats,
           as: "topicStats",
           where: { node_id: topicId },
-          attributes: ["tier"],
+          attributes: ["level"],  // ✅ FIXED: Use 'level' instead of 'tier'
           required: false
         },
         {
@@ -192,27 +192,15 @@ export const getTeachersForTopic = async (req, res) => {
       
       const sessionsDelivered = completedSessions.length;
       const avgRating = teacher.feedbackSummaries?.[0]?.avg_star_rating || 0;
-      const level = teacher.topicStats?.[0]?.tier;
+      const level = teacher.topicStats?.[0]?.level;  // ✅ FIXED: Use 'level' instead of 'tier'
 
-      const getTeacherPrice = (tier) => {
-        if (!tier) return 0;
+      // ✅ FIXED: Price mapping function - handles plural keys
+      const getTeacherPrice = (skillLevel) => {
+        if (!skillLevel) return 0;
         
-        const normalizedTier = tier.toString().toLowerCase().trim();
-        
-        const possibleKeys = [
-          normalizedTier,
-          tier,
-          tier.toLowerCase(),
-          tier.charAt(0).toUpperCase() + tier.slice(1).toLowerCase()
-        ];
-        
-        for (const key of possibleKeys) {
-          if (topicPrices[key] !== undefined) {
-            return topicPrices[key];
-          }
-        }
-        
-        return 0;
+        // Convert PascalCase to lowercase and add 's' for plural
+        const normalizedLevel = skillLevel.toLowerCase() + 's';
+        return topicPrices[normalizedLevel] || 0;
       };
 
       const teacherPrice = getTeacherPrice(level);
@@ -223,7 +211,7 @@ export const getTeachersForTopic = async (req, res) => {
       return {
         userId: teacher.id,
         name: `${teacher.firstName} ${teacher.lastName || ""}`.trim(),
-        level: level?.toLowerCase() || 'bridger',
+        level: level?.toLowerCase() || 'bridger',  // ✅ FIXED: Use actual level, convert to lowercase
         price: teacherPrice,
         topicId,
         sessionsDelivered,
@@ -332,55 +320,44 @@ export const BookPaidSlot = async (req, res) => {
     }
 
     //Enhanced pricing validation with debugging
-    const tier = teacherStats.tier;
+    const skillLevel = teacherStats.level;  // ✅ FIXED: Use 'level' instead of 'tier'
     const prices = topicNode.prices || {};
     
     console.log("=== PRICING DEBUG ===");
     console.log("Teacher Stats:", teacherStats.toJSON());
     console.log("Topic Node prices:", prices);
-    console.log("Teacher Tier from DB:", tier);
+    console.log("Teacher Level from DB:", skillLevel);  // ✅ FIXED: Updated variable name
     console.log("Level from frontend:", level);
     console.log("====================");
 
-    // Robust tier-to-price mapping
-    const getTierPrice = (tierValue, pricesObj) => {
-      if (!tierValue || !pricesObj || typeof pricesObj !== 'object') {
-        console.log("Invalid tier or prices object:", { tierValue, pricesObj });
+    // ✅ FIXED: Price mapping for plural keys
+    const getTierPrice = (skillLevel, pricesObj) => {
+      if (!skillLevel || !pricesObj || typeof pricesObj !== 'object') {
+        console.log("Invalid skill level or prices object:", { skillLevel, pricesObj });
         return 0;
       }
 
-      const normalizedTier = tierValue.toString().toLowerCase().trim();
+      // Convert PascalCase to lowercase and add 's' for plural
+      const normalizedLevel = skillLevel.toLowerCase() + 's';
       
-      const possibleKeys = [
-        normalizedTier,
-        tierValue,
-        tierValue.toLowerCase(),
-        tierValue.charAt(0).toUpperCase() + tierValue.slice(1).toLowerCase(),
-        tierValue.toUpperCase(),
-        `${normalizedTier}s`,
-        normalizedTier.replace(/^./, c => c.toUpperCase())
-      ];
-
-      console.log("Trying keys for pricing:", possibleKeys);
+      console.log("Looking for price with key:", normalizedLevel);
       
-      for (const key of possibleKeys) {
-        if (pricesObj[key] !== undefined && pricesObj[key] !== null) {
-          console.log(`Found price for key '${key}':`, pricesObj[key]);
-          return Number(pricesObj[key]) || 0;
-        }
+      if (pricesObj[normalizedLevel] !== undefined && pricesObj[normalizedLevel] !== null) {
+        console.log(`Found price for key '${normalizedLevel}':`, pricesObj[normalizedLevel]);
+        return Number(pricesObj[normalizedLevel]) || 0;
       }
 
       console.log("No matching price key found. Available keys:", Object.keys(pricesObj));
       return 0;
     };
 
-    const amount = getTierPrice(tier, prices);
+    const amount = getTierPrice(skillLevel, prices);  // ✅ FIXED: Use skillLevel
 
     console.log("Final calculated amount:", amount);
 
     if (amount <= 0) {
       console.error("Price configuration error:", {
-        tier,
+        skillLevel,  // ✅ FIXED: Updated variable name
         level,
         prices,
         amount,
@@ -389,18 +366,18 @@ export const BookPaidSlot = async (req, res) => {
       
       return res.status(400).json({ 
         success: false, 
-        message: `Invalid price configuration for teacher level '${tier}'. Available pricing tiers: ${Object.keys(prices).join(', ')}. Please contact support.`
+        message: `Invalid price configuration for teacher level '${skillLevel}'. Available pricing tiers: ${Object.keys(prices).join(', ')}. Please contact support.`  // ✅ FIXED: Updated variable name
       });
     }
 
-    // Verify level match
-    const normalizedDbTier = tier.toString().toLowerCase().trim();
+    // ✅ FIXED: Level verification - compare actual skill levels
+    const normalizedDbLevel = skillLevel.toLowerCase();  // ✅ FIXED: Use skillLevel
     const normalizedRequestLevel = level.toString().toLowerCase().trim();
     
-    if (normalizedRequestLevel !== normalizedDbTier) {
+    if (normalizedRequestLevel !== normalizedDbLevel) {
       return res.status(400).json({
         success: false,
-        message: `Teacher level mismatch. Expected: ${tier}, Received: ${level}. Please refresh and try again.`
+        message: `Teacher level mismatch. Expected: ${skillLevel}, Received: ${level}. Please refresh and try again.`  // ✅ FIXED: Use skillLevel
       });
     }
 
@@ -420,7 +397,7 @@ export const BookPaidSlot = async (req, res) => {
         user_id: user_id.toString(),
         topic_id: topic_id.toString(),
         slot,
-        tier,
+        skillLevel: skillLevel,  // ✅ FIXED: Use skillLevel instead of tier
         amount: amount.toString(),
         session_id: availableSession.id 
       },
