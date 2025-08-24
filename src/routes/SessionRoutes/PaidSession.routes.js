@@ -4,7 +4,7 @@ import { BookPaidSlot, confirmBooking, getTeachersForTopic, handlePaymentFailure
 import authMiddleware from "../../middlewares/authMiddleware.js";
 const router = express.Router();
 
-router.get('/teachers',authMiddleware,getTeachersForTopic); // for fetching the user which are having the paid session with each level in a particular topic,
+router.get('/teacher',authMiddleware,getTeachersForTopic); // for fetching the user which are having the paid session with each level in a particular topic,
 // get slot from frontend and payment
 router.post('/booking/create', authMiddleware, BookPaidSlot);
 router.post('/booking/confirm', authMiddleware, confirmBooking);
