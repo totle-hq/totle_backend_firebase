@@ -51,7 +51,7 @@ export const Teachertopicstats = sequelize1.define('teacher_topic_stats', {
 });
 
 
-Teachertopicstats.beforeSync(async () => {
+Teachertopicstats.afterSync(async () => {
   await sequelize1.query(`
     UPDATE catalog.teacher_topic_stats
     SET tier = 'free'
