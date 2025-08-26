@@ -3,6 +3,7 @@ import { Department } from "../../Models/UserModels/Department.js";
 import { Role } from "../../Models/UserModels/Roles.Model.js";
 import { UserDepartment } from "../../Models/UserModels/UserDepartment.js";
 import { autoSeedRolesAndDepartments, seedDepartments, seedRoles } from "../../seeders/roleDeptSeeder.js";
+import bcrypt from "bcrypt";
 
 
 export const AddDepartments = async (req, res) => {
@@ -229,16 +230,20 @@ export const createAccountInDepartment = async (req, res) => {
 // body: { newPassword }
 export const changeAccountPassword = async (req, res) => {
   try {
-    const { userid } = req.params; // this is roleId (PK)
+    const { id } = req.user; // this is roleId (PK)
     // const {id} = req.user;
-    const { newPassword } = req.body;
+    const { oldPassword, newPassword } = req.body;
     if (!newPassword) return res.status(400).json({ message: 'newPassword is required' });
 
-    const user = await UserDepartment.findByPk(userid);
+    const user = await Admin.findByPk(id);
     if (!user) return res.status(404).json({ message: 'Account not found' });
+    
+    if (!(await bcrypt.compare(oldPassword, user.password))) {
+      return res.status(400).json({ message: "Old password is incorrect" });
+    }
 
-    // const hash = await bcrypt.hash(newPassword, 10);
-    await user.update({ password: newPassword });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await user.update({ password: hash });
     return res.status(200).json({ message: 'Password updated' });
   } catch (err) {
     console.error('changeAccountPassword error:', err);

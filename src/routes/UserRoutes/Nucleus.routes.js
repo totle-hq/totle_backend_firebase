@@ -10,6 +10,6 @@ router.get("/getAllProfiles/:departmentId/roles", getAllUsersForRoles);
 
 router.get('/accounts', getAccountsByDepartmentCode); // ?departmentCode=TECH
 router.post('/accounts', verifyAdminToken, createAccountInDepartment);
-router.patch('/accounts/:userid/password', verifyAdminToken,changeAccountPassword);
+router.patch('/accounts/password', verifyAdminToken,changeAccountPassword);
 
 export default router;

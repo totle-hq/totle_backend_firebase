@@ -84,10 +84,10 @@ export const adminLogin = async (req, res) => {
     const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email, role: admin.global_role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
     let departmentName = null;
-    if (admin.global_role !== "Founder" && admin.global_role !== "Superadmin") {
-      const dept = await Department.findOne({ where: { headId: admin.id } });
-      departmentName = dept?.name || null;
-    }
+    // if (admin.global_role !== "Founder" && admin.global_role !== "Superadmin") {
+    //   const dept = await Department.findOne({ where: { headId: admin.id } });
+    //   departmentName = dept?.name || null;
+    // }
 
     
     res.status(200).json({
@@ -1254,7 +1254,7 @@ export const DepartmentCreationByFounder = async(req,res)=>{
       });
     }
 
-    await Department.create({headId: id, name, code, status: 'active'});
+    await Department.create({ name, code});
     return res.json({message: `Department ${name} created successfully`})
   } catch (error) {
     console.error("Error creating department:", error);
@@ -1312,7 +1312,7 @@ export const getAllDepartments = async (req, res) => {
 
     const departments = await Department.findAll({
       where: { parentId: null },
-      attributes: ['id', 'name', 'code', 'headId', 'status'],
+      attributes: ['id', 'name', 'code'],
       // include: [{
       //   model: Admin,
       //   as: 'head',
@@ -1404,9 +1404,9 @@ export const subDepartmentCreation = async(req, res)=>{
     const subDepartment = await Department.create({
       name,
       code,
-      parentId,
-      headId: id, // Founder creating it
-      status: "active"
+      // parentId,
+      // headId: id, // Founder creating it
+      // status: "active"
     });
     return res.status(201).json({
       message: `Sub-department '${name}' created successfully under '${parentDepartment.name}'`,
@@ -1427,7 +1427,9 @@ export const getSubDepartments = async(req,res)=>{
     
     const subDepartments = await Department.findAll({
       where: { parentId },
-      attributes: ['id', 'name', 'code', 'headId', 'parentId', 'status'],
+      attributes: ['id', 'name', 'code'
+        // , 'headId', 'parentId', 'status'
+      ],
       order: [['createdAt', 'ASC']],
     });
 
