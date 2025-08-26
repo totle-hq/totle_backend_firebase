@@ -25,6 +25,7 @@ import { SessionAttendance } from "../../Models/SessionAttendance.js";
 import { Session } from "../../Models/SessionModel.js";
 import { col, fn, Op, Sequelize } from "sequelize";
 import { Test } from "../../Models/test.model.js";
+import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 
 dotenv.config();
 
@@ -1088,11 +1089,21 @@ export const SummaryOfHomePage = async (req, res) => {
       }
     });
 
+    const topics = await CatalogueNode.count({
+      where: { is_topic : true }
+    });
+
+    const domains = await CatalogueNode.count({
+      where: { is_domain : true }
+    });
+
     return res.status(200).json({
       users: userCount,
       sessions: attendedSessionCount,
       minutes: totalMinutes,
-      mentors: totalMentorCount
+      mentors: totalMentorCount,
+      topics: topics,
+      domains: domains,
     });
 
   } catch (error) {
