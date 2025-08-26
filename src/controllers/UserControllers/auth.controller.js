@@ -1114,5 +1114,21 @@ export const SummaryOfHomePage = async (req, res) => {
   }
 };
 
-
+export const ChangeUserPassword = async (req, res) => {
+  try {
+    const {id} = req.user;
+    const { newPassword} = req.body;
+    if (!newPassword) {
+      return res.status(400).json({ error: true, message: "Please enter the new Password" });
+    }
+    const hashedPassword = await hashPassword(newPassword);
+    await User.update({ password: hashedPassword }, { where: { id } });
+    return res.status(200).json({ error: false, message: "Password changed successfully" });
+  } catch (error) {
+    console.error("❌ Error in ChangeUserPassword:", error);
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal Server Error" });
+  }
+}
 export { googleAuth, googleCallback, logout, verifyToken };
