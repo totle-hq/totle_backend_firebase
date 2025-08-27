@@ -129,6 +129,47 @@ const verifyToken = async (token) => {
   }
 };
 
+// export const signupUserAndSendOtp = async (req, res) => {
+//   const { email } = req.body;
+
+//   if (!email) {
+//     return res.status(400).json({ error: true, message: "Email is required" });
+//   }
+
+//   // const identifier = email || mobile;
+//   // const isEmail = !!email;
+
+//   try {
+//     console.log("Checking if user exists...");
+//     const existingUser = await User.findOne({ where: { email } });
+//     const existingBetaUser = await BetaUsers.findOne({ where: { email } });
+
+//     if (existingUser || existingBetaUser) {
+//       return res
+//         .status(403)
+//         .json({ error: true, message: "User with this email already exists" });
+//     }
+
+//     console.log("Sending OTP...");
+//     const otpResponse = await sendOtp(email);
+
+//     if (otpResponse.error) {
+//       return res
+//         .status(400)
+//         .json({ error: true, message: otpResponse.message });
+//     }
+
+//     return res.status(200).json({ error: false, message: otpResponse.message });
+//   } catch (error) {
+//     console.error("🔥 ERROR during signup: ", error);
+//     return res.status(500).json({
+//       error: true,
+//       message: "Internal Server Error",
+//       details: error.message,
+//     });
+//   }
+// };
+
 export const signupUserAndSendOtp = async (req, res) => {
   const { email } = req.body;
 
@@ -171,7 +212,7 @@ export const signupUserAndSendOtp = async (req, res) => {
 };
 
 export const otpVerification = async (req, res) => {
-  const { email, password, firstName, gender } = req.body;
+  const { email, password, firstName, gender, dob } = req.body;
   console.log(req.body);
 
   let otp = parseInt(req.body.otp, 10);
@@ -217,7 +258,12 @@ export const otpVerification = async (req, res) => {
 
     // Step 3: Hash password if provided
     const hashedPassword = password ? await hashPassword(password) : null;
-
+    // const dobDate = new Date(dob);
+    const today = new Date();
+    const minDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
+    if (dobDate > minDate) {
+      return res.status(400).json({ error: true, message: "You must be at least 10 years old to sign up" });
+    }
     // Step 4: Create or update user
     const [user, created] = await User.upsert(
       {
@@ -226,6 +272,7 @@ export const otpVerification = async (req, res) => {
         password: email ? hashedPassword : null,
         isVerified: true,
         firstName: firstName || "",
+        dob: dob,
         gender: gender?.toLowerCase() || null, // ✅ Save gender
         status: "active",
         updatedAt: new Date(),
