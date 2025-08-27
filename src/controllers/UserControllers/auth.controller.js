@@ -258,7 +258,7 @@ export const otpVerification = async (req, res) => {
 
     // Step 3: Hash password if provided
     const hashedPassword = password ? await hashPassword(password) : null;
-    // const dobDate = new Date(dob);
+    const dobDate = new Date(dob);
     const today = new Date();
     const minDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
     if (dobDate > minDate) {
