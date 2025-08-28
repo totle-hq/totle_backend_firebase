@@ -1,0 +1,73 @@
+name: Deploy Backend (main)
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Package the repo (exclude heavy/unnecessary dirs)
+      - name: Create release archive
+        run: |
+          tar --exclude='./.git' \
+              --exclude='./node_modules' \
+              --exclude='./.github' \
+              -czf release.tgz .
+
+      # Copy the archive to EC2 (uses the three secrets you added)
+      - name: Upload to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "release.tgz"
+          target: "/home/ec2-user/"
+
+      # SSH into EC2, unpack, install, and restart PM2 process
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            APP_DIR=/home/ec2-user/totle-backend
+
+            # Unpack the uploaded archive into the app directory
+            mkdir -p "$APP_DIR"
+            tar -xzf /home/ec2-user/release.tgz -C "$APP_DIR"
+            rm -f /home/ec2-user/release.tgz
+
+            cd "$APP_DIR"
+
+            # Ensure pnpm is available (Node is already installed on your box)
+            corepack enable || true
+            if ! command -v pnpm >/dev/null 2>&1; then
+              npm i -g pnpm@9
+            fi
+
+            # Install production deps using pnpm
+            pnpm install --frozen-lockfile || pnpm install
+            # If you use build step on backend, uncomment:
+            # pnpm run build
+
+            # Restart PM2 app (or start if first time)
+            if pm2 describe totle-backend >/dev/null 2>&1; then
+              pm2 restart totle-backend
+            else
+              # Assumes "pnpm start" boots your API on port 5000
+              pm2 start "pnpm start" --name totle-backend --time
+            fi
+
+            pm2 save
