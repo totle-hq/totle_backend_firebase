@@ -1,35 +1,42 @@
-// This file is Online Redis
-// // For Local Redis, you can comment out the code block below and uncomment the local Redis client code.
+// src/config/redis.js
 import { createClient } from "redis";
 
-const redisUrl = process.env.REDIS_URL;
+const DISABLED = String(process.env.REDIS_DISABLED || "").toLowerCase() === "true";
+const url = process.env.REDIS_URL;              // e.g. redis://127.0.0.1:6379  or  rediss://<upstash-host>:6379
+const forceTLS = String(process.env.REDIS_TLS || "").toLowerCase() === "true";
+const rejectUnauthorized = String(process.env.REDIS_REJECT_UNAUTHORIZED || "false").toLowerCase() === "true";
 
-export const redisClient = redisUrl
-  ? createClient({
-      url: redisUrl,
-      socket: {
-        tls: true, // Needed for Upstash or cloud Redis
-        rejectUnauthorized: false,
-      },
-    })
-  : null;
+let redisClient = null;
 
-if (redisClient) {
-  redisClient.connect()
-    .then(() => console.log("✅ Redis connected"))
-    .catch((err) => console.error("❌ Redis connection error:", err));
+if (!DISABLED && url) {
+  const isSecure = url.startsWith("rediss://") || forceTLS;
+  redisClient = createClient({
+    url,
+    socket: isSecure
+      ? { tls: true, rejectUnauthorized }
+      : { tls: false },
+  });
+
+  redisClient.on("connect", () => {
+    const mode = isSecure ? "TLS" : "no-TLS";
+    console.log(`✅ Redis connected (${mode}) @ ${url}`);
+  });
+
+  redisClient.on("error", (err) => {
+    console.error("❌ Redis error:", err.message || err);
+  });
+
+  // simple backoff logger if you ever add retry_strategy
+  redisClient.on("reconnecting", () => console.log("↻ Redis reconnecting…"));
+
+  try {
+    await redisClient.connect();
+  } catch (e) {
+    console.error("❌ Redis connect() failed:", e.message || e);
+  }
 } else {
-  console.warn("⚠️ REDIS_URL not set. Redis client not initialized.");
+  const reason = DISABLED ? "disabled via REDIS_DISABLED=true" : "REDIS_URL not set";
+  console.warn(`⚠️ Redis client not initialized (${reason}).`);
 }
 
-// Uncomment the following lines if you want to use a local Redis instance
-// If you want to use a local Redis instance, you can uncomment the lines below
-// and comment out the above code block.
-
-// import { createClient } from "redis";
-
-// export const redisClient = createClient(); // Default connects to redis://localhost:6379
-
-// redisClient.connect()
-//   .then(() => console.log("✅ Redis connected"))
-//   .catch((err) => console.error("❌ Redis connection error:", err));
+export { redisClient };
