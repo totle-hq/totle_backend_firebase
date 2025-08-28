@@ -141,6 +141,7 @@ const startServer = async () => {
 
     // await defineModelRelationships();
 
+    
     // Step 2: Once syncDatabase has finished, start the server
     const PORT = process.env.PORT || 5000;
     const server = http.createServer(app);
