@@ -15,54 +15,77 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Safer packaging: only tracked files, avoids "file changed as we read it"
+      # Configure AWS to edit your EC2 Security Group
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Get this runner's public IP
+      - name: Get runner public IP
+        id: ip
+        run: echo "ip=$(curl -s https://ifconfig.me)" >> $GITHUB_OUTPUT
+
+      # Temporarily allow SSH from the runner's IP
+      - name: Authorize runner IP on SG (SSH 22)
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32,Description='GH Actions temporary SSH'}]" \
+          || echo "Ingress may already exist — continuing"
+
+      # Safer packaging: tracked files only
       - name: Create release archive (tracked files only)
         run: |
           git archive --format=tar.gz -o release.tgz HEAD
+          ls -lh release.tgz
 
       # Copy archive to EC2 over SSH
       - name: Upload to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          username: ${{ secrets.EC2_USER }}           # ec2-user (Amazon Linux) or ubuntu (Ubuntu)
+          key: ${{ secrets.EC2_SSH_KEY }}             # Private key contents
           source: "release.tgz"
-          target: "/home/ec2-user/"
+          target: "/home/${{ secrets.EC2_USER }}/"
+          overwrite: true
+          timeout: 120s
+          command_timeout: 2m
 
       # SSH, unpack, install, and restart PM2 app
       - name: Deploy on EC2
-        uses: appleboy/ssh-action@v1.1.0
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
           script: |
-            set -e
+            set -euo pipefail
+            APP_DIR="/home/${USER}/totle-backend"
+            RELEASE="/home/${USER}/release.tgz"
 
-            APP_DIR=/home/ec2-user/totle-backend
-            RELEASE=/home/ec2-user/release.tgz
-
-            # Prepare app directory and unpack the new release
             mkdir -p "$APP_DIR"
             tar -xzf "$RELEASE" -C "$APP_DIR"
             rm -f "$RELEASE"
-
             cd "$APP_DIR"
 
-            # Ensure pnpm is available
+            # Ensure pnpm exists
             corepack enable || true
             if ! command -v pnpm >/dev/null 2>&1; then
               npm i -g pnpm@9
             fi
 
-            # Install deps (prefer lockfile; fall back if absent)
+            # Install deps (prefer lockfile)
             pnpm install --frozen-lockfile || pnpm install
 
-            # If your backend needs a build step, uncomment:
+            # Optional build:
             # pnpm run build
 
-            # Restart or start the PM2 process (listens on port 5000)
+            # PM2 restart/start
             if pm2 describe totle-backend >/dev/null 2>&1; then
               pm2 restart totle-backend
             else
@@ -70,3 +93,13 @@ jobs:
             fi
 
             pm2 save
+            pm2 status
+
+      # Always revoke the temporary SSH rule
+      - name: Revoke runner IP from SG
+        if: always()
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32}]" \
+          || echo "Ingress already removed — continuing"
