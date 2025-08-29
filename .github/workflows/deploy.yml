@@ -15,27 +15,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Use your IAM user keys — and PROVIDE REGION
       - name: Configure AWS credentials (IAM user keys)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }} # must exist; set to ap-southeast-2
 
       - name: Get runner public IP
         id: ip
         run: echo "ip=$(curl -s https://checkip.amazonaws.com)" >> $GITHUB_OUTPUT
 
+      # Temporarily open SSH 22 only for this runner's IP
       - name: Authorize runner IP for SSH
         run: |
           aws ec2 authorize-security-group-ingress \
             --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32,Description='GitHub Actions runner'}]" \
-          || echo "Ingress rule already exists"
+          || echo "Ingress rule may already exist"
 
+      # Package only tracked files (clean release)
       - name: Create release archive
         run: git archive --format=tar.gz -o release.tgz HEAD
 
+      # Copy to EC2
       - name: Upload to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -45,7 +49,10 @@ jobs:
           source: "release.tgz"
           target: "/home/${{ secrets.EC2_USER }}/"
           overwrite: true
+          timeout: 120s
+          command_timeout: 2m
 
+      # Unpack and restart PM2 app at /home/ec2-user/totle-backend on port 5000
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -63,7 +70,7 @@ jobs:
             cd "$APP_DIR"
 
             corepack enable || true
-            if ! command -v pnpm >/dev/null; then
+            if ! command -v pnpm >/dev/null 2>&1; then
               npm i -g pnpm@9
             fi
 
@@ -77,10 +84,10 @@ jobs:
 
             pm2 save
 
-      - name: Revoke runner IP (always run)
+      # Close SSH again no matter what
+      - name: Revoke runner IP (always)
         if: always()
         run: |
           aws ec2 revoke-security-group-ingress \
             --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
-            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32}]" \
-          || echo "Ingress already removed"
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32}]"
