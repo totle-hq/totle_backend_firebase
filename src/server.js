@@ -61,6 +61,7 @@ const ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:5173",
+  "https://nucleus.totle.co", 
 ];
 
 // Build a CORS validator that returns a single allowed origin (not '*')
