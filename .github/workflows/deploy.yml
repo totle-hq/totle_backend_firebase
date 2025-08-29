@@ -15,47 +15,53 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Configure AWS to edit your EC2 Security Group
+      # 1) Configure AWS (FIX: include aws-region)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }} # e.g. ap-southeast-2
 
-      # Get this runner's public IP
+      # 2) Get this runner’s public IP (fallback if one service fails)
       - name: Get runner public IP
         id: ip
-        run: echo "ip=$(curl -s https://ifconfig.me)" >> $GITHUB_OUTPUT
-
-      # Temporarily allow SSH from the runner's IP
-      - name: Authorize runner IP on SG (SSH 22)
+        shell: bash
         run: |
+          set -e
+          IP="$(curl -fsS https://checkip.amazonaws.com || curl -fsS https://ifconfig.me)"
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+
+      # 3) Temporarily allow SSH 22 for this runner IP
+      - name: Authorize runner IP on SG (SSH 22)
+        shell: bash
+        run: |
+          set -e
           aws ec2 authorize-security-group-ingress \
             --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
-            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32,Description='GH Actions temporary SSH'}]" \
-          || echo "Ingress may already exist — continuing"
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32,Description='GH Actions temp SSH'}]" \
+          || echo "Ingress rule already present (continuing)."
 
-      # Safer packaging: tracked files only
-      - name: Create release archive (tracked files only)
+      # 4) Package only tracked files (deterministic tarball)
+      - name: Create release archive
         run: |
           git archive --format=tar.gz -o release.tgz HEAD
           ls -lh release.tgz
 
-      # Copy archive to EC2 over SSH
+      # 5) Copy archive to EC2
       - name: Upload to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}           # ec2-user (Amazon Linux) or ubuntu (Ubuntu)
-          key: ${{ secrets.EC2_SSH_KEY }}             # Private key contents
+          host: ${{ secrets.EC2_HOST }}       # EC2 public IP/DNS (or EIP)
+          username: ${{ secrets.EC2_USER }}    # ec2-user (Amazon Linux) or ubuntu (Ubuntu)
+          key: ${{ secrets.EC2_SSH_KEY }}      # private key contents (OpenSSH/PEM)
           source: "release.tgz"
           target: "/home/${{ secrets.EC2_USER }}/"
           overwrite: true
           timeout: 120s
           command_timeout: 2m
 
-      # SSH, unpack, install, and restart PM2 app
+      # 6) Unpack, install, and restart PM2 "totle-backend"
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -73,19 +79,19 @@ jobs:
             rm -f "$RELEASE"
             cd "$APP_DIR"
 
-            # Ensure pnpm exists
+            # Ensure pnpm is available (Amazon Linux 2023)
             corepack enable || true
             if ! command -v pnpm >/dev/null 2>&1; then
               npm i -g pnpm@9
             fi
 
-            # Install deps (prefer lockfile)
+            # Install deps (prefer lockfile; fallback if missing)
             pnpm install --frozen-lockfile || pnpm install
 
-            # Optional build:
+            # Optional build step if your app needs it:
             # pnpm run build
 
-            # PM2 restart/start
+            # Start/restart PM2 process (listens on 5000 as per .env)
             if pm2 describe totle-backend >/dev/null 2>&1; then
               pm2 restart totle-backend
             else
@@ -95,11 +101,12 @@ jobs:
             pm2 save
             pm2 status
 
-      # Always revoke the temporary SSH rule
+      # 7) Always revoke the temporary SSH rule
       - name: Revoke runner IP from SG
         if: always()
+        shell: bash
         run: |
           aws ec2 revoke-security-group-ingress \
             --group-id "${{ secrets.EC2_SECURITY_GROUP_ID }}" \
             --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${{ steps.ip.outputs.ip }}/32}]" \
-          || echo "Ingress already removed — continuing"
+          || echo "Ingress already removed (continuing)."
