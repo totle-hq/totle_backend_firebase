@@ -38,6 +38,7 @@ import taskRoutes from "./routes/Objectives/task.routes.js";
 import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js";
 import getPaidTeacher from "./routes/SessionRoutes/PaidSession.routes.js";
 import EndeavorRoutes from "./routes/EndeavorRoutes/Endeavor.routes.js";
+import newsfeedRoutes from "./routes/newsfeed.routes.js";
 
 // DB sync (your existing)
 import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
@@ -117,6 +118,7 @@ app.use("/api/languages", languageRoutes); // kept as in your file
 app.use("/admin", adminRoutes);
 app.use("/api", ctaRoutes);
 app.use("/api", platformCtaRoutes);
+app.use("/api/newsfeed", newsfeedRoutes);
 
 app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
