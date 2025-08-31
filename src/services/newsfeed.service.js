@@ -7,7 +7,6 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 /**
  * Step 1: Fetch raw articles from NewsAPI
- * Using multiple TOTLE-relevant domains: education, AI, finance, HR, legal, etc.
  */
 async function fetchRawArticles() {
   const query = encodeURIComponent(
@@ -18,7 +17,8 @@ async function fetchRawArticles() {
 
   const { data } = await axios.get(url);
 
-  // Extract and normalize
+  console.log(`📡 [newsfeed] Raw fetch → ${data.articles.length} articles`);
+
   return data.articles.map((a, idx) => ({
     id: `news-${idx}-${Date.now()}`,
     title: a.title,
@@ -30,36 +30,22 @@ async function fetchRawArticles() {
 }
 
 /**
- * Step 2: Filter out totally irrelevant articles (quick keyword filter before AI call)
+ * Step 2: Filter out totally irrelevant articles
  */
 function prefilterArticles(articles) {
   const keywords = [
-    "education",
-    "edtech",
-    "learning",
-    "university",
-    "student",
-    "teacher",
-    "ai",
-    "artificial intelligence",
-    "finance",
-    "funding",
-    "startup",
-    "policy",
-    "regulation",
-    "hr",
-    "human resources",
-    "legal",
-    "compliance",
-    "marketing",
-    "strategy",
-    "operations",
+    "education", "edtech", "learning", "university", "student", "teacher",
+    "ai", "artificial intelligence", "finance", "funding", "startup",
+    "policy", "regulation", "hr", "human resources", "legal", "compliance",
+    "marketing", "strategy", "operations"
   ];
 
-  return articles.filter((a) => {
+  const filtered = articles.filter((a) => {
     const text = `${a.title} ${a.summary} ${a.content}`.toLowerCase();
     return keywords.some((kw) => text.includes(kw));
   });
+
+  return filtered;
 }
 
 /**
@@ -69,32 +55,38 @@ async function processWithAI(articles) {
   if (!articles.length) return [];
 
   const prompt = `
-You are a news relevance engine for TOTLE, a global edtech + venture ecosystem.
+You are a TOTLE news relevance classifier.
 
-TOTLE has:
-- Roles: Founder, Superadmin, Department Head, Senior Project Manager, Project Manager, Contributor, Watcher, Intern.
-- Departments: Research, Tech, Operations, Customer Support, Marketing, Strategy, Finance, Legal, Human Resources.
+Departments: Echo (Marketing), Tenjiku (Research), Manhattan (Tech), Helix (Operations),
+Vault (Finance), Legion (Legal), Sentinel (Support), Haven (HR), Kyoto (Strategy), Global.
 
-For each article, classify and output JSON with:
-- department: one of the 9 departments most relevant, or "Global" if it's org-wide
-- roles: which roles are most impacted
-- importance: number 0–100 (how strategically important for TOTLE)
-- relevance: number 0–100 (how directly connected to TOTLE domains)
-- summary: short 1–2 sentence summary
+Roles: Founder, Superadmin, Department Head, Senior Project Manager, Project Manager, Contributor, Watcher, Intern.
+
+For EACH input article, return a JSON array (same length, same order) where every object has:
+{
+  "department": "string (one of the 9 departments or Global)",
+  "roles": ["array of impacted roles"],
+  "importance": number (0–100),
+  "relevance": number (0–100),
+  "summary": "1–2 sentence summary"
+}
+Return ONLY valid JSON, nothing else.
 `;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: "You classify authentic news for TOTLE." },
-      { role: "user", content: `${prompt}\nArticles:\n${JSON.stringify(articles, null, 2)}` },
+      { role: "user", content: `${prompt}\n\nArticles:\n${JSON.stringify(articles, null, 2)}` },
     ],
     response_format: { type: "json_object" },
   });
 
+  const raw = completion.choices[0]?.message?.content || "{}";
+
   try {
-    const parsed = JSON.parse(completion.choices[0].message.content || "{}");
-    return parsed.articles || [];
+    const parsed = JSON.parse(raw);
+    return parsed.responses || parsed.results || parsed.articles || parsed;
   } catch (err) {
     console.error("⚠️ Failed to parse OpenAI response:", err);
     return [];
@@ -102,14 +94,28 @@ For each article, classify and output JSON with:
 }
 
 /**
- * Step 4: Main fetch service
+ * Step 4: Canonical department map
+ */
+const DEPT_MAP = {
+  Marketing: "Echo", Echo: "Echo",
+  Research: "Tenjiku", Tenjiku: "Tenjiku",
+  Tech: "Manhattan", Manhattan: "Manhattan",
+  Operations: "Helix", Helix: "Helix",
+  Finance: "Vault", Vault: "Vault",
+  Legal: "Legion", Legion: "Legion",
+  HR: "Haven", Haven: "Haven",
+  Strategy: "Kyoto", Kyoto: "Kyoto",
+  Support: "Sentinel", Sentinel: "Sentinel",
+  Global: "Global",
+};
+
+/**
+ * Step 5: Main fetch service
  */
 export async function fetchNewsFeed() {
-  // Fetch and prefilter
   const raw = await fetchRawArticles();
   const prefiltered = prefilterArticles(raw);
 
-  // Classify with AI
   let enriched = [];
   try {
     enriched = await processWithAI(prefiltered);
@@ -117,15 +123,82 @@ export async function fetchNewsFeed() {
     console.error("⚠️ OpenAI classification failed:", e);
   }
 
-  // Merge and enforce relevance threshold
-  return prefiltered
-    .map((r, i) => ({
+  const final = prefiltered.map((r, i) => {
+    const aiDept = enriched?.[i]?.department?.trim() || "Global";
+    const canonicalDept =
+      DEPT_MAP[aiDept] ||
+      DEPT_MAP[aiDept.charAt(0).toUpperCase() + aiDept.slice(1)] ||
+      "Global";
+
+    return {
       ...r,
-      department: enriched?.[i]?.department || "Global",
-      roles: enriched?.[i]?.roles || ["Founder", "Superadmin"],
+      department: canonicalDept,
+      roles: enriched?.[i]?.roles?.length ? enriched[i].roles : ["Founder", "Superadmin"],
       importance: enriched?.[i]?.importance ?? 50,
       relevance: enriched?.[i]?.relevance ?? 50,
       summary: enriched?.[i]?.summary || r.summary || "No summary available",
-    }))
-    .filter((a) => a.relevance >= 60); // Only TOTLE-relevant
+    };
+  });
+
+  const kept = final.filter((a) => a.relevance >= 60);
+  const dropped = final.filter((a) => a.relevance < 60);
+
+
+
+  dropped.forEach((d) =>
+    console.log(`🪣 Dropped: "${d.title}" → relevance ${d.relevance}, dept ${d.department}`)
+  );
+
+  return kept;
+}
+
+export async function fetchDeptNewsFeed(dept) {
+  const raw = await fetchRawArticles();
+  const prefiltered = prefilterArticles(raw);
+
+  let enriched = [];
+  try {
+    const prompt = `
+You are a TOTLE news relevance classifier.
+
+Departments: Echo (Marketing), Tenjiku (Research), Manhattan (Tech), Helix (Operations),
+Vault (Finance), Legion (Legal), Sentinel (Support), Haven (HR), Kyoto (Strategy).
+
+Focus ONLY on articles relevant to **${dept}** department.
+Return JSON array (same length, same order) with:
+{
+  "department": "${dept}",
+  "roles": ["array of impacted roles"],
+  "importance": number (0–100),
+  "relevance": number (0–100),
+  "summary": "1–2 sentence summary"
+}
+`;
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You classify authentic news for TOTLE." },
+        { role: "user", content: `${prompt}\n\nArticles:\n${JSON.stringify(prefiltered, null, 2)}` },
+      ],
+      response_format: { type: "json_object" },
+    });
+
+    const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+    enriched = parsed.responses || parsed.results || parsed.articles || parsed;
+  } catch (e) {
+    console.error(`⚠️ OpenAI classification failed for dept ${dept}:`, e);
+  }
+
+  const final = prefiltered.map((r, i) => ({
+    ...r,
+    department: dept,
+    roles: enriched?.[i]?.roles || ["Department Head", "Contributor"],
+    importance: enriched?.[i]?.importance ?? 50,
+    relevance: enriched?.[i]?.relevance ?? 50,
+    summary: enriched?.[i]?.summary || r.summary || "No summary available",
+  }));
+
+  const kept = final.filter((a) => a.relevance >= 60);
+
+  return kept;
 }

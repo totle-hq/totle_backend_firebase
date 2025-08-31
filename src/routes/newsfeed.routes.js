@@ -1,19 +1,26 @@
 import express from "express";
-import { fetchNewsFeed } from "../services/newsfeed.service.js";
+import { fetchNewsFeed, fetchDeptNewsFeed } from "../services/newsfeed.service.js";
 
 const router = express.Router();
 
-/**
- * GET /api/newsfeed
- * Returns curated, role/department-tagged news
- */
+// Founder / Superadmin global feed
 router.get("/", async (req, res) => {
   try {
-    const news = await fetchNewsFeed();
-    res.json(news);
+    const data = await fetchNewsFeed();
+    res.json(data);
   } catch (err) {
-    console.error("❌ NewsFeed error:", err);
-    res.status(500).json({ message: "Failed to fetch newsfeed", error: err.message });
+    res.status(500).json({ error: "Failed to fetch news" });
+  }
+});
+
+// Department-specific feed
+router.get("/:dept", async (req, res) => {
+  try {
+    const dept = req.params.dept;
+    const data = await fetchDeptNewsFeed(dept);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch dept news" });
   }
 });
 
