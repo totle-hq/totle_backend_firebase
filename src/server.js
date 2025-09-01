@@ -9,6 +9,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import http from "http";
 import { Server } from "socket.io";
+import { registerChatHandlers } from "./socket/chat.socket.js";
+import chatRoutes from "./routes/chat.routes.js";
 
 // ---- Routes (your existing imports) ----
 import authRoutes from "./routes/UserRoutes/auth.routes.js";
@@ -146,6 +148,8 @@ app.use("/api/WeekOverlay", WeekOverlayRoutes);
 app.use("/api/marketplace", getPaidTeacher);
 
 app.use("/catalogue", EndeavorRoutes);
+app.use("/api/chat", chatRoutes);
+
 
 /* -------------------- Health / Diagnostics -------------------- */
 app.get("/", (_req, res) => {
@@ -175,8 +179,8 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    // await syncDatabase();
-    await defineModelRelationships(); // if needed
+    await syncDatabase();
+    // await defineModelRelationships(); 
 
     const PORT = process.env.PORT || 5000;
 
@@ -200,36 +204,40 @@ const startServer = async () => {
       allowEIO3: false, // you are on EIO=4; keep false to avoid legacy quirks
     });
 
-    global.io = io;
+global.io = io;
 
-    io.on("connection", (socket) => {
-      console.log("🔌 WebSocket connected:", socket.id);
+// Register chat handlers once (for all connections)
+registerChatHandlers(io);
 
-      // Join signaling room
-      socket.on("join", ({ sessionId, userId, role }) => {
-        if (!sessionId) return;
-        socket.join(sessionId);
-        console.log(`🟢 ${role ?? "user"} ${userId ?? ""} joined session ${sessionId}`);
-      });
+io.on("connection", (socket) => {
+  console.log("🔌 WebSocket connected:", socket.id);
 
-      // Forward signal (offer, answer, candidate)
-      socket.on("signal", ({ sessionId, userId, type, data }) => {
-        if (!sessionId) return;
-        console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
-        socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
-      });
+  // Join signaling room
+  socket.on("join", ({ sessionId, userId, role }) => {
+    if (!sessionId) return;
+    socket.join(sessionId);
+    console.log(`🟢 ${role ?? "user"} ${userId ?? ""} joined session ${sessionId}`);
+  });
 
-      // Handle hangup
-      socket.on("hangup", ({ sessionId, userId }) => {
-        if (!sessionId) return;
-        console.log(`🔴 Hangup by ${userId ?? "unknown"} in ${sessionId}`);
-        socket.to(sessionId).emit("hangup");
-      });
+  // Forward signal (offer, answer, candidate)
+  socket.on("signal", ({ sessionId, userId, type, data }) => {
+    if (!sessionId) return;
+    console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
+    socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
+  });
 
-      socket.on("disconnect", (reason) => {
-        console.log(`❌ WebSocket disconnected: ${socket.id} (${reason})`);
-      });
-    });
+  // Handle hangup
+  socket.on("hangup", ({ sessionId, userId }) => {
+    if (!sessionId) return;
+    console.log(`🔴 Hangup by ${userId ?? "unknown"} in ${sessionId}`);
+    socket.to(sessionId).emit("hangup");
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log(`❌ WebSocket disconnected: ${socket.id} (${reason})`);
+  });
+});
+
 
     // Process-level safety nets
     process.on("unhandledRejection", (err) => {
