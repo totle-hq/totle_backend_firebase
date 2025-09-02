@@ -23,6 +23,7 @@ import { Department } from '../../Models/UserModels/Department.js';
 import { Op } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { UserDepartment } from '../../Models/UserModels/UserDepartment.js';
+import { is } from 'useragent';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -60,55 +61,97 @@ export const findAdminByEmail = async (email) => {
   return await Admin.findOne({ where: { email } }); // Sequelize Admin model
 };
 
+export const findRoleByName = async (email) => {
+  return await UserDepartment.findOne({ where: {email } }); // Sequelize Admin model
+};
+
 export const updateAdminStatus = async (adminId, status) => {
   return await Admin.update({ status }, { where: { id: adminId } }); // Sequelize Admin model
 };
 
 
-
 export const adminLogin = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const admin = await findAdminByEmail(email);
-    // console.log("admin", admin);
 
-    if (!admin) return res.status(400).json({ message: "Invalid Login" });
+    let admin = await findAdminByEmail(email);
+    let isFromUserDept = false;
 
-    if (admin.status !== "active") {
-      return res.status(403).json({ message: "Admin account is inactive. Contact Super Admin." });
+    if (!admin) {
+      admin = await findRoleByName(email);
+      isFromUserDept = true;
     }
 
-    const isMatch = await bcrypt.compare(password, admin.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid credentials" });
+    if (!admin) {
+      return res.status(400).json({ message: "Invalid Login" });
+    }
 
-    const token = jwt.sign({ id: admin.id, name: admin.name, status: admin.status, email: admin.email, role: admin.global_role }, process.env.JWT_SECRET, { expiresIn: "1h" });
+    // Normalize fields (Admin vs UserDepartment)
+    const userId = admin.id || admin.roleId;
+    const userName = admin.name || "No Name";
+    const userEmail = admin.email;
+    const userPassword = admin.password;
+    const userStatus = admin.status || "active";
+    const userRole = isFromUserDept ? admin.roleName : admin.global_role;
+
+    if (userStatus !== "active") {
+      return res
+        .status(403)
+        .json({ message: "Account is inactive. Contact Super Admin." });
+    }
+    let isMatch=false;
+    if(isFromUserDept){
+      isMatch = (password === userPassword);
+    }
+    else{
+      isMatch = await bcrypt.compare(password, userPassword);
+    }
+    console.log('Is match', isMatch)
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      {
+        id: userId,
+        name: userName,
+        email: userEmail,
+        role: userRole,
+        status: userStatus,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
 
     let departmentName = null;
-    // if (admin.global_role !== "Founder" && admin.global_role !== "Superadmin") {
-    //   const dept = await Department.findOne({ where: { headId: admin.id } });
-    //   departmentName = dept?.name || null;
-    // }
 
-    
+    if (isFromUserDept) {
+      const dept = await Department.findOne({
+        where: { id: admin.departmentId },
+      });
+      departmentName = dept?.name || null;
+    }
+
     res.status(200).json({
       message: "Successfully Logged in!",
       token,
       admin: {
-        id: admin.id,
-        name: admin.name,
-        email: admin.email,
-        global_role: admin.global_role,
+        id: userId,
+        name: userName,
+        email: userEmail,
+        global_role: userRole,
         department: departmentName,
-      }
+      },
     });
 
-    // Emit socket event
-    io.emit("userLoginStatus", { userId: admin.id, isLoggedIn: true });
-
+    // Socket event
+    io.emit("userLoginStatus", { userId, isLoggedIn: true });
   } catch (error) {
+    console.error("Admin login error:", error);
     res.status(500).json({ message: "Server error", error });
   }
 };
+
 
 
 export const getAdminDetails = async (req, res) => {
