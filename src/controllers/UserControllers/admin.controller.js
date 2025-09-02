@@ -129,7 +129,7 @@ export const adminLogin = async (req, res) => {
       const dept = await Department.findOne({
         where: { id: admin.departmentId },
       });
-      departmentName = dept?.name || null;
+      departmentName = dept?.codename || null;
     }
 
     res.status(200).json({
