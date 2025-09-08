@@ -98,11 +98,30 @@ export const Test = sequelize1.define("Test", {
     comment: "Cooling period in days based on test performance",
   },
 
+payment_id: {
+  type: DataTypes.UUID,
+  allowNull: false,
+  unique: true,
+  references: {
+    model: {
+      tableName: "payments",
+      schema: "user",
+    },
+    key: "payment_id",
+  },
+  onDelete: "RESTRICT",   // remove test if payment is deleted
+  onUpdate: "CASCADE",   // keep in sync if payment_id changes
+  comment: "Strict FK link to the unique Payment record for this test",
+},
+
+
+
   submitted_at: {
     type: DataTypes.DATE,
     allowNull: true,
     comment: "Timestamp when test was submitted",
   }
+
   
 }, {
   tableName: "tests",

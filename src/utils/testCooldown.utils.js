@@ -48,36 +48,20 @@ export const isUserEligibleForRetest = async (userId, topicId) => {
  
   }
  
-  // Set cooldown based on result
- 
-  if (percentage >= 80 && passed === false) {
- 
-    cooldownMinutes = 1440; // 24 hours
- 
-  } else if (percentage < 80 && passed === false) {
- 
-    cooldownMinutes = 10080; // 7 days
- 
-  }
- 
-  const now = new Date();
- 
-  const lastSubmitted = new Date(recentTest.submitted_at);
- 
-  // If cooling_period is set in DB, use that (overrides previous logic)
- 
-  // if (recentTest.cooling_period) {
- 
-  //   cooldownMinutes = recentTest.cooling_period * 24 * 60;
- 
-  // }
- 
-  const diffMs = now - lastSubmitted;
- 
-  const cooldownMs = cooldownMinutes * 60 * 1000;
- 
-  const remainingMs = cooldownMs - diffMs;
- 
+  // ✅ Always use DB-stored cooling_period (in days) if available
+if (recentTest.cooling_period && recentTest.cooling_period > 0) {
+  cooldownMinutes = recentTest.cooling_period * 24 * 60;
+} else {
+  cooldownMinutes = 0;
+}
+
+const lastSubmitted = new Date(recentTest.submitted_at);
+const cooldownMs = cooldownMinutes * 60 * 1000;
+const cooldownEnd = new Date(lastSubmitted.getTime() + cooldownMs);
+const now = new Date();
+
+const remainingMs = cooldownEnd - now;
+
  
   if (remainingMs <= 0) {
  

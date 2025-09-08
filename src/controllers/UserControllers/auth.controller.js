@@ -26,8 +26,25 @@ import { Session } from "../../Models/SessionModel.js";
 import { col, fn, Op, Sequelize } from "sequelize";
 import { Test } from "../../Models/test.model.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
+import { sequelize1 } from "../../config/sequelize.js"; // ✅ for raw SQL insert into cps_profiles
+
 
 dotenv.config();
+
+// --- CPS helper: ensure "user.cps_profiles" row exists for a user_id ---
+async function ensureCpsProfile(userId, transaction) {
+  try {
+    await sequelize1.query(
+      `INSERT INTO "user"."cps_profiles"(user_id) VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING;`,
+      { bind: [userId], transaction }
+    );
+    // console.log("[CPS] ensured cps_profile for", userId);
+  } catch (e) {
+    console.error("[CPS] ensure cps_profile failed for", userId, e.message);
+  }
+}
+
 
 // const storage = multer.diskStorage({
 //   destination: (req, file, cb) => {
@@ -265,20 +282,22 @@ export const otpVerification = async (req, res) => {
       return res.status(400).json({ error: true, message: "You must be at least 10 years old to sign up" });
     }
     // Step 4: Create or update user
-    const [user, created] = await User.upsert(
-      {
-        email: email || null,
-        mobile: null,
-        password: email ? hashedPassword : null,
-        isVerified: true,
-        firstName: firstName || "",
-        dob: dob,
-        gender: gender?.toLowerCase() || null, // ✅ Save gender
-        status: "active",
-        updatedAt: new Date(),
-      },
-      { returning: true }
-    );
+const [user, created] = await User.upsert(
+  {
+    email: email || null,
+    mobile: null,
+    password: email ? hashedPassword : null,
+    isVerified: true,
+    firstName: firstName || "",
+    dob: dob,
+    gender: gender?.toLowerCase() || null,
+    status: "active",
+    updatedAt: new Date(),
+  },
+  { returning: true }
+);
+await ensureCpsProfile(user.id); // ✅ make sure cps_profiles has a row for this user
+
 
     // Step 5: Save user metrics
     console.log("Saving UserMetrics for user:", user?.id);
@@ -356,6 +375,8 @@ export const loginUser = async (req, res) => {
     }
 
     await User.update({ isLoggedIn: true }, { where: { id: user.id } });
+    await ensureCpsProfile(user.id); // ✅ backfill CPS row on first login if missing
+
     //  ip during login
 
     const ip =

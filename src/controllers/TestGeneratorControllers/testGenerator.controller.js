@@ -243,15 +243,28 @@ export const generateTest = async (req, res) => {
     }
 
     // ✅ NEW: Check payment before generating test
-    const hasValidPayment = await checkTestPayment(userId, topicId);
-    if (!hasValidPayment) {
-      return res.status(402).json({
-        success: false,
-        message: "Payment required to take this test. Please pay ₹99 to continue.",
-        payment_required: true,
-        amount: 9900 // in paise
-      });
-    }
+// ✅ 1. Check payment before generating test
+const hasValidPayment = await checkTestPayment(userId, topicId);
+if (!hasValidPayment) {
+  return res.status(402).json({
+    success: false,
+    message: "Payment required to take this test. Please pay ₹99 to continue.",
+    payment_required: true,
+    amount: 9900 // in paise
+  });
+}
+
+// ✅ 2. Enforce cooling period BEFORE generating questions
+const { eligible, waitTime } = await isUserEligibleForRetest(userId, topicId);
+if (!eligible) {
+  return res.status(429).json({
+    success: false,
+    message: `You are still on cooldown. Please wait ${waitTime.days}d ${waitTime.hours}h ${waitTime.minutes}m ${waitTime.seconds}s before retaking this test.`,
+    cooldown_active: true,
+    waitTime
+  });
+}
+
 
     // Get subject and domain info
     const { subject, domain } = await findSubjectAndDomain(topicId);
@@ -324,29 +337,50 @@ export const generateTest = async (req, res) => {
     const time_limit_minutes = 30;
     const count = await Test.count() + 1;
 
-    const savedTest = await Test.create({
-      sl_no: count,
-      topic_name: topic.name,
-      user_id: userId,
-      topic_uuid: topicId,
-      difficulty,
-      topics: [{
-        id: topic.id,
-        name: topic.name,
-        description: topic.description,
-        session_count: topic.session_count,
-        prices: topic.prices,
-      }],
-      questions: finalQuestions,
-      answers: finalAnswers,
-      test_settings: {
-        difficulty,
-        time_limit_minutes,
-        retest_wait: 5,
-        fraud_risk_score: 0,
-      },
-      status: "generated",
-    });
+// ✅ Find latest successful payment for this test
+const payment = await Payment.findOne({
+  where: {
+    user_id: userId,
+    entity_type: "test",
+    entity_id: topicId,
+    status: "success"
+  },
+  order: [["created_at", "DESC"]],
+});
+
+if (!payment) {
+  return res.status(402).json({
+    success: false,
+    message: "No valid payment found for this test.",
+    payment_required: true
+  });
+}
+
+const savedTest = await Test.create({
+  sl_no: count,
+  topic_name: topic.name,
+  user_id: userId,
+  topic_uuid: topicId,
+  difficulty,
+  topics: [{
+    id: topic.id,
+    name: topic.name,
+    description: topic.description,
+    session_count: topic.session_count,
+    prices: topic.prices,
+  }],
+  questions: finalQuestions,
+  answers: finalAnswers,
+  test_settings: {
+    difficulty,
+    time_limit_minutes,
+    retest_wait: 5,
+    fraud_risk_score: 0,
+  },
+  status: "generated",
+  payment_id: payment.payment_id, // ✅ Link unique payment to this test
+});
+
 
     return res.status(200).json({
       success: true,
@@ -395,14 +429,27 @@ export const startTest = async (req, res) => {
     }
 
     // Double-check payment status
-    const hasValidPayment = await checkTestPayment(userId, test.topic_uuid);
-    if (!hasValidPayment) {
-      return res.status(402).json({
-        success: false,
-        message: "Payment required to start this test",
-        payment_required: true
-      });
-    }
+// ✅ Double-check payment status
+const hasValidPayment = await checkTestPayment(userId, test.topic_uuid);
+if (!hasValidPayment) {
+  return res.status(402).json({
+    success: false,
+    message: "Payment required to start this test",
+    payment_required: true
+  });
+}
+
+// ✅ Enforce cooldown before starting
+const { eligible, waitTime } = await isUserEligibleForRetest(userId, test.topic_uuid);
+if (!eligible) {
+  return res.status(429).json({
+    success: false,
+    message: `You are still on cooldown. Try again in ${waitTime.days}d ${waitTime.hours}h ${waitTime.minutes}m ${waitTime.seconds}s`,
+    cooldown_active: true,
+    waitTime
+  });
+}
+
 
     if (test.status !== "generated") {
       return res.status(400).json({ 
@@ -529,15 +576,25 @@ export const evaluateTest = async (req, res) => {
 
     test.status = "evaluated";
 
-    // ✅ Set cooling period based on score
-    let cooling_period = 0; // default 0 weeks
-    if (percentage >= 80 && percentage < 90) {
-      cooling_period = 1;
-    } else if(percentage < 80) {
-      cooling_period = 7;
-    }
-    
-    test.cooling_period = cooling_period;
+// ✅ Set cooling period based on score
+let cooling_period_days = 0;
+if (percentage >= 80 && percentage < 90) {
+  cooling_period_days = 7;   // 1 week
+} else if (percentage < 80) {
+  cooling_period_days = 14;  // 2 weeks
+}
+
+test.cooling_period = cooling_period_days;
+
+// Compute cooldown end dynamically (not persisted in DB)
+let cooling_period_end = null;
+if (cooling_period_days > 0 && test.submitted_at) {
+  cooling_period_end = new Date(
+    new Date(test.submitted_at).getTime() + cooling_period_days * 24 * 60 * 60 * 1000
+  );
+}
+
+
 
 
     // ✅ If passed, add this topic to qualified topics
@@ -597,13 +654,16 @@ export const evaluateTest = async (req, res) => {
     }    
     await test.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "Test evaluated",
-      evaluation: test.evaluation_result,
-      cooling_period_days: test.cooling_period, 
-      eligible_for_bridger: test.eligible_for_bridger,
-    });
+return res.status(200).json({
+  success: true,
+  message: "Test evaluated",
+  evaluation: test.evaluation_result,
+  cooling_period_days: test.cooling_period,
+  cooling_period_end,
+  eligible_for_bridger: test.eligible_for_bridger,
+});
+
+
 
   } catch (error) {
     console.error("❌ Error evaluating test:", error);
