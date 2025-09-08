@@ -11,17 +11,23 @@ export const Payment = sequelize1.define("Payment", {
   user_id: {
     type: DataTypes.UUID,
     allowNull: false,
+    comment: "Reference to the user making the payment",
   },
 
-  // The type of entity being paid for (session/test)
-  entity_type: {
-    type: DataTypes.ENUM("session", "test"),
-    allowNull: false,
-  },
-
-  entity_id: {
+  // 🔄 Strict FK to Session (optional: only if payment is for a session)
+  session_id: {
     type: DataTypes.UUID,
-    allowNull: false, // session_id or test_id
+    allowNull: true,
+    references: {
+      model: {
+        tableName: "sessions",
+        schema: "user",
+      },
+      key: "session_id",
+    },
+    onDelete: "RESTRICT",
+    onUpdate: "CASCADE",
+    comment: "Reference to a session if this payment was for a session",
   },
 
   order_id: {
@@ -62,4 +68,5 @@ export const Payment = sequelize1.define("Payment", {
   schema: "user",
   tableName: "payments",
   timestamps: true,
+  comment: "Stores all payment transactions (session or test)",
 });

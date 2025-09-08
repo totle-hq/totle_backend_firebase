@@ -1,53 +1,56 @@
-// src/routes/catalogue.routes.js
-
+// src/routes/CatalogRoutes/catalogue.routes.js
 import express from "express";
 import {
-  createNode,
-  getNodeById,
-  getChildren,
-  updateNode,
-  deleteNode,
-  getBreadcrumb,
-  addSubtopics,
-  getSubtopics,
-  updateSubtopic,
-  deleteSubtopic,
-  getDomainCount,
-  getTopicCount,
+  // existing
+  createNode, getNodeById, getChildren, updateNode, deleteNode,
+  getBreadcrumb, addSubtopics, getSubtopics, updateSubtopic, deleteSubtopic,
+  getDomainCount, getTopicCount,
+
+  // NEW
+  getDomains,
+  getTopicById,
+  createTopic,
+  updateTopic,
+  recomputeTopic,
+  getGeneratorInput,
+  ingestTopicTelemetry,
+  updateDomain,
+  recomputeDomainTopics,
 } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
 
-// 🟢 Create a node
+/* -------------------- Existing nodes endpoints -------------------- */
 router.post("/nodes", createNode);
-
-// 🟢 Get node by ID
 router.get("/nodes/:id", getNodeById);
-
-// 🟢 Get children of a node (parent_id query param)
-router.get("/nodes", getChildren);
-
-// 🟡 Update node
-router.put("/nodes/:id", updateNode);
-
-// 🔴 Delete node (only if no children)
+router.get("/nodes", getChildren);          // NOW supports ?is_domain=true or ?type=domain
+router.put("/nodes/:id", updateNode);       // still supported for backward compatibility
 router.delete("/nodes/:id", deleteNode);
-
-// 🧭 Breadcrumb path to a node
 router.get("/breadcrumbs/:id", getBreadcrumb);
 
+/* -------------------- Subtopics (existing) -------------------- */
 router.post("/nodes/:id/subtopics", addSubtopics);
-
 router.get("/nodes/:id/subtopics", getSubtopics);
-
 router.put("/nodes/:id/subtopics/:subtopic_id", updateSubtopic);
-
 router.delete("/nodes/:id/subtopics/:subtopic_id", deleteSubtopic);
 
+/* -------------------- Counts (existing) -------------------- */
 router.get("/domain-count", getDomainCount);
-
 router.get("/topic-count", getTopicCount);
 
+/* -------------------- CPS-aware: domains -------------------- */
+router.get("/domains", getDomains);                  // list ALL domains
+router.patch("/domains/:id", updateDomain);          // edit CPS domain priors/mixes/meta
+router.post("/domains/:id/recompute", recomputeDomainTopics); // recompute all topics in domain
 
+/* -------------------- CPS-aware: topics -------------------- */
+router.get("/topics/:id", getTopicById);             // rich topic read
+router.post("/topics", createTopic);                 // create with typed fields + archetype
+router.patch("/topics/:id", updateTopic);            // update typed fields; recompute
+router.post("/topics/:id/recompute", recomputeTopic);
+
+/* -------------------- Generator + Telemetry -------------------- */
+router.get("/generator-input/:topicId", getGeneratorInput);
+router.post("/telemetry/topics/:id/ingest", ingestTopicTelemetry);
 
 export default router;

@@ -41,6 +41,12 @@ import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js";
 import getPaidTeacher from "./routes/SessionRoutes/PaidSession.routes.js";
 import EndeavorRoutes from "./routes/EndeavorRoutes/Endeavor.routes.js";
 import newsfeedRoutes from "./routes/newsfeed.routes.js";
+import departmentRoutes from "./routes/department.routes.js";
+import cpsAdminRouter from "./routes/admin.cps.routes.js";
+import researchCpsRouter from "./routes/research.cps.routes.js";
+import strategyCpsRouter from "./routes/strategy.cps.routes.js";
+import opsCpsRouter from "./routes/ops.cps.routes.js";
+
 
 // DB sync (your existing)
 import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
@@ -137,6 +143,9 @@ app.use("/api/objectives", epicsRoutes);
 app.use("/api/objectives", featureRoutes);
 app.use("/api/objectives", taskRoutes);
 
+app.use("/api", departmentRoutes);
+
+
 app.use("/api/teach", insights);
 app.use("/api/progress", progressRoutes);
 
@@ -149,6 +158,12 @@ app.use("/api/marketplace", getPaidTeacher);
 
 app.use("/catalogue", EndeavorRoutes);
 app.use("/api/chat", chatRoutes);
+
+app.use("/admin/cps", cpsAdminRouter);
+app.use("/research/cps", researchCpsRouter);
+app.use("/strategy/cps", strategyCpsRouter);
+app.use("/ops/cps", opsCpsRouter);
+
 
 
 /* -------------------- Health / Diagnostics -------------------- */
@@ -179,8 +194,8 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    // await syncDatabase();
-    await defineModelRelationships(); 
+    await syncDatabase();
+    // await defineModelRelationships(); 
 
     const PORT = process.env.PORT || 5000;
 

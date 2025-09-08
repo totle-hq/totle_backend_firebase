@@ -147,4 +147,45 @@ const User = sequelize1.define(
   }
 );
 
+// Ensure a CPS row exists for every NEW user (raw SQL, no model dependency)
+User.afterCreate(async (user, options) => {
+  const { transaction } = options || {};
+  try {
+    await sequelize1.query(
+      `
+      INSERT INTO "user"."cps_profiles" (user_id)
+      VALUES ($1)
+      ON CONFLICT (user_id) DO NOTHING;
+      `,
+      { bind: [user.id], transaction }
+    );
+    console.log('[CPS] ensured cps_profile for', user?.id);
+  } catch (err) {
+    console.error('[CPS] failed to ensure cps_profile for', user?.id, err);
+  }
+});
+
+// (Optional) handle bulk creates too
+User.afterBulkCreate(async (users, options) => {
+  const { transaction } = options || {};
+  try {
+    const ids = users.map(u => u.id);
+    if (!ids.length) return;
+    await sequelize1.query(
+      `
+      INSERT INTO "user"."cps_profiles" (user_id)
+      SELECT x.id
+      FROM UNNEST(ARRAY[${ids.map((_, i) => `$${i + 1}`).join(',')} ]::uuid[]) AS x(id)
+      ON CONFLICT (user_id) DO NOTHING;
+      `,
+      { bind: ids, transaction }
+    );
+    console.log('[CPS] ensured cps_profile for', ids.length, 'users');
+  } catch (err) {
+    console.error('[CPS] bulk cps_profile ensure failed', err);
+  }
+});
+
+
+
 export { User };
