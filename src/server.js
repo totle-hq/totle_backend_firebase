@@ -46,6 +46,8 @@ import cpsAdminRouter from "./routes/admin.cps.routes.js";
 import researchCpsRouter from "./routes/research.cps.routes.js";
 import strategyCpsRouter from "./routes/strategy.cps.routes.js";
 import opsCpsRouter from "./routes/ops.cps.routes.js";
+import cpsRouter from "./routes/cps.routes.js";
+import testsProgressRoutes from "./routes/tests.progress.routes.js";
 
 
 // DB sync (your existing)
@@ -163,7 +165,9 @@ app.use("/admin/cps", cpsAdminRouter);
 app.use("/research/cps", researchCpsRouter);
 app.use("/strategy/cps", strategyCpsRouter);
 app.use("/ops/cps", opsCpsRouter);
+app.use("/api/cps", cpsRouter);
 
+app.use("/api/tests/progress", testsProgressRoutes);
 
 
 /* -------------------- Health / Diagnostics -------------------- */
@@ -194,8 +198,8 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    await syncDatabase();
-    // await defineModelRelationships(); 
+    // await syncDatabase();
+    await defineModelRelationships(); 
 
     const PORT = process.env.PORT || 5000;
 

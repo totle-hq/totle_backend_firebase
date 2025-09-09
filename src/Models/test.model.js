@@ -1,5 +1,4 @@
 // src/Models/test.model.js
-
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
 
@@ -7,126 +6,224 @@ import { sequelize1 } from "../config/sequelize.js";
  * Test Model
  * Stores all metadata related to a generated test
  */
-export const Test = sequelize1.define("Test", {
-  sl_no:{
-    type: DataTypes.INTEGER,
-  },
-  topic_name: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    comment: "Name of the topic for the test",
-  },
-  answers: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: "Correct answers for the test (used for evaluation)",
-  }, 
-  answers_submitted: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: "User's submitted answers before evaluation",
-  },
-  test_id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-    allowNull: false,
-    comment: "Unique identifier for the test",
-  },
-  question_timings: {
-  type: DataTypes.JSONB,
-  allowNull: true,
-  comment: "Start and end timestamps for each question",
-}
-,
-  user_id: {
-    type: DataTypes.UUID,
-    allowNull: false,
-    comment: "Reference to the user taking the test",
-  },
-  topic_uuid: {
-    type: DataTypes.UUID,
-    allowNull: true,
-    comment: "Reference to the topic (CatalogueNode) stored as UUID (not enforced by DB-level FK)",
-  },
-  topics: {
-    type: DataTypes.JSONB,
-    allowNull: false,
-    comment: "Array of topic objects included in this test",
-  },
-  questions: {
-    type: DataTypes.JSONB,
-    allowNull: false,
-    comment: "Generated questions with metadata (ID, text, options, answers, etc.)",
-  }, 
-  performance_metrics: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: "Optional performance metrics post evaluation (accuracy, score breakdown, etc.)",
-  },
-  test_settings: {
-    type: DataTypes.JSONB,
-    allowNull: false,
-    comment: "Settings used for generation (difficulty, retest_wait, fraud_risk_score etc.)",
-  },
-  status: {
-    type: DataTypes.STRING, // Temporarily use STRING instead of ENUM
-    defaultValue: "generated",
-    allowNull: false,
-    comment: "Current state of the test lifecycle",
-  },
-  eligible_for_bridger: {
-    type: DataTypes.BOOLEAN,
-    allowNull: false,
-    defaultValue: false,
-    comment: "Whether the user is eligible to become a Bridger based on this test",
-  },
-  result: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: "Evaluation result (e.g., score, accuracy, time taken, etc.)",
-  },
-
-  fraud_flags: {
-    type: DataTypes.JSONB,
-    allowNull: true,
-    comment: "Fraud detection flags (suspicious patterns, duplicate attempts, etc.)",
-  },
-  cooling_period: {
-    type: DataTypes.INTEGER, // store number of days
-    allowNull: true,
-    comment: "Cooling period in days based on test performance",
-  },
-
-payment_id: {
-  type: DataTypes.UUID,
-  allowNull: false,
-  unique: true,
-  references: {
-    model: {
-      tableName: "payments",
-      schema: "user",
+export const Test = sequelize1.define(
+  "Test",
+  {
+    sl_no: {
+      type: DataTypes.INTEGER,
     },
-    key: "payment_id",
+    topic_name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      comment: "Name of the topic for the test",
+    },
+    answers: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment: "Correct answers for the test (used for evaluation)",
+    },
+    answers_submitted: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment: "User's submitted answers before evaluation",
+    },
+    test_id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+      allowNull: false,
+      comment: "Unique identifier for the test",
+    },
+    question_timings: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment: "Start and end timestamps for each question",
+    },
+    user_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      comment: "Reference to the user taking the test",
+    },
+    topic_uuid: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      comment:
+        "Reference to the topic (CatalogueNode) stored as UUID (not enforced by DB-level FK)",
+    },
+    topics: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      comment: "Array of topic objects included in this test",
+    },
+    questions: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      comment:
+        "Generated questions with metadata (ID, text, options, answers, etc.)",
+    },
+    performance_metrics: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment:
+        "Optional performance metrics post evaluation (accuracy, score breakdown, etc.)",
+    },
+    test_settings: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      comment:
+        "Settings used for generation (difficulty, retest_wait, fraud_risk_score etc.)",
+    },
+    status: {
+      type: DataTypes.STRING, // Using STRING for flexibility
+      defaultValue: "generated",
+      allowNull: false,
+      comment: "Current state of the test lifecycle",
+    },
+    eligible_for_bridger: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment:
+        "Whether the user is eligible to become a Bridger based on this test",
+    },
+    result: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment:
+        "Evaluation result (e.g., score, accuracy, time taken, etc.). May contain cps_scores.",
+    },
+    fraud_flags: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment: "Fraud detection flags (suspicious patterns, duplicate attempts, etc.)",
+    },
+    cooling_period: {
+      type: DataTypes.INTEGER, // store number of days
+      allowNull: true,
+      comment: "Cooling period in days based on test performance",
+    },
+    payment_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      unique: true,
+      references: {
+        model: {
+          tableName: "payments",
+          schema: "user",
+        },
+        key: "payment_id",
+      },
+      onDelete: "RESTRICT",
+      onUpdate: "CASCADE",
+      comment: "Strict FK link to the unique Payment record for this test",
+    },
+    submitted_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: "Timestamp when test was submitted",
+    },
   },
-  onDelete: "RESTRICT",   // remove test if payment is deleted
-  onUpdate: "CASCADE",   // keep in sync if payment_id changes
-  comment: "Strict FK link to the unique Payment record for this test",
-},
-
-
-
-  submitted_at: {
-    type: DataTypes.DATE,
-    allowNull: true,
-    comment: "Timestamp when test was submitted",
+  {
+    tableName: "tests",
+    schema: "user",
+    timestamps: true,
+    underscored: true,
+    comment:
+      "Stores all tests generated by AI engine with metadata, fraud signals, results, and flags",
+    indexes: [
+      { fields: ["user_id"] },
+      { fields: ["topic_uuid"] },
+      { fields: ["payment_id"], unique: true },
+      { fields: ["status"] },
+      { fields: ["submitted_at"] },
+    ],
   }
+);
 
-  
-}, {
-  tableName: "tests",
-  schema: "user",
-  timestamps: true,
-  underscored: true,
-  comment: "Stores all tests generated by AI engine with metadata, fraud signals, results, and flags"
+/* ------------------------------------------------------------------ */
+/*           Automatic CPS Profile EMA update after evaluation         */
+/* ------------------------------------------------------------------ */
+
+/** Extract cps_scores object if present in result or performance_metrics */
+function extractCpsScores(container) {
+  const a = container?.result?.cps_scores;
+  if (a && typeof a === "object") return a;
+  const b = container?.performance_metrics?.cps_scores;
+  if (b && typeof b === "object") return b;
+  return null;
+}
+
+/** Does this object have any numeric values? */
+function hasAnyNumericScore(scores) {
+  if (!scores || typeof scores !== "object") return false;
+  return Object.values(scores).some((v) => Number.isFinite(Number(v)));
+}
+
+/** Should we trigger EMA now? (new cps_scores appeared or changed) */
+function shouldTriggerCpsUpdate(instance) {
+  const nowScores = extractCpsScores({
+    result: instance?.result,
+    performance_metrics: instance?.performance_metrics,
+  });
+
+  const prevResult = instance?.previous?.("result");
+  const prevPerf = instance?.previous?.("performance_metrics");
+  const prevScores = extractCpsScores({
+    result: prevResult,
+    performance_metrics: prevPerf,
+  });
+
+  const hasNow = hasAnyNumericScore(nowScores);
+  const hadPrev = hasAnyNumericScore(prevScores);
+
+  // Trigger when scores appear for the first time, or when submitted_at flips with scores present.
+  const submitNow = !!instance?.submitted_at;
+  const submitPrev = !!instance?.previous?.("submitted_at");
+
+  return (hasNow && !hadPrev) || (hasNow && submitNow && !submitPrev);
+}
+
+/**
+ * Use dynamic import to avoid circular deps:
+ * services/cps/cpsEma.service.js imports Test; Test importing the service
+ * at file top would create a cycle. Dynamic import resolves after model define.
+ */
+async function callCpsEmaUpdate(testId) {
+  try {
+    const mod = await import("../services/cps/cpsEma.service.js");
+    const { updateCpsProfileFromTest } = mod;
+    await updateCpsProfileFromTest({
+      testId,
+      alpha: 0.4,
+      firstTestSetsBaseline: true,
+    });
+  } catch (err) {
+    console.error("[CPS][EMA] update failed for test", testId, err);
+  }
+}
+
+// Fire once if a brand-new row already contains cps_scores (rare, but safe)
+Test.afterCreate(async (instance) => {
+  try {
+    const nowScores = extractCpsScores({
+      result: instance?.result,
+      performance_metrics: instance?.performance_metrics,
+    });
+    if (hasAnyNumericScore(nowScores)) {
+      await callCpsEmaUpdate(instance.test_id);
+    }
+  } catch (e) {
+    console.error("[CPS][EMA] afterCreate hook error", e);
+  }
+});
+
+// Fire on update when cps_scores first appear or on submission with scores
+Test.afterUpdate(async (instance) => {
+  try {
+    if (shouldTriggerCpsUpdate(instance)) {
+      await callCpsEmaUpdate(instance.test_id);
+    }
+  } catch (e) {
+    console.error("[CPS][EMA] afterUpdate hook error", e);
+  }
 });

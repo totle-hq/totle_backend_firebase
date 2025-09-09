@@ -24,15 +24,14 @@ import { Role } from "../Models/UserModels/Roles.Model.js";
 import { Payment } from "../Models/PaymentModels.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 
-// ✅ NEW: CPS Profile model import
+// CPS / Rubrics
 import { CpsProfile } from "../Models/CpsProfile.model.js";
+import { TestItemRubric } from "../Models/TestItemRubric.model.js";
 
 const defineRelationships = () => {
-  // User ↔ Responses
-  User.hasMany(Responses, { foreignKey: "userId", onDelete: "CASCADE" });
-  Responses.belongsTo(User, { foreignKey: "userId" });
-
-  // User ↔ Preferred Language (guarded to avoid duplicate alias errors)
+  /* =========================
+   * User core relationships
+   * ========================= */
   if (!User.associations?.preferredLanguage) {
     User.belongsTo(Language, { foreignKey: "preferred_language_id", as: "preferredLanguage" });
   }
@@ -40,173 +39,250 @@ const defineRelationships = () => {
     Language.hasMany(User, { foreignKey: "preferred_language_id", as: "users" });
   }
 
-  // User ↔ UserMetrics
-  User.hasOne(UserMetrics, { foreignKey: "userId", onDelete: "CASCADE" });
-  UserMetrics.belongsTo(User, { foreignKey: "userId" });
+  if (!User.associations?.metrics) {
+    User.hasOne(UserMetrics, { foreignKey: "userId", as: "metrics", onDelete: "CASCADE" });
+  }
+  if (!UserMetrics.associations?.user) {
+    UserMetrics.belongsTo(User, { foreignKey: "userId", as: "user" });
+  }
 
-  // ✅ NEW: User ↔ CPS Profile (one row per user)
+  if (!User.associations?.otps) {
+    User.hasMany(OTP, { foreignKey: "userId", as: "otps", onDelete: "CASCADE" });
+  }
+  if (!OTP.associations?.user) {
+    OTP.belongsTo(User, { foreignKey: "userId", as: "user" });
+  }
+
+  if (!User.associations?.marketplaceSuggestions) {
+    User.hasMany(MarketplaceSuggestion, { foreignKey: "userId", as: "marketplaceSuggestions", onDelete: "CASCADE" });
+  }
+  if (!MarketplaceSuggestion.associations?.user) {
+    MarketplaceSuggestion.belongsTo(User, { foreignKey: "userId", as: "user" });
+  }
+
+  if (!Admin.associations?.marketplaceSuggestions) {
+    Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", as: "marketplaceSuggestions", allowNull: true });
+  }
+
+  if (!Admin.associations?.departments) {
+    Admin.hasMany(UserDepartment, { foreignKey: "userId", as: "departments" });
+  }
+  if (!UserDepartment.associations?.admin) {
+    UserDepartment.belongsTo(Admin, { foreignKey: "userId", as: "admin" });
+  }
+
+  if (!Admin.associations?.roleAssignmentLogs) {
+    Admin.hasMany(RoleAssignmentLog, { foreignKey: "userId", as: "roleAssignmentLogs" });
+  }
+  if (!RoleAssignmentLog.associations?.admin) {
+    RoleAssignmentLog.belongsTo(Admin, { foreignKey: "userId", as: "admin" });
+  }
+
+  /* =========================
+   * CPS Profile (1:1)
+   * ========================= */
   if (!User.associations?.cpsProfile) {
-    User.hasOne(CpsProfile, {
-      foreignKey: "user_id",
-      as: "cpsProfile",
-      onDelete: "CASCADE",
-      onUpdate: "CASCADE",
-    });
+    User.hasOne(CpsProfile, { foreignKey: "user_id", as: "cpsProfile", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
   if (!CpsProfile.associations?.user) {
-    CpsProfile.belongsTo(User, {
-      foreignKey: "user_id",
-      as: "user",
-      onDelete: "CASCADE",
-      onUpdate: "CASCADE",
-    });
+    CpsProfile.belongsTo(User, { foreignKey: "user_id", as: "user", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
 
-  // Survey ↔ Questions
-  Survey.hasMany(Question, { foreignKey: "surveyId", as: "questions" });
-  Question.belongsTo(Survey, { foreignKey: "surveyId" });
+  /* =========================
+   * Survey / Questions / Responses
+   * ========================= */
+  if (!Survey.associations?.questions) {
+    Survey.hasMany(Question, { foreignKey: "surveyId", as: "questions" });
+  }
+  if (!Question.associations?.survey) {
+    Question.belongsTo(Survey, { foreignKey: "surveyId", as: "survey" });
+  }
 
-  // Survey ↔ Responses
-  Survey.hasMany(Responses, { foreignKey: "surveyId" });
-  Responses.belongsTo(Survey, { foreignKey: "surveyId" });
-  Responses.belongsTo(Question, { foreignKey: "questionId" });
+  if (!Survey.associations?.responses) {
+    Survey.hasMany(Responses, { foreignKey: "surveyId", as: "responses" });
+  }
+  if (!Responses.associations?.survey) {
+    Responses.belongsTo(Survey, { foreignKey: "surveyId", as: "survey" });
+  }
 
-  // Admin ↔ Blog
-  Admin.hasMany(Blog, { foreignKey: "adminId" });
-  Blog.belongsTo(Admin, { foreignKey: "adminId" });
+  if (!Question.associations?.responses) {
+    Question.hasMany(Responses, { foreignKey: "questionId", as: "responses" });
+  }
+  if (!Responses.associations?.question) {
+    Responses.belongsTo(Question, { foreignKey: "questionId", as: "question" });
+  }
 
-  // Admin ↔ Survey
-  Admin.hasMany(Survey, { foreignKey: "adminId" });
-  Survey.belongsTo(Admin, { foreignKey: "adminId" });
+  if (!User.associations?.responses) {
+    User.hasMany(Responses, { foreignKey: "userId", as: "responses", onDelete: "CASCADE" });
+  }
+  if (!Responses.associations?.user) {
+    Responses.belongsTo(User, { foreignKey: "userId", as: "user" });
+  }
 
-  // User ↔ OTP
-  User.hasMany(OTP, { foreignKey: "userId", onDelete: "CASCADE" });
-  OTP.belongsTo(User, { foreignKey: "userId" });
+  if (!Admin.associations?.blogs) {
+    Admin.hasMany(Blog, { foreignKey: "adminId", as: "blogs" });
+  }
+  if (!Blog.associations?.admin) {
+    Blog.belongsTo(Admin, { foreignKey: "adminId", as: "admin" });
+  }
 
-  // User ↔ Marketplace Suggestions
-  User.hasMany(MarketplaceSuggestion, { foreignKey: "userId", onDelete: "CASCADE" });
-  MarketplaceSuggestion.belongsTo(User, { foreignKey: "userId" });
+  if (!Admin.associations?.surveys) {
+    Admin.hasMany(Survey, { foreignKey: "adminId", as: "surveys" });
+  }
+  if (!Survey.associations?.admin) {
+    Survey.belongsTo(Admin, { foreignKey: "adminId", as: "admin" });
+  }
 
-  // Admin ↔ Marketplace Suggestions
-  Admin.hasMany(MarketplaceSuggestion, { foreignKey: "adminId", allowNull: true });
+  /* =========================
+   * Departments / Roles
+   * ========================= */
+  if (!Department.associations?.subDepartments) {
+    Department.hasMany(Department, { foreignKey: "parentId", as: "subDepartments", onDelete: "CASCADE" });
+  }
+  if (!Department.associations?.parentDepartment) {
+    Department.belongsTo(Department, { foreignKey: "parentId", as: "parentDepartment" });
+  }
 
-  // Admin ↔ Departments
-  Admin.hasMany(UserDepartment, { foreignKey: "userId" });
-  UserDepartment.belongsTo(Admin, { foreignKey: "userId" });
+  if (!Department.associations?.roles) {
+    Department.hasMany(Role, { foreignKey: "departmentId", as: "roles", onDelete: "CASCADE" });
+  }
+  if (!Role.associations?.department) {
+    Role.belongsTo(Department, { foreignKey: "departmentId", as: "department", onDelete: "CASCADE" });
+  }
 
-  // Admin ↔ RoleAssignmentLog
-  Admin.hasMany(RoleAssignmentLog, { foreignKey: "userId" });
-  RoleAssignmentLog.belongsTo(Admin, { foreignKey: "userId" });
+  /* =========================
+   * Teaching stats ↔ Catalogue
+   * ========================= */
+  if (!Teachertopicstats.associations?.teacher) {
+    Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher", onDelete: "CASCADE" });
+  }
+  if (!User.associations?.topicStats) {
+    User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats", onDelete: "CASCADE" });
+  }
 
-  // Department ↔ UserDepartment
-  Department.hasMany(UserDepartment, { foreignKey: "departmentId" });
-  UserDepartment.belongsTo(Department, { foreignKey: "departmentId" });
+  if (!Teachertopicstats.associations?.catalogueNode) {
+    Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: "node_id", as: "catalogueNode", onDelete: "CASCADE" });
+  }
+  if (!CatalogueNode.associations?.teacherStats) {
+    CatalogueNode.hasMany(Teachertopicstats, { foreignKey: "node_id", as: "teacherStats", onDelete: "CASCADE" });
+  }
 
-  // Teacher ↔ Topic Stats
-  Teachertopicstats.belongsTo(User, { foreignKey: "teacherId", as: "teacher", onDelete: "CASCADE" });
-  User.hasMany(Teachertopicstats, { foreignKey: "teacherId", as: "topicStats", onDelete: "CASCADE" });
+  /* =========================
+   * CatalogueNode self refs
+   * (Keep both aliases only if you really use them)
+   * ========================= */
+  if (!CatalogueNode.associations?.parentNode) {
+    CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "parentNode", onDelete: "CASCADE" });
+  }
+  if (!CatalogueNode.associations?.subject) {
+    CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "subject", onDelete: "CASCADE" });
+  }
 
-  // CatalogueNode ↔ TeacherTopicStats
-  Teachertopicstats.belongsTo(CatalogueNode, { foreignKey: "node_id", onDelete: "CASCADE" });
-  CatalogueNode.hasMany(Teachertopicstats, { foreignKey: "node_id", onDelete: "CASCADE" });
+  /* =========================
+   * Support / FeedbackSummary
+   * ========================= */
+  if (!SupportQueriesModel.associations?.user) {
+    SupportQueriesModel.belongsTo(User, { foreignKey: "user_id", as: "user", onDelete: "CASCADE" });
+  }
+  if (!User.associations?.supportQueries) {
+    User.hasMany(SupportQueriesModel, { foreignKey: "user_id", as: "supportQueries", onDelete: "CASCADE" });
+  }
 
-  // FeedbackSummary ↔ CatalogueNode
-  FeedbackSummary.belongsTo(CatalogueNode, { foreignKey: "node_id", onDelete: "CASCADE" });
-  CatalogueNode.hasMany(FeedbackSummary, { foreignKey: "node_id", onDelete: "CASCADE" });
+  if (!FeedbackSummary.associations?.catalogueNode) {
+    FeedbackSummary.belongsTo(CatalogueNode, { foreignKey: "node_id", as: "catalogueNode", onDelete: "CASCADE" });
+  }
+  if (!CatalogueNode.associations?.feedbackSummaries) {
+    CatalogueNode.hasMany(FeedbackSummary, { foreignKey: "node_id", as: "feedbackSummaries", onDelete: "CASCADE" });
+  }
 
-  // User ↔ TestFlags
-  TestFlag.belongsTo(User, { foreignKey: "user_id", as: "user" });
-  User.hasMany(TestFlag, { foreignKey: "user_id", as: "testFlags" });
+  if (!User.associations?.feedbackSummaries) {
+    User.hasMany(FeedbackSummary, { foreignKey: "teacher_id", as: "feedbackSummaries" });
+  }
+  if (!FeedbackSummary.associations?.teacher) {
+    FeedbackSummary.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
+  }
 
-  // Test ↔ TestFlags
-  TestFlag.belongsTo(Test, { foreignKey: "test_id", as: "test" });
-  Test.hasMany(TestFlag, { foreignKey: "test_id", as: "flags" });
+  /* =========================
+   * Sessions / Bookings / Feedback
+   * ========================= */
+  if (!Session.associations?.teacher) {
+    Session.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
+  }
+  if (!User.associations?.teachingSessions) {
+    User.hasMany(Session, { foreignKey: "teacher_id", as: "teachingSessions" });
+  }
 
-  // User ↔ Support Queries
-  SupportQueriesModel.belongsTo(User, { foreignKey: "user_id", onDelete: "CASCADE" });
-  User.hasMany(SupportQueriesModel, { foreignKey: "user_id", onDelete: "CASCADE" });
+  if (!Session.associations?.catalogueNode) {
+    Session.belongsTo(CatalogueNode, { foreignKey: "topic_id", as: "catalogueNode", onDelete: "CASCADE" });
+  }
+  if (!CatalogueNode.associations?.sessions) {
+    CatalogueNode.hasMany(Session, { foreignKey: "topic_id", as: "sessions", onDelete: "CASCADE" });
+  }
 
-  // Department ↔ SubDepartments
-  Department.hasMany(Department, { foreignKey: "parentId", as: "subDepartments", onDelete: "CASCADE" });
-  Department.belongsTo(Department, { foreignKey: "parentId", as: "parentDepartment" });
+  if (!BookedSession.associations?.student) {
+    BookedSession.belongsTo(User, { foreignKey: "learner_id", as: "student", onDelete: "CASCADE" });
+  }
+  if (!BookedSession.associations?.teacher) {
+    BookedSession.belongsTo(User, { foreignKey: "teacher_id", as: "teacher", onDelete: "CASCADE" });
+  }
+  if (!BookedSession.associations?.bookedTopic) {
+    BookedSession.belongsTo(CatalogueNode, { foreignKey: "topic_id", as: "bookedTopic", onDelete: "CASCADE" });
+  }
+  if (!CatalogueNode.associations?.bookedSessions) {
+    CatalogueNode.hasMany(BookedSession, { foreignKey: "topic_id", as: "bookedSessions", onDelete: "CASCADE" });
+  }
 
-  // Department ↔ Roles
-  Department.hasMany(Role, { foreignKey: "departmentId", onDelete: "CASCADE" });
-  Role.belongsTo(Department, { foreignKey: "departmentId", onDelete: "CASCADE" });
+  if (!Session.associations?.feedbacks) {
+    Session.hasMany(Feedback, { foreignKey: "session_id", as: "feedbacks", onDelete: "CASCADE", onUpdate: "CASCADE" });
+  }
+  if (!Feedback.associations?.feedbackSession) {
+    Feedback.belongsTo(Session, { foreignKey: "session_id", as: "feedbackSession", onDelete: "CASCADE", onUpdate: "CASCADE" });
+  }
 
-  // Session ↔ User (Teacher)
-  Session.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
-  User.hasMany(Session, { foreignKey: "teacher_id", as: "teachingSessions" });
+  /* =========================
+   * Payments (NO session_id)
+   * ========================= */
+  // IMPORTANT: Do NOT create Payment↔Session associations.
+  // They would inject a phantom session_id column and break inserts.
 
-  // Session ↔ CatalogueNode
-  Session.belongsTo(CatalogueNode, { foreignKey: "topic_id", onDelete: "CASCADE" });
-  CatalogueNode.hasMany(Session, { foreignKey: "topic_id", onDelete: "CASCADE" });
+  if (!User.associations?.payments) {
+    User.hasMany(Payment, { foreignKey: "user_id", as: "payments" });
+  }
+  if (!Payment.associations?.user) {
+    Payment.belongsTo(User, { foreignKey: "user_id", as: "user" });
+  }
 
-  // BookedSession ↔ User (Learner)
-  BookedSession.belongsTo(User, { foreignKey: "learner_id", as: "student", onDelete: "CASCADE" });
+  // Test payment linkage (via Test.payment_id)
+  if (!Test.associations?.payment) {
+    Test.belongsTo(Payment, { foreignKey: "payment_id", as: "payment", onDelete: "RESTRICT", onUpdate: "CASCADE" });
+  }
+  if (!Payment.associations?.test) {
+    Payment.hasOne(Test, { foreignKey: "payment_id", as: "test", onDelete: "RESTRICT", onUpdate: "CASCADE" });
+  }
 
-  // CatalogueNode ↔ Self
-  CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "parentNode", onDelete: "CASCADE" });
-  CatalogueNode.belongsTo(CatalogueNode, { as: "subject", foreignKey: "parent_id", onDelete: "CASCADE" });
+  /* =========================
+   * Test flags / rubrics
+   * ========================= */
+  if (!TestFlag.associations?.user) {
+    TestFlag.belongsTo(User, { foreignKey: "user_id", as: "user" });
+  }
+  if (!User.associations?.testFlags) {
+    User.hasMany(TestFlag, { foreignKey: "user_id", as: "testFlags" });
+  }
 
-  // BookedSession ↔ User (Teacher)
-  BookedSession.belongsTo(User, { as: "teacher", foreignKey: "teacher_id", onDelete: "CASCADE" });
+  if (!TestFlag.associations?.test) {
+    TestFlag.belongsTo(Test, { foreignKey: "test_id", as: "test" });
+  }
+  if (!Test.associations?.flags) {
+    Test.hasMany(TestFlag, { foreignKey: "test_id", as: "flags" });
+  }
 
-  // BookedSession ↔ CatalogueNode
-  BookedSession.belongsTo(CatalogueNode, { as: "bookedTopic", foreignKey: "topic_id", onDelete: "CASCADE" });
-  CatalogueNode.hasMany(BookedSession, { foreignKey: "topic_id", onDelete: "CASCADE" });
-
-  // User ↔ FeedbackSummary
-  User.hasMany(FeedbackSummary, { foreignKey: "teacher_id", as: "feedbackSummaries" });
-  FeedbackSummary.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
-
-  // Session ↔ Feedback
-  Session.hasMany(Feedback, {
-    foreignKey: "session_id",
-    as: "feedbacks",
-    onDelete: "CASCADE",
-    onUpdate: "CASCADE",
-  });
-
-  Feedback.belongsTo(Session, {
-    foreignKey: "session_id",
-    as: "feedbackSession",
-    onDelete: "CASCADE",
-    onUpdate: "CASCADE",
-  });
-
-  // Payments
-  Payment.belongsTo(Session, {
-    foreignKey: "session_id",
-    as: "sessionPayment",
-    onDelete: "RESTRICT",
-    onUpdate: "CASCADE",
-  });
-
-  Session.hasOne(Payment, {
-    foreignKey: "session_id",
-    as: "payment",
-    onDelete: "RESTRICT",
-    onUpdate: "CASCADE",
-  });
-
-  User.hasMany(Payment, { foreignKey: "user_id" });
-  Payment.belongsTo(User, { foreignKey: "user_id" });
-
-  // Test ↔ Payment
-  Test.belongsTo(Payment, {
-    foreignKey: "payment_id",
-    as: "payment",
-    onDelete: "RESTRICT",
-    onUpdate: "CASCADE",
-  });
-
-  Payment.hasOne(Test, {
-    foreignKey: "payment_id",
-    as: "test",
-    onDelete: "RESTRICT",
-    onUpdate: "CASCADE",
-  });
+  if (!Test.associations?.itemRubrics) {
+    Test.hasMany(TestItemRubric, { foreignKey: "test_id", as: "itemRubrics", onDelete: "CASCADE", onUpdate: "CASCADE" });
+  }
+  if (!TestItemRubric.associations?.test) {
+    TestItemRubric.belongsTo(Test, { foreignKey: "test_id", as: "test", onDelete: "CASCADE", onUpdate: "CASCADE" });
+  }
 };
 
 export default defineRelationships;
