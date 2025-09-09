@@ -1,72 +1,85 @@
+// File: src/Models/PaymentModels.js
 import { DataTypes } from "sequelize";
-import { sequelize1 } from "../config/sequelize.js";
+import { sequelize1 } from "../config/sequelize.js"; // adjust path if needed
 
-export const Payment = sequelize1.define("Payment", {
-  payment_id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-  },
-
-  user_id: {
-    type: DataTypes.UUID,
-    allowNull: false,
-    comment: "Reference to the user making the payment",
-  },
-
-  // 🔄 Strict FK to Session (optional: only if payment is for a session)
-  session_id: {
-    type: DataTypes.UUID,
-    allowNull: true,
-    references: {
-      model: {
-        tableName: "sessions",
-        schema: "user",
-      },
-      key: "session_id",
+export const Payment = sequelize1.define(
+  "Payment",
+  {
+    payment_id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
-    onDelete: "RESTRICT",
-    onUpdate: "CASCADE",
-    comment: "Reference to a session if this payment was for a session",
-  },
 
-  order_id: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
+    user_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
 
-  razorpay_payment_id: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
+    // what the payment is for (we use "test")
+    entity_type: {
+      type: DataTypes.STRING(32), // keep STRING to avoid ENUM migration requirements
+      allowNull: false,
+    },
 
-  razorpay_signature: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
+    // id of the thing being paid for (topicId for tests)
+    entity_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
 
-  amount: {
-    type: DataTypes.INTEGER, // in paise (e.g., 1000 = ₹10)
-    allowNull: false,
-  },
+    order_id: {
+      type: DataTypes.STRING(64),
+      allowNull: false,
+      unique: true,
+    },
 
-  currency: {
-    type: DataTypes.STRING,
-    defaultValue: "INR",
-  },
+    razorpay_payment_id: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+    },
 
-  status: {
-    type: DataTypes.ENUM("created", "pending", "success", "failed", "refunded"),
-    defaultValue: "created",
-  },
+    razorpay_signature: {
+      type: DataTypes.STRING(128),
+      allowNull: true,
+    },
 
-  failure_reason: {
-    type: DataTypes.STRING,
-    allowNull: true,
+    amount: {
+      type: DataTypes.INTEGER, // paise
+      allowNull: false,
+    },
+
+    currency: {
+      type: DataTypes.STRING(8),
+      allowNull: false,
+      defaultValue: "INR",
+    },
+
+    status: {
+      type: DataTypes.STRING(16), // "created" | "success" | "failed" | "refunded"
+      allowNull: false,
+      defaultValue: "created",
+    },
+
+    failure_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+
+    // IMPORTANT: do NOT define session_id here
   },
-}, {
-  schema: "user",
-  tableName: "payments",
-  timestamps: true,
-  comment: "Stores all payment transactions (session or test)",
-});
+  {
+    tableName: "payments",
+    schema: "user",
+    timestamps: true,      // generates createdAt / updatedAt
+    underscored: false,    // keeps camelCase (createdAt/updatedAt)
+    freezeTableName: true,
+    indexes: [
+      { fields: ["user_id"] },
+      { fields: ["entity_type", "entity_id"] },
+      { unique: true, fields: ["order_id"] },
+      { fields: ["status"] },
+      { fields: ["createdAt"] },
+    ],
+  }
+);

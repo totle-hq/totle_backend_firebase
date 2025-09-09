@@ -4,7 +4,7 @@ import { sequelize1 } from "../config/sequelize.js";
 
 /**
  * One row per user in schema "user".
- * Columns map to the already-created table "user"."cps_profiles".
+ * Columns map to "user"."cps_profiles".
  * Timestamps map to created_at/updated_at.
  */
 const CpsProfile = sequelize1.define(
@@ -14,6 +14,19 @@ const CpsProfile = sequelize1.define(
       type: DataTypes.UUID,
       primaryKey: true,
       allowNull: false,
+    },
+
+    /* ---------- Bookkeeping used by cpsEma.service.js ---------- */
+    tests_seen: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: "How many tests have contributed to this profile",
+    },
+    last_test_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      comment: "Most recent Test.test_id that updated this profile",
     },
 
     // --- Dimension 1 — Reasoning & Strategy ---
@@ -38,20 +51,20 @@ const CpsProfile = sequelize1.define(
     episodic_memory_flag:        { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
 
     // --- Dimension 3 — Processing Speed & Fluency ---
-    mean_response_time:          { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
+    mean_response_time:          { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     speed_accuracy_tradeoff:     { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     adaptive_fluency_index:      { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     cognitive_load_tolerance:    { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     reaction_variability:        { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
-    decision_latency:            { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
+    decision_latency:            { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     fluency_recovery_rate:       { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
 
     // --- Dimension 4 — Attention & Cognitive Focus ---
     active_engagement_ratio:     { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
-    tab_switch_frequency:        { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
+    tab_switch_frequency:        { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     question_skipping_rate:      { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
-    hover_depth_index:           { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
-    backtracking_frequency:      { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
+    hover_depth_index:           { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
+    backtracking_frequency:      { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     attention_recovery_rate:     { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     focus_decay_over_time:       { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
 
@@ -59,7 +72,7 @@ const CpsProfile = sequelize1.define(
     strategy_selection_score:    { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     self_correction_rate:        { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     hint_utilization_efficiency: { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
-    planning_latency:            { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
+    planning_latency:            { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     reflective_comment_depth:    { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     retry_strategy_shift:        { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     time_reallocation_efficiency:{ type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
@@ -72,7 +85,7 @@ const CpsProfile = sequelize1.define(
     effort_variability:          { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     strategy_adaptability:       { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     grit_trajectory:             { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
-    recovery_latency:            { type: DataTypes.DECIMAL(7, 2), allowNull: false, defaultValue: 0 },
+    recovery_latency:            { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
     plateau_breaking_score:      { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
   },
   {
@@ -81,6 +94,11 @@ const CpsProfile = sequelize1.define(
     timestamps: true,
     createdAt: "created_at",
     updatedAt: "updated_at",
+    indexes: [
+      { fields: ["updated_at"] },
+      { fields: ["tests_seen"] },
+      { unique: true, fields: ["user_id"] },   // 🔑 enforce one row per user
+    ],
   }
 );
 
