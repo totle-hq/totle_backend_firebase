@@ -2,7 +2,8 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { CPS_KEYS } from "./cpsKeys.js";  // ✅ already in repo, reuse it
-
+import fs from "fs";
+import path from "path";
 dotenv.config();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -90,6 +91,18 @@ function sanitizeItems(rawQuestions = [], rawAnswers = [], globalSeen) {
 /* -------------------------------------------------------------------------- */
 /* Public API                                                                 */
 /* -------------------------------------------------------------------------- */
+
+
+function logBrokenJson(raw, phase) {
+  try {
+    const outPath = path.join(process.cwd(), `broken_json_${phase}_${Date.now()}.txt`);
+    fs.writeFileSync(outPath, raw || "");
+    console.warn(`⚠️ Logged broken JSON to ${outPath}`);
+  } catch (e) {
+    console.error("⚠️ Failed to log broken JSON:", e.message);
+  }
+}
+
 export async function generateCpsQuestionSet({
   subject = "",
   subjectDescription = "",
@@ -125,7 +138,7 @@ export async function generateCpsQuestionSet({
 
   const steps = [];
   const globalSeenStems = new Set();
-  const model = process.env.OPENAI_CPS_MODEL || "gpt-4o-mini";
+  const model = process.env.OPENAI_CPS_MODEL || "gpt-4o";
 
   // --- per block fetching ---
   for (const s of order) {
@@ -137,13 +150,15 @@ export async function generateCpsQuestionSet({
     let collected = [];
     let tries = 0;
 
-    while (collected.length < targetCount && tries < 5) {
+    while (collected.length < targetCount && tries < 15) {
       tries++;
+      const remaining = targetCount - collected.length;
+      const batchSize = Math.min(2, remaining); // 🔑 micro-batch max 2
       const avoidStems = Array.from(globalSeenStems).slice(-50);
 
       const prompt = buildPrompt({
         blockKey: s.key,
-        count: targetCount - collected.length,
+        count: batchSize,
         isBaseline,
         subject,
         subjectDescription,
@@ -162,7 +177,7 @@ export async function generateCpsQuestionSet({
           model,
           prompt,
           system: systemMessage(),
-          max_tokens: 3500,
+          max_tokens: 1200,
         });
 
         const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
@@ -178,6 +193,8 @@ export async function generateCpsQuestionSet({
         }
       } catch (err) {
         console.warn(`[CPS:${s.key}] try ${tries} failed:`, err?.message || err);
+        logBrokenJson(err?.raw || "", s.key); // 🔑 log broken JSON
+        continue; // 🔑 skip instead of crash
       }
     }
 
@@ -200,7 +217,6 @@ export async function generateCpsQuestionSet({
 
   while (total < 25 && fallbackTries < 50) {
     fallbackTries++;
-    // cycle blocks
     const block = order[fallbackTries % order.length];
     const prompt = buildPrompt({
       blockKey: block.key,
@@ -223,7 +239,7 @@ export async function generateCpsQuestionSet({
         model,
         prompt,
         system: systemMessage(),
-        max_tokens: 1200,
+        max_tokens: 1000,
       });
       const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
       if (items.length > 0) {
@@ -248,6 +264,8 @@ export async function generateCpsQuestionSet({
       }
     } catch (err) {
       console.warn(`[Fallback:${block.key}] failed:`, err?.message || err);
+      logBrokenJson(err?.raw || "", `fallback_${block.key}`);
+      continue;
     }
   }
 
@@ -274,7 +292,6 @@ function systemMessage() {
     "Output only in JSON as specified.",
   ].join(" ");
 }
-
 
 function buildPrompt({
   blockKey,
@@ -320,11 +337,10 @@ function buildPrompt({
     "",
     "Each item must be unique, clear, and text-only.",
     "Each item must have exactly 4 distinct options (A–D).",
-"Each item must have one correct answer key (A/B/C/D). The correct answer must be indisputably correct and randomly distributed across A–D.",
-"For each item, also produce a rubric with:",
-`- option_impacts: mapping A–D → { ${CPS_KEYS.join(", ")} }, each key having a −1..+1 numeric delta (0 if not impacted).`,
-"- gates: e.g. { teaching_floor: true/false, unsafe: true/false }",
-
+    "Each item must have one correct answer key (A/B/C/D). The correct answer must be indisputably correct and randomly distributed across A–D.",
+    "For each item, also produce a rubric with:",
+    `- option_impacts: mapping A–D → { ${CPS_KEYS.join(", ")} }, each key having a −1..+1 numeric delta (0 if not impacted).`,
+    "- gates: e.g. { teaching_floor: true/false, unsafe: true/false }",
     "",
     "Output strictly in JSON with shape:",
     "{",
@@ -338,27 +354,102 @@ function buildPrompt({
 /* -------------------------------------------------------------------------- */
 /* OpenAI call                                                                */
 /* -------------------------------------------------------------------------- */
-async function callOpenAI({ model, prompt, system, max_tokens = 3500 }) {
-  const response = await openai.chat.completions.create({
-    model,
-    temperature: 0.3,
-    response_format: { type: "json_object" },
-    max_tokens,
-    messages: [
-      ...(system ? [{ role: "system", content: system }] : []),
-      { role: "user", content: prompt },
-    ],
-  });
+function extractJsonBlock(str) {
+  if (!str) return null;
+  const start = str.indexOf("{");
+  const end = str.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  return str.slice(start, end + 1);
+}
 
-  let raw = response.choices?.[0]?.message?.content || "{}";
-  raw = raw.replace(/```json|```/g, "").trim();
-  return JSON.parse(raw);
+function safeParse(raw) {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    const block = extractJsonBlock(raw);
+    if (block) {
+      try { return JSON.parse(block); } catch {}
+    }
+  }
+  return null;
+}
+
+function lastValidJsonSlice(raw) {
+  if (!raw) return "{}";
+  const start = raw.indexOf("{");
+  const end = raw.lastIndexOf("}");
+  if (start === -1) return "{}";
+  return raw.slice(start, end + 1);
+}
+
+
+async function callOpenAI({ model, prompt, system, max_tokens = 2000 }) {
+  const baseMessages = [
+    ...(system ? [{ role: "system", content: system }] : []),
+    { role: "user", content: prompt },
+  ];
+
+  let raw = "";
+  try {
+    const response = await openai.chat.completions.create({
+      model,
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      max_tokens,
+      messages: baseMessages,
+    });
+
+    raw = response.choices?.[0]?.message?.content || "{}";
+    raw = raw.replace(/```json|```/g, "").trim();
+
+    const parsed = safeParse(raw);
+    if (parsed) return parsed;
+
+    throw new Error("Parse failed");
+  } catch (err) {
+    console.warn("⚠️ Initial JSON parse failed:", err.message);
+
+    // 🔑 Preserve raw in error for logging
+    err.raw = raw;
+
+    // Try repair
+    try {
+      const slice = lastValidJsonSlice(raw);
+      const repairResponse = await openai.chat.completions.create({
+        model,
+        temperature: 0.0,
+        response_format: { type: "json_object" },
+        max_tokens: 2000,
+        messages: [
+          {
+            role: "system",
+            content: "You are a JSON repair assistant. Only return valid JSON. No explanations.",
+          },
+          {
+            role: "user",
+            content: `Fix this truncated/invalid JSON so it is valid and matches schema:\n\n${slice}`,
+          },
+        ],
+      });
+
+      let fixed = repairResponse.choices?.[0]?.message?.content || "{}";
+      fixed = fixed.replace(/```json|```/g, "").trim();
+      const parsedFixed = safeParse(fixed);
+      if (parsedFixed) return parsedFixed;
+
+      throw new Error("Repair parse failed");
+    } catch (repairErr) {
+      console.error("❌ JSON repair also failed:", repairErr.message);
+      // 🔑 return empty instead of crashing whole loop
+      return { questions: [], answers: [], rubrics: [] };
+    }
+  }
 }
 
 /* -------------------------------------------------------------------------- */
 /* Rubric coercion                                                            */
 /* -------------------------------------------------------------------------- */
-
 function coerceRubric(r = {}, blockKey) {
   const out = { option_impacts: {}, gates: {}, block: blockKey };
 
@@ -366,7 +457,6 @@ function coerceRubric(r = {}, blockKey) {
     const entry = r?.option_impacts?.[opt];
     const clean = {};
 
-    // Copy only valid numeric params
     if (entry && typeof entry === "object") {
       for (const [k, v] of Object.entries(entry)) {
         const num = Number(v);
@@ -374,7 +464,6 @@ function coerceRubric(r = {}, blockKey) {
       }
     }
 
-    // ✅ Guarantee full 47-param coverage
     for (const key of CPS_KEYS) {
       if (!(key in clean)) clean[key] = 0;
     }
@@ -389,7 +478,6 @@ function coerceRubric(r = {}, blockKey) {
 
   return out;
 }
-
 
 /* -------------------------------------------------------------------------- */
 /* Views + EMA helpers                                                        */
