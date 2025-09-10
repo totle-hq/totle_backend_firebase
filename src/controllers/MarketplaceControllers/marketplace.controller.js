@@ -52,186 +52,182 @@ export const upgradeToPaid = async (req, res) => {
 
 export const getTopEntities = async (req, res) => {
   try {
-    const { entity, domainId, tier, level, language, range } = req.query;
-    
+    const { entity, domainId, tier, level, range } = req.query;
+
     if (!['topic', 'domain'].includes(entity)) {
       return res.status(400).json({ error: 'Invalid entity type' });
     }
 
     if (entity === 'topic') {
-      const whereClauses = ["cn.is_topic = true"];
-      const joinClauses = [
-        `JOIN "user"."sessions" s ON cn.node_id = s.topic_id AND s.status = 'completed'`,
-        `JOIN "catalog"."teacher_topic_stats" tts ON cn.node_id = tts.node_id`
+      const where = { is_topic: true };
+      if (domainId) where.parent_id = domainId;
+
+      const include = [
+        {
+          model: Session,
+          as: 'sessions',
+          required: true,
+          where: { status: 'completed' },
+          attributes: [],
+        },
+        {
+          model: Teachertopicstats,
+          as: 'teacherStats',
+          required: true,
+          where: {
+            ...(tier && tier !== 'all' ? { tier } : {}),
+            ...(level && level !== 'All' ? { level } : {}),
+          },
+          attributes: [],
+        },
       ];
-      const params = {};
 
-      if (domainId) {
-        whereClauses.push("cn.parent_id = :domainId");
-        params.domainId = domainId;
-      }
-
-      if (tier && tier !== 'all') {
-        whereClauses.push("tts.tier = :tier");
-        params.tier = tier;
-      }
-
-      if (level && level !== 'All') {
-        whereClauses.push("tts.level = :level");
-        params.level = level;
-      }
-
-      const query = `
-        SELECT 
-          cn.node_id,
-          cn.name,
-          COUNT(DISTINCT s.id) AS "sessionCount",
-          COUNT(DISTINCT tts.teacher_id) AS "teacherCount"
-        FROM "catalog"."catalogue_nodes" cn
-        ${joinClauses.join('\n')}
-        WHERE ${whereClauses.join(' AND ')}
-        GROUP BY cn.node_id
-        ORDER BY "sessionCount" DESC
-        LIMIT 10
-      `;
-
-      const results = await sequelize.query(query, {
-        replacements: params,
-        type: sequelize.QueryTypes.SELECT
+      const topics = await CatalogueNode.findAll({
+        where,
+        attributes: [
+          'node_id',
+          'name',
+          [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('sessions.id'))), 'sessionCount'],
+          [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('teacherStats.teacher_id'))), 'teacherCount'],
+        ],
+        include,
+        group: ['CatalogueNode.node_id'],
+        order: [[Sequelize.literal('"sessionCount"'), 'DESC']],
+        limit: 10,
+        raw: true,
       });
 
       const topicsWithSparklines = await Promise.all(
-        results.map(async (item) => ({
+        topics.map(async (item) => ({
           id: item.node_id,
           name: item.name,
           sessionCount: item.sessionCount,
           teacherCount: item.teacherCount,
-          spark: await getTopicSparklineData(item.node_id, range)
+          spark: await getTopicSparklineData(item.node_id, range),
         }))
       );
 
       return res.json(topicsWithSparklines);
-    } 
-    
-    // --- DOMAIN BRANCH ---
-    else {
-      const dateCondition = getDateRangeCondition(range || 'week', 's'); // 👈 alias fixed!
-      const whereClauses = ["d.is_domain = true"];
-      const joinClauses = [
-        `JOIN "catalog"."catalogue_nodes" cn ON cn.parent_id = d.node_id AND cn.is_topic = true`,
-        `JOIN "user"."sessions" s ON s.topic_id = cn.node_id AND s.status = 'completed'`,
-        `JOIN "catalog"."teacher_topic_stats" tts ON cn.node_id = tts.node_id`
+    } else {
+      // For domains
+      const where = { is_domain: true };
+      if (domainId) where.parent_id = domainId;
+
+      const include = [
+        {
+          model: CatalogueNode,
+          as: 'topics',
+          required: true,
+          where: { is_topic: true },
+          include: [
+            {
+              model: Session,
+              as: 'sessions',
+              required: true,
+              where: { status: 'completed' },
+              attributes: [],
+            },
+            {
+              model: Teachertopicstats,
+              as: 'teacherStats',
+              required: true,
+              where: {
+                ...(tier && tier !== 'all' ? { tier } : {}),
+                ...(level && level !== 'All' ? { level } : {}),
+              },
+              attributes: [],
+            },
+          ],
+          attributes: [],
+        },
       ];
-      const params = {};
 
-      if (domainId) {
-        whereClauses.push("d.parent_id = :domainId");
-        params.domainId = domainId;
-      }
-
-      if (tier && tier !== 'all') {
-        whereClauses.push("tts.tier = :tier");
-        params.tier = tier;
-      }
-
-      if (level && level !== 'All') {
-        whereClauses.push("tts.level = :level");
-        params.level = level;
-      }
-
-      const query = `
-        SELECT 
-          d.node_id,
-          d.name,
-          COUNT(DISTINCT s.id) AS "sessionCount",
-          COUNT(DISTINCT tts.teacher_id) AS "teacherCount"
-        FROM "catalog"."catalogue_nodes" d
-        ${joinClauses.join('\n')}
-        WHERE ${whereClauses.join(' AND ')}
-        ${dateCondition ? `AND ${dateCondition}` : ''}
-        GROUP BY d.node_id
-        ORDER BY "sessionCount" DESC
-        LIMIT 10
-      `;
-
-      const results = await sequelize.query(query, {
-        replacements: params,
-        type: sequelize.QueryTypes.SELECT
+      const domains = await CatalogueNode.findAll({
+        where,
+        attributes: [
+          'node_id',
+          'name',
+          [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('topics->sessions.id'))), 'sessionCount'],
+          [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('topics->teacherStats.teacher_id'))), 'teacherCount'],
+        ],
+        include,
+        group: ['CatalogueNode.node_id'],
+        order: [[Sequelize.literal('"sessionCount"'), 'DESC']],
+        limit: 10,
+        raw: true,
       });
 
       const domainsWithSparklines = await Promise.all(
-        results.map(async (item) => ({
+        domains.map(async (item) => ({
           id: item.node_id,
           name: item.name,
           sessionCount: item.sessionCount,
           teacherCount: item.teacherCount,
-          spark: await getDomainSparklineData(item.node_id, range)
+          spark: await getDomainSparklineData(item.node_id, range),
         }))
       );
 
       return res.json(domainsWithSparklines);
     }
-
   } catch (error) {
     console.error("Error fetching top entities:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: "Failed to fetch data",
       details: error.message,
-      query: error.sql 
     });
   }
 };
 
 
+
 async function getTopicSparklineData(topicId, range) {
   const dateCondition = getDateRangeCondition(range);
-  
-  const query = `
-    SELECT 
-      ${getTimeGroup(range, 'sessions')} AS time_group,
-      COUNT(id) AS value
-    FROM "user"."sessions" sessions
-    WHERE 
-      status = 'completed'
-      AND topic_id = :topicId
-      ${dateCondition ? `AND ${dateCondition.replace(/s\./g, '')}` : ''}
-    GROUP BY time_group
-    ORDER BY time_group
-  `;
 
-  const results = await sequelize.query(query, {
-    replacements: { topicId },
-    type: sequelize.QueryTypes.SELECT
+  const results = await Session.findAll({
+    where: {
+      status: 'completed',
+      topic_id: topicId,
+      ...(dateCondition ? { completed_at: { [Op.gte]: new Date(dateCondition.split('>= ')[1].replace(/'/g, '')) } } : {}),
+    },
+    attributes: [
+      [Sequelize.literal(getTimeGroup(range, 'sessions')), 'time_group'],
+      [Sequelize.fn('COUNT', Sequelize.col('id')), 'value'],
+    ],
+    group: ['time_group'],
+    order: [Sequelize.literal('time_group')],
+    raw: true,
   });
 
   return results.map(r => r.value);
 }
 
 
+
 async function getDomainSparklineData(domainId, range) {
-  const dateCondition = getDateRangeCondition(range, 's');
+  const dateCondition = getDateRangeCondition(range);
 
-  const query = `
-    SELECT 
-      ${getTimeGroup(range, 's')} AS time_group,
-      COUNT(DISTINCT s.id) AS value
-    FROM "catalog"."catalogue_nodes" cn
-    JOIN "user"."sessions" s 
-      ON s.topic_id = cn.node_id 
-      AND s.status = 'completed'
-    WHERE cn.parent_id = :domainId
-      AND cn.is_topic = true
-      ${dateCondition ? `AND ${dateCondition}` : ''}
-    GROUP BY time_group
-    ORDER BY time_group
-  `;
-
-  const results = await sequelize.query(query, {
-    replacements: { domainId },
-    type: sequelize.QueryTypes.SELECT
+  const results = await Session.findAll({
+    where: {
+      status: 'completed',
+      ...(dateCondition ? { completed_at: { [Op.gte]: new Date(dateCondition.split('>= ')[1].replace(/'/g, '')) } } : {}),
+    },
+    include: [
+      {
+        model: CatalogueNode,
+        as: 'topic',
+        where: { parent_id: domainId, is_topic: true },
+        attributes: [],
+      },
+    ],
+    attributes: [
+      [Sequelize.literal(getTimeGroup(range, 's')), 'time_group'],
+      [Sequelize.fn('COUNT', Sequelize.fn('DISTINCT', Sequelize.col('s.id'))), 'value'],
+    ],
+    group: ['time_group'],
+    order: [Sequelize.literal('time_group')],
+    raw: true,
   });
 
-  // Build buckets for full time range
   const buckets = buildTimeBuckets(range);
   const valuesByTime = Object.fromEntries(
     results.map(r => [formatTimeKey(r.time_group, range), parseInt(r.value, 10)])
@@ -239,6 +235,7 @@ async function getDomainSparklineData(domainId, range) {
 
   return buckets.map(t => valuesByTime[t] || 0);
 }
+
 
 
 function buildTimeBuckets(range) {
@@ -633,67 +630,54 @@ async function getSessionCountsOptimized(whereClause, teacherIds) {
   weekStart.setDate(today.getDate() - today.getDay());
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  let languageFilter = '';
-  if (teacherIds && teacherIds.length) {
-    languageFilter = `AND s.teacher_id IN (:teacherIds)`;
-  }
+  const where = { ...whereClause };
+  if (teacherIds?.length) where.teacher_id = { [Op.in]: teacherIds };
 
-  const query = `
-    SELECT 
-      COUNT(*) AS total,
-      COUNT(CASE WHEN completed_at >= :today THEN 1 END) AS today,
-      COUNT(CASE WHEN completed_at >= :weekStart THEN 1 END) AS week,
-      COUNT(CASE WHEN completed_at >= :monthStart THEN 1 END) AS month
-    FROM "user".sessions s
-    WHERE ${buildWhereClause(whereClause)}
-    ${languageFilter}
-  `;
-
-  const [results] = await sequelize.query(query, {
-    replacements: {
-      today: today.toISOString(),
-      weekStart: weekStart.toISOString(),
-      monthStart: monthStart.toISOString(),
-      teacherIds,
-      ...whereClause
-    },
-    type: Sequelize.QueryTypes.SELECT
+  const results = await Session.findAll({
+    where,
+    attributes: [
+      [Sequelize.fn('COUNT', Sequelize.col('*')), 'total'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN completed_at >= '${today.toISOString()}' THEN 1 END`)), 'today'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN completed_at >= '${weekStart.toISOString()}' THEN 1 END`)), 'week'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN completed_at >= '${monthStart.toISOString()}' THEN 1 END`)), 'month'],
+    ],
+    raw: true,
   });
 
+  const row = results[0] || {};
   return {
-    tillDate: parseInt(results.total, 10),
-    thatDay: parseInt(results.today, 10),
-    thatWeek: parseInt(results.week, 10),
-    thatMonth: parseInt(results.month, 10)
+    tillDate: parseInt(row.total || 0, 10),
+    thatDay: parseInt(row.today || 0, 10),
+    thatWeek: parseInt(row.week || 0, 10),
+    thatMonth: parseInt(row.month || 0, 10),
   };
 }
+
 
 
 async function getTeacherStatsByTopicOptimized(topicIds, teacherIds) {
   if (!topicIds.length) return {};
 
-  const query = `
-    SELECT 
-      tts.node_id,
-      COUNT(tts.teacher_id) AS total,
-      COUNT(CASE WHEN tts.tier = 'paid' THEN 1 END) AS paid,
-      COUNT(CASE WHEN tts.tier = 'free' THEN 1 END) AS free
-    FROM "catalog"."teacher_topic_stats" tts
-    WHERE tts.node_id IN (:topicIds)
-      ${teacherIds && teacherIds.length ? 'AND tts.teacher_id IN (:teacherIds)' : ''}
-    GROUP BY tts.node_id
-  `;
+  const where = { node_id: topicIds };
+  if (teacherIds?.length) where.teacher_id = { [Op.in]: teacherIds };
 
-  const results = await sequelize.query(query, {
-    replacements: { topicIds, teacherIds },
-    type: Sequelize.QueryTypes.SELECT
+  const results = await Teachertopicstats.findAll({
+    where,
+    attributes: [
+      'node_id',
+      [Sequelize.fn('COUNT', Sequelize.col('teacher_id')), 'total'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN tier = 'paid' THEN 1 END`)), 'paid'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN tier = 'free' THEN 1 END`)), 'free'],
+    ],
+    group: ['node_id'],
+    raw: true,
   });
 
   return results.reduce((acc, row) => {
     acc[row.node_id] = {
-      qualified: row.total,
-      paid: row.paid,
-      free: row.free
+      qualified: Number(row.total) || 0,
+      paid: Number(row.paid) || 0,
+      free: Number(row.free) || 0,
     };
     return acc;
   }, {});
@@ -709,56 +693,35 @@ async function getSessionCountsByTopicOptimized(topicIds, filters) {
   weekStart.setDate(today.getDate() - today.getDay());
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const teacherFilter = filters.teacherIds && filters.teacherIds.length
-    ? 'AND s.teacher_id IN (:teacherIds)'
-    : '';
+  const where = { topic_id: topicIds };
+  if (filters.teacherIds?.length) where.teacher_id = { [Op.in]: filters.teacherIds };
+  if (filters.level && filters.level !== 'All') where.session_level = filters.level;
+  if (filters.tier && filters.tier !== 'all') where.session_tier = filters.tier;
 
-  const levelFilter = filters.level && filters.level !== 'All'
-    ? 'AND s.session_level = :level'
-    : '';
-
-  const tierFilter = filters.tier && filters.tier !== 'all'
-    ? 'AND s.session_tier = :tier'
-    : '';
-
-  const query = `
-    SELECT 
-      s.topic_id,
-      COUNT(s.id) AS total,
-      COUNT(CASE WHEN s.completed_at >= :today THEN 1 END) AS today,
-      COUNT(CASE WHEN s.completed_at >= :weekStart THEN 1 END) AS week,
-      COUNT(CASE WHEN s.completed_at >= :monthStart THEN 1 END) AS month
-    FROM "user".sessions s
-    WHERE s.topic_id IN (:topicIds)
-    ${teacherFilter}
-    ${levelFilter}
-    ${tierFilter}
-    GROUP BY s.topic_id
-  `;
-
-  const results = await sequelize.query(query, {
-    replacements: {
-      topicIds,
-      today: today.toISOString(),
-      weekStart: weekStart.toISOString(),
-      monthStart: monthStart.toISOString(),
-      teacherIds: filters.teacherIds,
-      level: filters.level,
-      tier: filters.tier
-    },
-    type: Sequelize.QueryTypes.SELECT
+  const results = await Session.findAll({
+    where,
+    attributes: [
+      'topic_id',
+      [Sequelize.fn('COUNT', Sequelize.col('id')), 'total'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN completed_at >= '${today.toISOString()}' THEN 1 END`)), 'today'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN completed_at >= '${weekStart.toISOString()}' THEN 1 END`)), 'week'],
+      [Sequelize.fn('COUNT', Sequelize.literal(`CASE WHEN completed_at >= '${monthStart.toISOString()}' THEN 1 END`)), 'month'],
+    ],
+    group: ['topic_id'],
+    raw: true,
   });
 
   return results.reduce((acc, row) => {
     acc[row.topic_id] = {
-      today: parseInt(row.today, 10),
-      week: parseInt(row.week, 10),
-      month: parseInt(row.month, 10),
-      total: parseInt(row.total, 10)
+      today: Number(row.today) || 0,
+      week: Number(row.week) || 0,
+      month: Number(row.month) || 0,
+      total: Number(row.total) || 0,
     };
     return acc;
   }, {});
 }
+
 
 function buildWhereClause(conditions) {
   return Object.entries(conditions)
@@ -770,6 +733,7 @@ function buildWhereClause(conditions) {
     })
     .join(' AND ');
 }
+
 async function getTopicDetailsOptimized(topics, filters) {
   if (!topics.length) return [];
 

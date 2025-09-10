@@ -20,6 +20,11 @@ import { Task } from '../Models/Objectives/Task.model.js';
 import { Teachertopicstats } from '../Models/TeachertopicstatsModel.js';
 import { fixTeacherTopicStatsTier } from '../utils/marketplacefunction.js';
 import { Session } from '../Models/SessionModel.js';
+import { CpsProfile } from '../Models/CpsProfile.model.js';
+import { TestItemRubric } from '../Models/TestItemRubric.model.js';
+import { Payment } from '../Models/PaymentModels.js';
+import { User } from '../Models/UserModels/UserModel.js';
+import { Department } from '../Models/UserModels/Department.js';
 
 dotenv.config();
 
@@ -170,12 +175,13 @@ export async function syncDatabase() {
 
     // Keep your earlier fix/ordering for marketplace enum/table:
     console.log('🔍 Ensuring enum values exist for catalog.enum_teacher_topic_stats_tier...');
-    await fixTeacherTopicStatsTier();
-    await safeSync(Teachertopicstats, { name: 'Teachertopicstats' }); // alter allowed
+    
 
     // Blog/Survey/Admin/etc. (dynamic imports preserved)
     const { Admin } = await import('../Models/UserModels/AdminModel.js');
     await safeSync(Admin, { name: 'Admin' });
+    await safeSync(Language, { name: "Language" }); 
+    await safeSync(User, { name: 'User'});
 
     const { Blog } = await import('../Models/SurveyModels/BlogModel.js');
     await safeSync(Blog, { name: 'Blog' });
@@ -202,12 +208,15 @@ export async function syncDatabase() {
     const { Question } = await import('../Models/SurveyModels/QuestionModel.js');
     await safeSync(Question, { name: 'Question' });
 
-    await safeSync(Test, { name: 'Test' });
+    // await safeSync(Test, { name: 'Test' });
 
     const { CatalogueNode } = await import('../Models/CatalogModels/catalogueNode.model.js');
     await safeSync(CatalogueNode, { name: 'CatalogueNode' });
 
+    await Department.sync({ alter: true });
+
     await safeSync(BookedSession, { name: 'BookedSession' });
+    await safeSync(CpsProfile, { name: "CpsProfile" });
 
     await safeSync(ProgressionThresholds, { name: 'ProgressionThresholds' });
     console.log('✅ ProgressionThresholds table synced successfully!');
@@ -217,7 +226,12 @@ export async function syncDatabase() {
 
     // DO NOT call sequelize1.sync({ alter: true }) again here.
     // If you want a final "create missing only" pass:
-    // await sequelize1.sync();
+    await safeSync(Payment, { name: "Payment" });  // 👈 add this before Test
+    await safeSync(Test, { name: "Test" });
+    await safeSync(TestItemRubric, { name: "TestItemRubric" });
+
+
+    await sequelize1.sync();
 
     console.log('✅ All tables synced successfully!');
 
@@ -226,6 +240,8 @@ export async function syncDatabase() {
     await SupportQueriesMasterSeeder();
     await createSuperAdminIfNeeded();
     await autoRolesAndDepartments();
+    await fixTeacherTopicStatsTier();
+
   } catch (error) {
     console.error('❌ Error syncing database:', error);
   }

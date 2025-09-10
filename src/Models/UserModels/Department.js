@@ -18,6 +18,10 @@ const Department = sequelize1.define('departments', {
     allowNull: false,
     comment: 'Stable department code (e.g., TECH, OPS, HR)',
   },
+  slug: {
+    type: DataTypes.STRING,
+    
+  },
   codename: {
     type: DataTypes.STRING,
     allowNull: false,
