@@ -7,7 +7,7 @@ import { generateQuestions } from "../../services/questionGenerator.service.js";
 import { isUserEligibleForRetest } from "../../utils/testCooldown.utils.js";
 import { saveTest } from "../../services/testStorage.service.js";
 import { Test } from "../../Models/test.model.js";
-import { Topic } from "../../Models/CatalogModels/TopicModel.js";
+// import { Topic } from "../../Models/CatalogModels/TopicModel.js";
 import jwt from "jsonwebtoken";
 import { Op } from "sequelize";
 import { Session } from "../../Models/SessionModel.js";

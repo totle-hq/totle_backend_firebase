@@ -1,7 +1,7 @@
 import Feedback from "../Models/feedbackModels.js";
 import { User } from "../Models/UserModels/UserModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
-import { Topic } from "../Models/CatalogModels/TopicModel.js";
+// import { Topic } from "../Models/CatalogModels/TopicModel.js";
 import { Op } from "sequelize";
 import { Session } from "../Models/SessionModel.js";
 import { findSubjectAndDomain } from "../utils/getsubject.js";

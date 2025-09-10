@@ -35,7 +35,7 @@ export const TestItemRubric = sequelize1.define(
         "baseline" // ✅ baseline tests allowed
       ),
       allowNull: false,
-      comment: "Which CPS pipeline (or baseline) produced this item",
+      // comment: "Which CPS pipeline (or baseline) produced this item",
     },
 
     global_qid: {
@@ -49,14 +49,14 @@ export const TestItemRubric = sequelize1.define(
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: {},
-      comment: "Per-option CPS impacts (A–D → param deltas, numeric only)",
+      // comment: "Per-option CPS impacts (A–D → param deltas, numeric only)",
     },
 
     gates: {
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: {},
-      comment: "Gate conditions for pass/fail style checks (e.g., teaching_floor)",
+      // comment: "Gate conditions for pass/fail style checks (e.g., teaching_floor)",
     },
 
     item_weight: {

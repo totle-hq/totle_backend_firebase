@@ -1,7 +1,7 @@
 import { SessionSummaires } from "../Models/SessionsummariesModel.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { Op, fn, col } from "sequelize";
-import { Topic } from "../Models/CatalogModels/TopicModel.js";
+// import { Topic } from "../Models/CatalogModels/TopicModel.js";
 import { User } from "../Models/UserModels/UserModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
