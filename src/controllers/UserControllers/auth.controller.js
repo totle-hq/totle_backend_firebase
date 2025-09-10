@@ -1127,7 +1127,7 @@ export const SummaryOfHomePage = async (req, res) => {
         [fn('SUM', col('duration_minutes')), 'total_minutes']
       ],
       where: {
-        id: { [Op.in]: attendedSessionIds }
+        session_id: { [Op.in]: attendedSessionIds }
       },
       raw: true
     });
