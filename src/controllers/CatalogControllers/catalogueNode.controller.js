@@ -235,8 +235,12 @@ export const createNode = async (req, res) => {
     await cacheDel(`catalogue:domains*`);
 
     const domainNode = await findUniformDomainParent(node);
+    console.log("domain node", domainNode)
     if (domainNode?.prices) {
-      await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+      if(domainNode?.metadata?.uniform){
+        console.log("domain", domain?.metadata?.uniform);
+        await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+      }
     }
     // If topic, compute CPS now (only if typed fields present)
     if (fullNode.is_topic && fullNode.archetype) {
@@ -472,6 +476,10 @@ export const createTopic = async (req, res) => {
     const full = await CatalogueNode.findByPk(t.node_id);
     await updateAddressRecursively(full);
     await recomputeTopicComputedFields(full);
+    const domainNode = await findUniformDomainParent(full);
+    if (domainNode?.metadata?.uniform && domainNode.prices) {
+      await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+    }
     await cacheDel(`catalogue:children:${full.parent_id}*`);
     return res.status(201).json(full);
   } catch (err) {
