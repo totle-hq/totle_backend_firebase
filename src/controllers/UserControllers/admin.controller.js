@@ -24,6 +24,10 @@ import { Op } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { UserDepartment } from '../../Models/UserModels/UserDepartment.js';
 import { is } from 'useragent';
+import { BookedSession } from '../../Models/BookedSession.js';
+import { sequelize1 } from '../../config/sequelize.js';
+import { FeedbackSummary } from '../../Models/feedbacksummary.js';
+import Feedback from '../../Models/feedbackModels.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -1738,5 +1742,57 @@ export const editSuperadminPassword = async (req, res) => {
   } catch (error) {
     console.error("editSuperadminPassword error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const detailedInfoOfTotlers = async (req, res) => {
+  try {
+    const { id } = req.params; // node_id (topic/subject/domain)
+
+    // 1. Sessions grouped by level (Bridger, Expert, Master, Legend)
+    const tierStats = await BookedSession.findAll({
+      where: { topic_id: id },
+      attributes: [
+        "topic_id",
+        [sequelize1.col("teacher_level"), "level"], // <-- assumes you store teacher level somewhere (adjust if in TeacherTopicStats)
+        [sequelize1.fn("COUNT", sequelize1.col("id")), "total_sessions"],
+      ],
+      group: ["topic_id", "level"],
+      raw: true,
+    });
+
+    // 2. Total sessions at this node
+    const totalSessions = await BookedSession.count({
+      where: { topic_id: id },
+    });
+
+    // 3. Average rating (prefer summary table if populated)
+    const ratingSummary = await FeedbackSummary.findOne({
+      where: { node_id: id },
+      attributes: ["avg_star_rating", "feedback_count"],
+    });
+
+    // Fallback: calculate directly from raw feedback if summary not available
+    let avgRating = null;
+    if (ratingSummary && ratingSummary.feedback_count > 0) {
+      avgRating = ratingSummary.avg_star_rating;
+    } else {
+      const rawFeedback = await Feedback.findOne({
+        where: { topic_id: id },
+        attributes: [[sequelize1.fn("AVG", sequelize1.col("star_rating")), "avg_star_rating"]],
+        raw: true,
+      });
+      avgRating = rawFeedback?.avg_star_rating || 0;
+    }
+
+    return res.json({
+      node_id: id,
+      tiers: tierStats, // sessions grouped by Bridger, Expert, Master, Legend
+      totalSessions,
+      avgRating,
+    });
+  } catch (error) {
+    console.error("Fetching info failed", error);
+    return res.status(500).json({ message: "Fetching Failed" });
   }
 };
