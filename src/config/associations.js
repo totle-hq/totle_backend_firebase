@@ -283,6 +283,23 @@ const defineRelationships = () => {
   if (!TestItemRubric.associations?.test) {
     TestItemRubric.belongsTo(Test, { foreignKey: "test_id", as: "test", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
+  if (!BookedSession.associations?.teacherStats) {
+    BookedSession.hasOne(Teachertopicstats, {
+      foreignKey: "teacher_id",       // match teacher_id
+      sourceKey: "teacher_id",        // from BookedSession
+      as: "teacherStats",
+      constraints: false              // avoid Sequelize auto constraints
+    });
+  }
+  if (!Teachertopicstats.associations?.bookedSession) {
+    Teachertopicstats.belongsTo(BookedSession, {
+      foreignKey: "teacher_id",
+      targetKey: "teacher_id",
+      as: "bookedSession",
+      constraints: false
+    });
+  }
+
 };
 
 export default defineRelationships;

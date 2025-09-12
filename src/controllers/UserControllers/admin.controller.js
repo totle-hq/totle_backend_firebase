@@ -28,6 +28,8 @@ import { BookedSession } from '../../Models/BookedSession.js';
 import { sequelize1 } from '../../config/sequelize.js';
 import { FeedbackSummary } from '../../Models/feedbacksummary.js';
 import Feedback from '../../Models/feedbackModels.js';
+import { Teachertopicstats } from '../../Models/TeachertopicstatsModel.js';
+import { CatalogueNode } from '../../Models/CatalogModels/catalogueNode.model.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -1745,35 +1747,67 @@ export const editSuperadminPassword = async (req, res) => {
   }
 };
 
+
+
 export const detailedInfoOfTotlers = async (req, res) => {
   try {
-    const { id } = req.params; // node_id (topic/subject/domain)
+    const id = req.params.id || req.query.topic_id;
+    if (!id) {
+      return res.status(400).json({ message: "Missing node id" });
+    }
 
-    // 1. Sessions grouped by level (Bridger, Expert, Master, Legend)
+    // 1. Fetch node details
+    const node = await CatalogueNode.findByPk(id, {
+      attributes: ["node_id", "name", "is_domain", "is_subject", "is_topic"]
+    });
+    if (!node) {
+      return res.status(404).json({ message: "Node not found" });
+    }
+
+    // 2. Sessions grouped by teacher level (via teacherStats join)
     const tierStats = await BookedSession.findAll({
       where: { topic_id: id },
       attributes: [
         "topic_id",
-        [sequelize1.col("teacher_level"), "level"], // <-- assumes you store teacher level somewhere (adjust if in TeacherTopicStats)
-        [sequelize1.fn("COUNT", sequelize1.col("id")), "total_sessions"],
+        [sequelize1.col("teacherStats.level"), "level"],
+        [sequelize1.fn("COUNT", sequelize1.col("BookedSession.id")), "total_sessions"],
       ],
-      group: ["topic_id", "level"],
+      include: [
+        {
+          model: Teachertopicstats,
+          as: "teacherStats",
+          attributes: [],
+          required: true,
+          on: {
+            node_id: sequelize1.where(
+              sequelize1.col("teacherStats.node_id"),
+              "=",
+              sequelize1.col("BookedSession.topic_id")
+            ),
+            teacher_id: sequelize1.where(
+              sequelize1.col("teacherStats.teacher_id"),
+              "=",
+              sequelize1.col("BookedSession.teacher_id")
+            )
+          }
+        }
+      ],
+      group: ["topic_id", "teacherStats.level"],
       raw: true,
     });
 
-    // 2. Total sessions at this node
+    // 3. Total sessions at this node
     const totalSessions = await BookedSession.count({
       where: { topic_id: id },
     });
 
-    // 3. Average rating (prefer summary table if populated)
+    // 4. Average rating
     const ratingSummary = await FeedbackSummary.findOne({
       where: { node_id: id },
       attributes: ["avg_star_rating", "feedback_count"],
     });
 
-    // Fallback: calculate directly from raw feedback if summary not available
-    let avgRating = null;
+    let avgRating = 0;
     if (ratingSummary && ratingSummary.feedback_count > 0) {
       avgRating = ratingSummary.avg_star_rating;
     } else {
@@ -1785,9 +1819,18 @@ export const detailedInfoOfTotlers = async (req, res) => {
       avgRating = rawFeedback?.avg_star_rating || 0;
     }
 
+    // 5. Send response
     return res.json({
       node_id: id,
-      tiers: tierStats, // sessions grouped by Bridger, Expert, Master, Legend
+      node_name: node.name,
+      node_type: node.is_domain
+        ? "domain"
+        : node.is_subject
+        ? "subject"
+        : node.is_topic
+        ? "topic"
+        : "unknown",
+      tiers: tierStats,
       totalSessions,
       avgRating,
     });
