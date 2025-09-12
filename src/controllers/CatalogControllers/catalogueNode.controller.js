@@ -238,7 +238,7 @@ export const createNode = async (req, res) => {
     console.log("domain node", domainNode)
     if (domainNode?.prices) {
       if(domainNode?.metadata?.uniform){
-        console.log("domain", domain?.metadata?.uniform);
+        console.log("domain", domainNode?.metadata?.uniform);
         await distributePricesRecursively(domainNode.node_id, domainNode.prices);
       }
     }
