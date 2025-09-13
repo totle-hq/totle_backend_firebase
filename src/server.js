@@ -48,7 +48,7 @@ import strategyCpsRouter from "./routes/strategy.cps.routes.js";
 import opsCpsRouter from "./routes/ops.cps.routes.js";
 import cpsRouter from "./routes/cps.routes.js";
 import testsProgressRoutes from "./routes/tests.progress.routes.js";
-
+import nucleusDocsRoutes from "./routes/nucleusDocs.routes.js";  // ✅ import
 
 // DB sync (your existing)
 import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
@@ -146,6 +146,8 @@ app.use("/api/objectives", featureRoutes);
 app.use("/api/objectives", taskRoutes);
 
 app.use("/api", departmentRoutes);
+
+app.use("/api/nucleus-docs", nucleusDocsRoutes);
 
 
 app.use("/api/teach", insights);
