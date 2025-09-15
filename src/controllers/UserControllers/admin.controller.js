@@ -1748,105 +1748,12 @@ export const editSuperadminPassword = async (req, res) => {
 };
 
 
-
-// export const detailedInfoOfTotlers = async (req, res) => {
-//   try {
-//     const id = req.params.id || req.query.topic_id;
-//     if (!id) {
-//       return res.status(400).json({ message: "Missing node id" });
-//     }
-
-//     // 1. Fetch node details
-//     const node = await CatalogueNode.findByPk(id, {
-//       attributes: ["node_id", "name", "is_domain", "is_subject", "is_topic"]
-//     });
-//     if (!node) {
-//       return res.status(404).json({ message: "Node not found" });
-//     }
-
-//     // 2. Sessions grouped by teacher level (via teacherStats join)
-//     const tierStats = await BookedSession.findAll({
-//       where: { topic_id: id },
-//       attributes: [
-//         "topic_id",
-//         [sequelize1.col("teacherStats.level"), "level"],
-//         [sequelize1.fn("COUNT", sequelize1.col("BookedSession.id")), "total_sessions"],
-//       ],
-//       include: [
-//         {
-//           model: Teachertopicstats,
-//           as: "teacherStats",
-//           attributes: [],
-//           required: true,
-//           on: {
-//             node_id: sequelize1.where(
-//               sequelize1.col("teacherStats.node_id"),
-//               "=",
-//               sequelize1.col("BookedSession.topic_id")
-//             ),
-//             teacher_id: sequelize1.where(
-//               sequelize1.col("teacherStats.teacher_id"),
-//               "=",
-//               sequelize1.col("BookedSession.teacher_id")
-//             )
-//           }
-//         }
-//       ],
-//       group: ["topic_id", "teacherStats.level"],
-//       raw: true,
-//     });
-
-//     // 3. Total sessions at this node
-//     const totalSessions = await BookedSession.count({
-//       where: { topic_id: id },
-//     });
-
-//     // 4. Average rating
-//     const ratingSummary = await FeedbackSummary.findOne({
-//       where: { node_id: id },
-//       attributes: ["avg_star_rating", "feedback_count"],
-//     });
-
-//     let avgRating = 0;
-//     if (ratingSummary && ratingSummary.feedback_count > 0) {
-//       avgRating = ratingSummary.avg_star_rating;
-//     } else {
-//       const rawFeedback = await Feedback.findOne({
-//         where: { topic_id: id },
-//         attributes: [[sequelize1.fn("AVG", sequelize1.col("star_rating")), "avg_star_rating"]],
-//         raw: true,
-//       });
-//       avgRating = rawFeedback?.avg_star_rating || 0;
-//     }
-
-//     // 5. Send response
-//     return res.json({
-//       node_id: id,
-//       node_name: node.name,
-//       node_type: node.is_domain
-//         ? "domain"
-//         : node.is_subject
-//         ? "subject"
-//         : node.is_topic
-//         ? "topic"
-//         : "unknown",
-//       tiers: tierStats,
-//       totalSessions,
-//       avgRating,
-//     });
-//   } catch (error) {
-//     console.error("Fetching info failed", error);
-//     return res.status(500).json({ message: "Fetching Failed" });
-//   }
-// };
-
-
 export const fetchChildrenWithStats = async (req, res) => {
   try {
     let parent_id = req.params.parent_id;
     if (parent_id === "null") parent_id = null;
 
-    // Fetch child nodes of this parent
+    // fetch child nodes
     const children = await CatalogueNode.findAll({
       where: { parent_id },
       attributes: [
@@ -1861,60 +1768,123 @@ export const fetchChildrenWithStats = async (req, res) => {
       raw: true,
     });
 
-    // For each child node, fetch summary stats
-    const detailedChildren = await Promise.all(children.map(async (node) => {
-      // Total sessions
-      const totalSessions = await BookedSession.count({ where: { topic_id: node.node_id } });
-
-      // Average rating via FeedbackSummary or fallback Feedback table
-      let avgRating = 0;
-      const ratingSummary = await FeedbackSummary.findOne({
-        where: { node_id: node.node_id },
-        attributes: ["avg_star_rating", "feedback_count"],
-        raw: true,
-      });
-      if (ratingSummary && ratingSummary.feedback_count > 0) {
-        avgRating = ratingSummary.avg_star_rating;
-      } else {
-        const rawFeedback = await Feedback.findOne({
+    const detailedChildren = await Promise.all(
+      children.map(async (node) => {
+        // total sessions
+        const totalSessions = await BookedSession.count({
           where: { topic_id: node.node_id },
-          attributes: [[Sequelize.fn("AVG", Sequelize.col("star_rating")), "avg_star_rating"]],
+        });
+
+        // average rating
+        let avgRating = 0;
+        const ratingSummary = await FeedbackSummary.findOne({
+          where: { node_id: node.node_id },
+          attributes: ["avg_star_rating", "feedback_count"],
           raw: true,
         });
-        avgRating = rawFeedback?.avg_star_rating || 0;
-      }
+        if (ratingSummary && ratingSummary.feedback_count > 0) {
+          avgRating = ratingSummary.avg_star_rating;
+        } else {
+          const rawFeedback = await Feedback.findOne({
+            where: { topic_id: node.node_id },
+            attributes: [
+              [Sequelize.fn("AVG", Sequelize.col("star_rating")), "avg_star_rating"],
+            ],
+            raw: true,
+          });
+          avgRating = rawFeedback?.avg_star_rating || 0;
+        }
 
-      // Tier stats grouped by teacher level
-      const tierStats = await BookedSession.findAll({
-        where: { topic_id: node.node_id },
-        attributes: [
-          [Sequelize.col("teacherStats.level"), "level"],
-          [Sequelize.fn("COUNT", Sequelize.col("BookedSession.id")), "total_sessions"],
-        ],
-        include: [{
-          model: Teachertopicstats,
-          as: "teacherStats",
-          attributes: [],
-          required: true,
-          on: {
-            node_id: Sequelize.where(
-              Sequelize.col("teacherStats.node_id"),
-              "=",
-              Sequelize.col("BookedSession.topic_id")
-            ),
-            teacher_id: Sequelize.where(
-              Sequelize.col("teacherStats.teacher_id"),
-              "=",
-              Sequelize.col("BookedSession.teacher_id")
-            ),
-          },
-        }],
-        group: ["teacherStats.level"],
-        raw: true,
-      });
+        // base response
+        let result = { ...node, totalSessions, avgRating };
 
-      return { ...node, totalSessions, avgRating, tiers: tierStats };
-    }));
+        // 🟡 Tier stats (for all nodes, including topics)
+        const tierStats = await BookedSession.findAll({
+          where: { topic_id: node.node_id },
+          attributes: [
+            [Sequelize.col("teacherStats.level"), "level"],
+            [Sequelize.fn("COUNT", Sequelize.col("BookedSession.id")), "total_sessions"],
+          ],
+          include: [
+            {
+              model: Teachertopicstats,
+              as: "teacherStats", // ✅ correct alias from BookedSession side
+              attributes: [],
+              required: true,
+              on: {
+                node_id: Sequelize.where(
+                  Sequelize.col("teacherStats.node_id"),
+                  "=",
+                  Sequelize.col("BookedSession.topic_id")
+                ),
+                teacher_id: Sequelize.where(
+                  Sequelize.col("teacherStats.teacher_id"),
+                  "=",
+                  Sequelize.col("BookedSession.teacher_id")
+                ),
+              },
+            },
+          ],
+          group: ["teacherStats.level"],
+          raw: true,
+        });
+
+        result.tiers = tierStats;
+
+        // 🟢 If Topic → also return Bridger-level stats
+        if (node.is_topic) {
+          const bridgers = await Teachertopicstats.findAll({
+            where: { node_id: node.node_id },
+            attributes: ["teacherId", "level"],
+            include: [
+              {
+                model: User,
+                as: "teacher", // ✅ association in associations.js
+                attributes: ["firstName", "lastName", "profilePictureUrl"],
+              },
+              {
+                model: BookedSession,
+                as: "bookedSession", // ✅ correct alias from Teachertopicstats side
+                required: false,
+                attributes: [
+                  [Sequelize.fn("COUNT", Sequelize.col("bookedSession.id")), "totalSessions"],
+                ],
+                where: { topic_id: node.node_id },
+              },
+              {
+                model: Feedback,
+                as: "feedbacks",
+                required: false,
+                attributes: [
+                  [Sequelize.fn("AVG", Sequelize.col("feedbacks.star_rating")), "avgRating"],
+                ],
+                where: { topic_id: node.node_id },
+              },
+            ],
+            group: [
+              "teacher_topic_stats.teacher_id",
+              "teacher_topic_stats.level",
+              "teacher.id",
+              "teacher.firstName",
+              "teacher.lastName",
+              "teacher.profilePictureUrl",
+            ],
+            raw: true,
+          });
+
+          result.bridgers = bridgers.map((b) => ({
+            teacher_id: b.teacherId,
+            name: `${b["teacher.firstName"] || ""} ${b["teacher.lastName"] || ""}`.trim(),
+            profilePictureUrl: b["teacher.profilePictureUrl"] || null,
+            level: b.level,
+            totalSessions: Number(b.totalSessions || 0),
+            avgRating: Number(b.avgRating || 0),
+          }));
+        }
+
+        return result;
+      })
+    );
 
     res.json(detailedChildren);
   } catch (error) {
@@ -1922,4 +1892,5 @@ export const fetchChildrenWithStats = async (req, res) => {
     res.status(500).json({ message: "Fetch failed." });
   }
 };
+
 

@@ -70,7 +70,6 @@ router.post('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, addS
 router.get('/org/subdepartments/:subDepartmentId/roles', verifyAdminToken, getSubDepartmentRoles);
 router.get("/feedback/flagged",verifyAdminToken,getAllFlaggedFeedbacks); // get flagged feedback
 router.put("/org/superadmins/:id/editpassword", verifyAdminToken, editSuperadminPassword);
-// router.get("/org/detailedInfo/:id", detailedInfoOfTotlers)
 router.get("/org/children/:parent_id", fetchChildrenWithStats);
 
 
