@@ -299,6 +299,22 @@ const defineRelationships = () => {
       constraints: false
     });
   }
+  if (!Teachertopicstats.associations?.feedbacks) {
+    Teachertopicstats.hasMany(Feedback, {
+      foreignKey: "bridger_id",
+      sourceKey: "teacherId",
+      as: "feedbacks",
+      constraints: false
+    });
+  }
+  if (!Feedback.associations?.teacherStats) {
+    Feedback.belongsTo(Teachertopicstats, {
+      foreignKey: "bridger_id",
+      targetKey: "teacherId",
+      as: "teacherStats",
+      constraints: false
+    });
+  }
 
 };
 
