@@ -112,7 +112,18 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
       },
       include: [
         { model: User, as: "student", attributes: ["firstName", "lastName"] },
-        { model: CatalogueNode, as: "bookedTopic", attributes: ["name"] }
+        {
+          model: CatalogueNode,
+          as: "bookedTopic",
+          attributes: ["node_id", "name", "parent_id"],
+          include: [
+            {
+              model: CatalogueNode,
+              as: "parentNode",   // 👈 this is the subject
+              attributes: ["node_id", "name", "parent_id"],
+            }
+          ]
+        }
       ],
       order: [["createdAt", "ASC"]],
     });
@@ -122,14 +133,17 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
       return res.status(404).json({ error: true, message: "No upcoming session found" });
     }
 
+    // let topic = await CatalogueNode.findOne({where: {node_id: session.topic_id}})
+
     return res.status(200).json({
       success: true,
       session: {
         session_id: session.session_id,
         studentName: session.learner_id
-          ? `${session.student.firstName} ${session.student.lastName}`
+          ? `${session.student.firstName}`
           : "Unknown",
-        topicName: session.topic.name || "Unknown",
+        topicName: session.bookedTopic?.name || "Unknown",
+        subject: session.bookedTopic?.parentNode?.name || "Unknown",
         scheduled_at: session.createdAt,
       }
     });

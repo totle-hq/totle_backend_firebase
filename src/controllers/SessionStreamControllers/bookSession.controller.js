@@ -116,7 +116,7 @@ export const bookFreeSession = async (req, res) => {
 
       const distanceKm = getDistance(learner.location, teacher.location); // IP or lat/lng based
       const score = getScore(learner, teacher, mismatchPercent, distanceKm, learner.gender);
-      console.log("score for session", session.id, ":", score);
+      console.log("score for session", session.session_id, ":", score);
       if (score > highestScore) {
         highestScore = score;
         bestSession = session;
@@ -140,7 +140,7 @@ export const bookFreeSession = async (req, res) => {
       },
       order: [["scheduled_at", "ASC"]]
     });
-    console.log("Next slot found:", nextSlot ? nextSlot.id : "None");
+    console.log("Next slot found:", nextSlot ? nextSlot.session_id : "None");
 
     if (!nextSlot) {
       console.warn("⚠️ No suitable future slot found for booking");
@@ -158,12 +158,12 @@ export const bookFreeSession = async (req, res) => {
       teacher_id: nextSlot.teacher_id,
       topic_id,
       topic: topicName.name || "Unknown",
-      session_id: nextSlot.id
+      session_id: nextSlot.session_id
     });
 
     await Session.update(
       { student_id: learner_id, status: "upcoming" },
-      { where: { id: nextSlot.id } }
+      { where: { session_id: nextSlot.session_id } }
     );
 
     const teacher = await User.findOne({
@@ -180,7 +180,7 @@ export const bookFreeSession = async (req, res) => {
       success: true,
       message: "Session booked successfully",
       data: {
-        sessionId: nextSlot.id,
+        sessionId: nextSlot.session_id,
         teacherName: `${teacher.firstName} ${teacher.lastName}`,
         topicName: topic?.name || "Unknown",
         scheduledAt: nextSlot.scheduled_at,

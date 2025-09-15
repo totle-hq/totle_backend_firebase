@@ -626,6 +626,7 @@ export const getQualifiedTopics = async (req, res) => {
       include: [
         {
           model: CatalogueNode,
+          as: "catalogueNode",
           attributes: ["node_id", "name", "parent_id"],
         },
       ],
