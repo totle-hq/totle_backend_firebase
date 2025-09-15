@@ -110,6 +110,47 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+
+app.use(
+  helmet.contentSecurityPolicy({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://www.googletagmanager.com",
+        "https://meet.jit.si",
+        "https://aframe.io",
+        "https://checkout.razorpay.com",
+        "https://unpkg.com",
+      ],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*"],
+      connectSrc: [
+        "'self'",
+        "https://api.totle.co",
+        "wss://api.totle.co",
+        "https://www.google-analytics.com",
+        "https://stats.g.doubleclick.net",
+        "https://totle.co",
+        "https://nucleus.totle.co",
+        "http://localhost:5000",
+        "ws://localhost:5000",
+        "https://api.razorpay.com",
+        "https://checkout.razorpay.com",
+        "https://lumberjack.razorpay.com",
+        "https://rzp.io",
+        "https://meet.jit.si",
+        "https://aframe.io",
+      ],
+      frameSrc: ["'self'", "https://checkout.razorpay.com", "https://meet.jit.si"],
+      objectSrc: ["'none'"],
+    },
+  })
+);
+
 app.use(compression());
 app.use(morgan("dev"));
 
