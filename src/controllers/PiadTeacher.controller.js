@@ -165,6 +165,7 @@ export const getTeachersForTopic = async (req, res) => {
           include: [
             {
               model: CatalogueNode,
+              as: "catalogueNode",
               attributes: ["name"],
               required: false
             }
