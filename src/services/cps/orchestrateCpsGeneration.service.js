@@ -138,7 +138,7 @@ export async function generateCpsQuestionSet({
 
   const steps = [];
   const globalSeenStems = new Set();
-  const model = process.env.OPENAI_CPS_MODEL || "gpt-4o";
+  const model = process.env.OPENAI_CPS_MODEL || "gpt-5-mini";
 
   // --- per block fetching ---
   for (const s of order) {
