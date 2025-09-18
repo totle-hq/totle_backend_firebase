@@ -99,7 +99,7 @@ export const getAllUserDetails = async (req, res) => {
             { teacher_id: { [Op.in]: userIds } },
           ],
         },
-        attributes: ["id", "student_id", "teacher_id", "status"],
+        attributes: ["session_id", "student_id", "teacher_id", "status"],
       }),
       Feedback.findAll({
         where: { flagged_issue: true },
