@@ -1894,3 +1894,51 @@ export const fetchChildrenWithStats = async (req, res) => {
 };
 
 
+const getYesterday = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+export const getUsersSummary = async (req, res) => {
+  try {
+    const yesterday = getYesterday();
+
+    // Total across all levels
+    const totalUsers = await Teachertopicstats.count();
+    const newUsersYesterday = await Teachertopicstats.count({
+      where: { createdAt: { [Op.gte]: yesterday } },
+    });
+
+    // Breakdown by levels
+    const levels = ["Bridger", "Expert", "Master", "Legend"];
+    const breakdown = {};
+
+    for (const level of levels) {
+      const count = await Teachertopicstats.count({ where: { level } });
+      const newSinceYesterday = await Teachertopicstats.count({
+        where: { level, createdAt: { [Op.gte]: yesterday } },
+      });
+
+      breakdown[level.toLowerCase()] = {
+        total: count,
+        changeFromYesterday: newSinceYesterday,
+      };
+    }
+
+    return res.json({
+      users: {
+        totalUsers,
+        changeFromYesterday: newUsersYesterday,
+      },
+      bridgers: breakdown.bridger,
+      experts: breakdown.expert,
+      masters: breakdown.master,
+      legends: breakdown.legend,
+    });
+  } catch (err) {
+    console.error("❌ Error fetching summary:", err);
+    res.status(500).json({ error: "Failed to fetch users summary" });
+  }
+};
