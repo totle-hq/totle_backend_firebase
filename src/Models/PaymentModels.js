@@ -20,6 +20,7 @@ export const Payment = sequelize1.define(
     entity_type: {
       type: DataTypes.STRING(32), // keep STRING to avoid ENUM migration requirements
       allowNull: false,
+       defaultValue: 'unknown',
     },
 
     // id of the thing being paid for (topicId for tests)
