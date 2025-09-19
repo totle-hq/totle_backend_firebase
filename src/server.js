@@ -241,8 +241,8 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    await syncDatabase();
-    // await defineModelRelationships();
+    // await syncDatabase();
+    await defineModelRelationships();
 
     const PORT = process.env.PORT || 5000;
 
