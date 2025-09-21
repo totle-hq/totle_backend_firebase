@@ -315,6 +315,20 @@ const defineRelationships = () => {
       constraints: false
     });
   }
+  if (!Test.associations?.user) {
+    Test.belongsTo(User, {
+      foreignKey: "user_id",
+      as: "user",
+      onDelete: "CASCADE",
+    });
+  }
+  if (!User.associations?.tests) {
+    User.hasMany(Test, {
+      foreignKey: "user_id",
+      as: "tests",
+      onDelete: "CASCADE",
+    });
+  }
 
 };
 
