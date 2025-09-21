@@ -30,6 +30,7 @@ import { FeedbackSummary } from '../../Models/feedbacksummary.js';
 import Feedback from '../../Models/feedbackModels.js';
 import { Teachertopicstats } from '../../Models/TeachertopicstatsModel.js';
 import { CatalogueNode } from '../../Models/CatalogModels/catalogueNode.model.js';
+import { CpsProfile } from '../../Models/CpsProfile.model.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -117,6 +118,9 @@ export const adminLogin = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    const cpsSummary = await ensureAllCpsProfiles();
+    console.log("[CPS] Ensured all profiles");
+
     const token = jwt.sign(
       {
         id: userId,
@@ -158,6 +162,37 @@ export const adminLogin = async (req, res) => {
   }
 };
 
+
+export const ensureAllCpsProfiles = async () => {
+  try {
+    const users = await User.findAll({ attributes: ["id"] });
+
+    let createdCount = 0;
+    let existingCount = 0;
+
+    for (const u of users) {
+      const [profile, created] = await CpsProfile.findOrCreate({
+        where: { user_id: u.id },
+        defaults: { user_id: u.id },
+      });
+      if (created) createdCount++;
+      else existingCount++;
+    }
+
+    return {
+      success: true,
+      message: "CPS profiles ensured for all users",
+      summary: {
+        totalUsers: users.length,
+        createdProfiles: createdCount,
+        existingProfiles: existingCount,
+      },
+    };
+  } catch (err) {
+    console.error("[Research CPS] ensure-all-profiles failed:", err);
+    throw err; // bubble up so adminLogin can handle
+  }
+};
 
 
 export const getAdminDetails = async (req, res) => {
