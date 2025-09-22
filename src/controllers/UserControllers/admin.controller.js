@@ -1941,8 +1941,8 @@ export const getUsersSummary = async (req, res) => {
     const yesterday = getYesterday();
 
     // Total across all levels
-    const totalUsers = await Teachertopicstats.count();
-    const newUsersYesterday = await Teachertopicstats.count({
+    const totalUsers = await User.count();
+    const newUsersYesterday = await User.count({
       where: { createdAt: { [Op.gte]: yesterday } },
     });
 
@@ -1951,9 +1951,17 @@ export const getUsersSummary = async (req, res) => {
     const breakdown = {};
 
     for (const level of levels) {
-      const count = await Teachertopicstats.count({ where: { level } });
+      const count = await Teachertopicstats.count({
+        include: [{ model: User, attributes: [] }],
+        where: { level },
+      })
+
       const newSinceYesterday = await Teachertopicstats.count({
-        where: { level, createdAt: { [Op.gte]: yesterday } },
+        include: [{ model: User, attributes: [] }],
+        where: {
+          level,
+          createdAt: { [Op.gte]: yesterday },
+        },
       });
 
       breakdown[level.toLowerCase()] = {
