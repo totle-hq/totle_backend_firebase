@@ -3,6 +3,8 @@ import express from "express";
 import { Op } from "sequelize";
 import { User } from "../Models/UserModels/UserModel.js";
 import { CpsProfile } from "../Models/CpsProfile.model.js";
+import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { Test } from "../Models/test.model.js";
 
 const router = express.Router();
 
@@ -280,5 +282,112 @@ router.get("/export.csv", async (req, res) => {
     res.status(500).json({ error: true, message: "Export failed." });
   }
 });
+
+// src/routes/research.cps.routes.js
+router.get("/search-by-uuid/:uuid", async (req, res) => {
+  try {
+    const { uuid } = req.params;
+
+    // 1. Find node
+    const node = await CatalogueNode.findOne({ where: { node_id: uuid } });
+    if (!node) {
+      return res.status(404).json({ error: true, message: "Node not found" });
+    }
+
+    // 2. Collect users if node is a topic
+    let items = [];
+    if (node.is_topic) {
+      const tests = await Test.findAll({
+        where: { topic_uuid: uuid },
+        include: [
+          {
+            model: User,
+            as: "user",
+            attributes: ["id","firstName","lastName","email","status","location","createdAt","updatedAt"],
+            include: [
+              {
+                model: CpsProfile,
+                as: "cpsProfile",
+                required: false,
+                attributes: ["user_id","created_at","updated_at", ...CPS_FIELDS],
+              },
+            ],
+          },
+        ],
+        attributes: ["test_id","createdAt","updatedAt"],
+      });
+
+      items = tests
+        .filter(t => t.user) // only valid tests with user
+        .map(t => {
+          const u = t.user;
+          const p = u.cpsProfile || {};
+
+          return {
+            user: {
+              id: u.id,
+              name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
+              email: u.email,
+              status: u.status,
+              location: u.location,
+              createdAt: u.createdAt,
+              updatedAt: u.updatedAt,
+            },
+            cps: p.user_id
+              ? {
+                  created_at: p.created_at,
+                  updated_at: p.updated_at,
+                  dimensions: {
+                    reasoning_strategy: {
+                      average: avg(p, DIMENSIONS.reasoning_strategy),
+                      fields: Object.fromEntries(DIMENSIONS.reasoning_strategy.map(f => [f, Number(p[f] ?? 0)])),
+                    },
+                    memory_retrieval: {
+                      average: avg(p, DIMENSIONS.memory_retrieval),
+                      fields: Object.fromEntries(DIMENSIONS.memory_retrieval.map(f => [f, Number(p[f] ?? 0)])),
+                    },
+                    processing_fluency: {
+                      average: avg(p, DIMENSIONS.processing_fluency),
+                      fields: Object.fromEntries(DIMENSIONS.processing_fluency.map(f => [f, Number(p[f] ?? 0)])),
+                    },
+                    attention_focus: {
+                      average: avg(p, DIMENSIONS.attention_focus),
+                      fields: Object.fromEntries(DIMENSIONS.attention_focus.map(f => [f, Number(p[f] ?? 0)])),
+                    },
+                    metacognition_regulation: {
+                      average: avg(p, DIMENSIONS.metacognition_regulation),
+                      fields: Object.fromEntries(DIMENSIONS.metacognition_regulation.map(f => [f, Number(p[f] ?? 0)])),
+                    },
+                    resilience_adaptability: {
+                      average: avg(p, DIMENSIONS.resilience_adaptability),
+                      fields: Object.fromEntries(DIMENSIONS.resilience_adaptability.map(f => [f, Number(p[f] ?? 0)])),
+                    },
+                  },
+                  all_params: Object.fromEntries(CPS_FIELDS.map(k => [k, Number(p[k] ?? 0)])),
+                }
+              : null,
+          };
+        });
+    }
+
+    res.json({
+      node: {
+        id: node.node_id,
+        name: node.name,
+        level: node.node_level,
+        is_topic: node.is_topic,
+        is_subject: node.is_subject,
+        is_domain: node.is_domain,
+      },
+      total: items.length,
+      items,
+    });
+  } catch (err) {
+    console.error("[Research CPS] search-by-uuid failed:", err);
+    res.status(500).json({ error: true, message: "Failed to fetch by UUID" });
+  }
+});
+
+
 
 export default router;
