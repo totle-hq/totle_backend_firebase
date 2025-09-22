@@ -86,15 +86,17 @@ export const getAggregate = async (req, res) => {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
+    // ✅ Proper include with alias "user"
     const profiles = await CpsProfile.findAll({
       where: { updated_at: { [Op.gte]: cutoffDate } },
       include: [
         {
           model: User,
+          as: "user",
           attributes: ["id", "location"],
         },
       ],
-      raw: true,
+      // ❌ removed raw: true (keeps nested objects intact)
     });
 
     // calculate per-dimension averages per user
@@ -109,7 +111,7 @@ export const getAggregate = async (req, res) => {
       }
       return {
         userId: p.user_id,
-        location: p["User.location"] || "Unknown",
+        location: p.user?.location || "Unknown", // ✅ fixed alias
         updated_at: p.updated_at,
         ...dims,
       };
@@ -126,15 +128,19 @@ export const getAggregate = async (req, res) => {
       overall: {
         users: userScores.length,
         dimensions: overall,
-        days_since_latest: r2(
-          (Date.now() - Math.max(...userScores.map((u) => +new Date(u.updated_at)))) /
-            86400000
-        ),
+        days_since_latest: userScores.length
+          ? r2(
+              (Date.now() -
+                Math.max(...userScores.map((u) => +new Date(u.updated_at)))) /
+                86400000
+            )
+          : null,
       },
       groupBy,
       groups: [],
     };
 
+    // grouping
     if (groupBy === "location") {
       const groups = {};
       for (const u of userScores) {
@@ -151,7 +157,8 @@ export const getAggregate = async (req, res) => {
           users: users.length,
           dimensions: dims,
           days_since_latest: r2(
-            (Date.now() - Math.max(...users.map((u) => +new Date(u.updated_at)))) /
+            (Date.now() -
+              Math.max(...users.map((u) => +new Date(u.updated_at)))) /
               86400000
           ),
         };
@@ -164,6 +171,7 @@ export const getAggregate = async (req, res) => {
     res.status(500).json({ error: true, message: "Aggregate fetch failed." });
   }
 };
+
 
 export const getGeo = async (req, res) => {
   try {
