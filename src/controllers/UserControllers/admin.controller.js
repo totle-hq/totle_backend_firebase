@@ -1952,12 +1952,12 @@ export const getUsersSummary = async (req, res) => {
 
     for (const level of levels) {
       const count = await Teachertopicstats.count({
-        include: [{ model: User, attributes: [] }],
+        include: [{ model: User, as: "teacher", attributes: [] }],
         where: { level },
       })
 
       const newSinceYesterday = await Teachertopicstats.count({
-        include: [{ model: User, attributes: [] }],
+        include: [{ model: User, as: "teacher", attributes: [] }],
         where: {
           level,
           createdAt: { [Op.gte]: yesterday },
