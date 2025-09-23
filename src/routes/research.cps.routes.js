@@ -5,6 +5,8 @@ import { User } from "../Models/UserModels/UserModel.js";
 import { CpsProfile } from "../Models/CpsProfile.model.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { Test } from "../Models/test.model.js";
+import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
+import { BookedSession } from "../Models/BookedSession.js";
 
 const router = express.Router();
 
@@ -388,6 +390,125 @@ router.get("/search-by-uuid/:uuid", async (req, res) => {
   }
 });
 
+async function getAllDescendantNodeIds(nodeId) {
+  const children = await CatalogueNode.findAll({
+    where: { parent_id: nodeId },
+    attributes: ["node_id"],
+  });
+
+  let ids = children.map(c => c.node_id);
+
+  for (const child of children) {
+    const subIds = await getAllDescendantNodeIds(child.node_id);
+    ids = ids.concat(subIds);
+  }
+  return ids;
+}
+
+/**
+ * Extract cps_scores from result/performance_metrics
+ */
+function extractCpsScores(test) {
+  const a = test?.result?.cps_scores;
+  if (a && typeof a === "object") return a;
+  const b = test?.performance_metrics?.cps_scores;
+  if (b && typeof b === "object") return b;
+  return null;
+}
+
+// Dimensions present in CpsProfile
+const DIMENSION_KEYS = [
+  "reasoning_strategy",
+  "memory_retrieval",
+  "processing_fluency",
+  "attention_focus",
+  "metacognition_regulation",
+  "resilience_adaptability",
+];
+
+// All CPS fields from CpsProfile (excluding metadata)
+const ALL_CPS_FIELDS = Object.keys(CpsProfile.rawAttributes).filter(
+  k =>
+    ![
+      "user_id",
+      "tests_seen",
+      "last_test_id",
+      "created_at",
+      "updated_at",
+    ].includes(k)
+);
+
+export const getUserNodeCps = async (req, res) => {
+  const { userId, nodeId } = req.params;
+
+  try {
+    // 1. Collect node + descendants
+    const nodeIds = [nodeId, ...(await getAllDescendantNodeIds(nodeId))];
+
+    // 2. Find tests for this user under those topics
+    const tests = await Test.findAll({
+      where: {
+        user_id: userId,
+        topic_uuid: { [Op.in]: nodeIds },
+        submitted_at: { [Op.ne]: null },
+      },
+      raw: true,
+    });
+
+    if (!tests.length) {
+      // return all zeros if no tests found
+      const zeroDims = Object.fromEntries(DIMENSION_KEYS.map(k => [k, 0]));
+      const zeroFields = Object.fromEntries(
+        ALL_CPS_FIELDS.filter(k => !DIMENSION_KEYS.includes(k)).map(k => [k, 0])
+      );
+      return res.json({ dimensions: zeroDims, fields: zeroFields });
+    }
+
+    // 3. Aggregate scores
+    const fieldSums = {};
+    const fieldCounts = {};
+
+    tests.forEach(test => {
+      const scores = extractCpsScores(test);
+      if (!scores) return;
+
+      Object.entries(scores).forEach(([k, v]) => {
+        if (typeof v === "number") {
+          fieldSums[k] = (fieldSums[k] || 0) + v;
+          fieldCounts[k] = (fieldCounts[k] || 0) + 1;
+        }
+      });
+    });
+
+    // 4. Compute averages
+    const avgFields = {};
+    for (const [k, sum] of Object.entries(fieldSums)) {
+      avgFields[k] = sum / fieldCounts[k];
+    }
+
+    // 5. Build dimensions from avgFields (if fields are mapped to them)
+    // For now, just return them as 0 unless you define a mapping
+    const finalDims = {};
+    DIMENSION_KEYS.forEach(k => {
+      finalDims[k] = avgFields[k] ?? 0; // if cps_scores directly contain dimension keys
+    });
+
+    // 6. Ensure all fields exist with fallback = 0
+    const finalFields = {};
+    ALL_CPS_FIELDS.filter(k => !DIMENSION_KEYS.includes(k)).forEach(k => {
+      finalFields[k] = avgFields[k] ?? 0;
+    });
+
+    return res.json({
+      dimensions: finalDims,
+      fields: finalFields,
+    });
+  } catch (err) {
+    console.error("Error in getUserNodeCps:", err);
+    res.status(500).json({ error: "Failed to fetch node CPS summary" });
+  }
+};
+router.get("/users/:userId/nodes/:nodeId", getUserNodeCps);
 
 
 export default router;
