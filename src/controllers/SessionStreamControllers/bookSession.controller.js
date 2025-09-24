@@ -82,7 +82,7 @@ export const bookFreeSession = async (req, res) => {
 
     if (availableSessions.length < 2) {
       console.warn("⚠️ Not enough available sessions for booking", availableSessions.length);
-      return res.status(404).json({ error: true, message: "Not enough available sessions" });
+      return res.status(404).json({ error: true, message: "Bridgers aren't available for this session yet" });
     }
 
     // 🧠 Match Scoring
@@ -144,7 +144,7 @@ export const bookFreeSession = async (req, res) => {
 
     if (!nextSlot) {
       console.warn("⚠️ No suitable future slot found for booking");
-      return res.status(404).json({ error: true, message: "No suitable future slot found" });
+      return res.status(404).json({ error: true, message: "Bridgers for this session will be available soon." });
     }
 
     let topicName = await CatalogueNode.findOne({
