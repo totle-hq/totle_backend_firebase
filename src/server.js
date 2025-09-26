@@ -135,6 +135,8 @@ app.use(
         "https://www.google-analytics.com",
         "https://stats.g.doubleclick.net",
         "https://totle.co",
+        "https://www.totle.co",
+        "www.totle.co",
         "https://nucleus.totle.co",
         "http://localhost:5000",
         "ws://localhost:5000",
