@@ -246,3 +246,14 @@ export async function syncDatabase() {
     console.error('❌ Error syncing database:', error);
   }
 }
+
+
+export const runDbSync = async (isSyncNeeded = false) => {
+  if (isSyncNeeded) {
+    console.log("⚙️ Running full DB sync...");
+    await syncDatabase();
+  } else {
+    console.log("🔗 Defining model relationships only...");
+    await defineModelRelationships();
+  }
+};
