@@ -51,7 +51,7 @@ import testsProgressRoutes from "./routes/tests.progress.routes.js";
 import nucleusDocsRoutes from "./routes/nucleusDocs.routes.js";  // ✅ import
 
 // DB sync (your existing)
-import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
+import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
 
 // ----------------------------------------
 dotenv.config();
@@ -243,8 +243,7 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    // await syncDatabase();
-    await defineModelRelationships();
+    await runDbSync(false);
 
     const PORT = process.env.PORT || 5000;
 

@@ -31,6 +31,7 @@ import Feedback from '../../Models/feedbackModels.js';
 import { Teachertopicstats } from '../../Models/TeachertopicstatsModel.js';
 import { CatalogueNode } from '../../Models/CatalogModels/catalogueNode.model.js';
 import { CpsProfile } from '../../Models/CpsProfile.model.js';
+import { runDbSync } from '../../config/syncDb.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -1983,5 +1984,28 @@ export const getUsersSummary = async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching summary:", err);
     res.status(500).json({ error: "Failed to fetch users summary" });
+  }
+};
+
+const SECURE_SYNC_PIN = "secure"; // 🔒 your secure code
+
+export const toggleSyncDb = async (req, res) => {
+  try {
+    const { pin, isSyncNeeded } = req.body;
+
+    // Validate PIN
+    if (pin !== SECURE_SYNC_PIN) {
+      return res.status(403).json({ message: "Access denied: Invalid PIN" });
+    }
+
+    // Run sync or relationship setup
+    await runDbSync(isSyncNeeded);
+
+    return res.status(200).json({
+      message: `Database sync ${isSyncNeeded ? "initiated" : "skipped"} successfully.`,
+    });
+  } catch (error) {
+    console.error("Error toggling DB sync:", error);
+    return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
