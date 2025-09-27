@@ -72,7 +72,7 @@ router.get("/feedback/flagged",verifyAdminToken,getAllFlaggedFeedbacks); // get 
 router.put("/org/superadmins/:id/editpassword", verifyAdminToken, editSuperadminPassword);
 router.get("/org/children/:parent_id", fetchChildrenWithStats);
 router.get("/analytics/summary",verifyAdminToken, getUsersSummary);
-router.post("/admin/db-sync", verifyAdminToken, toggleSyncDb);
+router.post("/db-sync", verifyAdminToken, toggleSyncDb);
 
 
 
