@@ -1992,7 +1992,6 @@ const SECURE_SYNC_PIN = "secure"; // 🔒 your secure code
 export const toggleSyncDb = async (req, res) => {
   try {
     const { pin, isSyncNeeded } = req.body;
-
     // Validate PIN
     if (pin !== SECURE_SYNC_PIN) {
       return res.status(403).json({ message: "Access denied: Invalid PIN" });
