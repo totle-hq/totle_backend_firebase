@@ -51,7 +51,7 @@ import testsProgressRoutes from "./routes/tests.progress.routes.js";
 import nucleusDocsRoutes from "./routes/nucleusDocs.routes.js";  // ✅ import
 
 // DB sync (your existing)
-import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
+import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
 
 // ----------------------------------------
 dotenv.config();
@@ -80,7 +80,8 @@ const corsOptions = {
   origin(origin, cb) {
     // Allow same-origin / server-to-server / health checks (no Origin header)
     if (!origin) return cb(null, true);
-    if (ORIGINS.includes(origin)) return cb(null, true);
+const normalized = origin.replace(/\/$/, "");
+if (ORIGINS.includes(normalized)) return cb(null, true);
     return cb(new Error(`Not allowed by CORS: ${origin}`));
   },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
@@ -92,7 +93,8 @@ const corsOptions = {
 
 app.use((req, _res, next) => {
   // small visibility into who is blocked by CORS
-  if (req.headers.origin && !ORIGINS.includes(req.headers.origin)) {
+const normalized = req.headers.origin?.replace(/\/$/, "");
+if (normalized && !ORIGINS.includes(normalized)) {
     console.warn(`[CORS] Blocked origin: ${req.headers.origin} ${req.method} ${req.originalUrl}`);
   }
   next();
@@ -135,8 +137,6 @@ app.use(
         "https://www.google-analytics.com",
         "https://stats.g.doubleclick.net",
         "https://totle.co",
-        "https://www.totle.co",
-        "www.totle.co",
         "https://nucleus.totle.co",
         "http://localhost:5000",
         "ws://localhost:5000",
@@ -243,7 +243,8 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    await runDbSync(false);
+    // await syncDatabase();
+    await defineModelRelationships();
 
     const PORT = process.env.PORT || 5000;
 
@@ -256,7 +257,8 @@ const startServer = async () => {
       cors: {
         origin: (origin, cb) => {
           if (!origin) return cb(null, true); // server-to-server/no-origin
-          if (ORIGINS.includes(origin)) return cb(null, true);
+const normalized = origin.replace(/\/$/, "");
+if (ORIGINS.includes(normalized)) return cb(null, true);
           return cb(new Error(`Socket.IO CORS blocked: ${origin}`));
         },
         methods: ["GET", "POST"],
