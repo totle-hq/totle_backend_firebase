@@ -107,11 +107,11 @@ export async function generateQuestions({
     const response = await openai.chat.completions.create({
       model: "gpt-5-mini",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
+      temperature: 1,
       // Strongly reduce formatting errors:
       response_format: { type: "json_object" },
       // Generating 20 hard MCQs is verbose; give enough room:
-      max_tokens: 3500,
+      max_completion_tokens: 3500,
     });
 
     let raw = response.choices?.[0]?.message?.content || "{}";
@@ -162,8 +162,9 @@ export async function generateQuestions({
       time_limit_minutes,
     };
   } catch (error) {
-    console.error("❌ Error generating Bridger questions:", error);
-    throw new Error("Failed to generate questions");
+console.error("❌ Error generating Bridger questions:", error?.message || error);
+throw new Error(error?.message || "Failed to generate questions");
+
   }
 }
 
