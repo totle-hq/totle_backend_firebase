@@ -72,8 +72,9 @@ const ORIGINS = [
   "http://localhost:3000",
   "http://localhost:3001",
   "http://localhost:5173",
-  "https://nucleus.totle.co", 
+  "https://nucleus.totle.co"
 ];
+
 
 // Build a CORS validator that returns a single allowed origin (not '*')
 const corsOptions = {
@@ -99,6 +100,16 @@ if (normalized && !ORIGINS.includes(normalized)) {
   }
   next();
 });
+
+app.use((req, res, next) => {
+  const normalized = req.headers.origin?.replace(/\/$/, "");
+  if (normalized && ORIGINS.includes(normalized)) {
+    res.header("Access-Control-Allow-Origin", req.headers.origin);
+    res.header("Access-Control-Allow-Credentials", "true");
+  }
+  next();
+});
+
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Preflight for all routes
