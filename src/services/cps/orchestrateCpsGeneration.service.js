@@ -1,7 +1,7 @@
 // src/services/cps/orchestrateCpsGeneration.service.js
 import OpenAI from "openai";
 import dotenv from "dotenv";
-import { CPS_KEYS } from "./cpsKeys.js";  // ✅ already in repo, reuse it
+import { CPS_KEYS } from "./cpsKeys.js";
 import fs from "fs";
 import path from "path";
 dotenv.config();
@@ -89,10 +89,8 @@ function sanitizeItems(rawQuestions = [], rawAnswers = [], globalSeen) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Public API                                                                 */
+/* Broken JSON logger                                                         */
 /* -------------------------------------------------------------------------- */
-
-
 function logBrokenJson(raw, phase) {
   try {
     const outPath = path.join(process.cwd(), `broken_json_${phase}_${Date.now()}.txt`);
@@ -103,6 +101,9 @@ function logBrokenJson(raw, phase) {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Main generator                                                             */
+/* -------------------------------------------------------------------------- */
 export async function generateCpsQuestionSet({
   subject = "",
   subjectDescription = "",
@@ -116,49 +117,38 @@ export async function generateCpsQuestionSet({
   isBaseline = false,
   onProgress,
 }) {
-  const PLAN = {
-    reasoning_strategy: 6,
-    metacognition_selfreg: 4,
-    memory_retrieval: 3,
-    speed_fluency: 3,
-    attention_focus: 2,
-    resilience_adaptability: 2,
-    teaching: 5,
-  };
+  // PLAN: baseline split into 4 neutral pipelines
+  const PLAN = isBaseline
+    ? { baseline_reasoning: 5, baseline_memory: 5, baseline_speed: 5, baseline_misc: 5 }
+    : {
+        reasoning_strategy: 6,
+        metacognition_selfreg: 4,
+        memory_retrieval: 3,
+        speed_fluency: 3,
+        attention_focus: 2,
+        resilience_adaptability: 2,
+        teaching: 5,
+      };
 
-  const order = [
-    { key: "reasoning_strategy", label: "Generating Reasoning & Strategy…" },
-    { key: "metacognition_selfreg", label: "Generating Metacognition & Self-Regulation…" },
-    { key: "memory_retrieval", label: "Generating Memory & Retrieval…" },
-    { key: "speed_fluency", label: "Generating Processing Speed & Fluency…" },
-    { key: "attention_focus", label: "Generating Attention & Focus…" },
-    { key: "resilience_adaptability", label: "Generating Resilience & Adaptability…" },
-    { key: "teaching", label: "Generating Teaching Ability (minimal probe)…" },
-  ];
-
+  const order = Object.keys(PLAN).map((k) => ({ key: k, label: `Generating ${k}…` }));
   const steps = [];
   const globalSeenStems = new Set();
-  const model = process.env.OPENAI_CPS_MODEL || "gpt-5-mini";
+  const model = process.env.OPENAI_CPS_MODEL || "gpt-4.1";
 
-  // --- per block fetching ---
   for (const s of order) {
     const targetCount = PLAN[s.key];
-    if (targetCount <= 0) continue;
-
     onProgress?.({ phase: s.key, status: "progress", note: s.label });
+    console.log(`[${isBaseline ? "Baseline" : "CPS"}:${s.key}] Need ${targetCount}`);
 
     let collected = [];
     let tries = 0;
 
     while (collected.length < targetCount && tries < 15) {
       tries++;
-      const remaining = targetCount - collected.length;
-      const batchSize = Math.min(2, remaining); // 🔑 micro-batch max 2
-      const avoidStems = Array.from(globalSeenStems).slice(-50);
-
+      console.log(`[${s.key}] Attempt ${tries} (${collected.length}/${targetCount})`);
       const prompt = buildPrompt({
         blockKey: s.key,
-        count: batchSize,
+        count: Math.min(2, targetCount - collected.length),
         isBaseline,
         subject,
         subjectDescription,
@@ -169,7 +159,7 @@ export async function generateCpsQuestionSet({
         subtopics,
         learnerProfile,
         params,
-        avoidStems,
+        avoidStems: Array.from(globalSeenStems).slice(-50),
       });
 
       try {
@@ -179,99 +169,70 @@ export async function generateCpsQuestionSet({
           system: systemMessage(),
           max_completion_tokens: 1200,
         });
-
         const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
-        const rubricsById = new Map((parsed.rubrics || []).map((r) => [Number(r?.id), r]));
-
         for (const it of items) {
           if (collected.length >= targetCount) break;
           const norm = normalizeStem(it.text);
           if (globalSeenStems.has(norm) || isTooSimilar(it.text, globalSeenStems)) continue;
-          const rubric = coerceRubric(rubricsById.get(it.id), s.key);
+
+          const rubric = isBaseline
+            ? { option_impacts: {}, gates: {}, block: "baseline" }
+            : coerceRubric((parsed.rubrics || []).find((r) => Number(r?.id) === it.id), s.key);
+
           collected.push({ ...it, rubric });
           globalSeenStems.add(norm);
         }
       } catch (err) {
-        console.warn(`[CPS:${s.key}] try ${tries} failed:`, err?.message || err);
-        logBrokenJson(err?.raw || "", s.key); // 🔑 log broken JSON
-        continue; // 🔑 skip instead of crash
+        console.warn(`[${s.key}] Parse failed:`, err.message);
+        logBrokenJson(err?.raw || "", s.key);
       }
     }
 
-    steps.push({
-      key: s.key,
-      items: collected,
-      recommendedTimeMin: defaultTimeForBlock(s.key),
-    });
-
-    onProgress?.({
-      phase: s.key,
-      status: "done",
-      note: `${collected.length}/${targetCount} items ready`,
-    });
+    steps.push({ key: s.key, items: collected, recommendedTimeMin: isBaseline ? 30 : defaultTimeForBlock(s.key) });
+    onProgress?.({ phase: s.key, status: "done", note: `${collected.length}/${targetCount} items ready` });
   }
 
-  // --- global safeguard: ensure at least 25 ---
-  let total = steps.reduce((acc, st) => acc + st.items.length, 0);
+  // fallback: top up until 20 baseline or 25 CPS
+  const minTarget = isBaseline ? 20 : 25;
+  let total = steps.reduce((a, s) => a + s.items.length, 0);
   let fallbackTries = 0;
-
-  while (total < 25 && fallbackTries < 50) {
+  while (total < minTarget && fallbackTries < 40) {
     fallbackTries++;
     const block = order[fallbackTries % order.length];
-    const prompt = buildPrompt({
-      blockKey: block.key,
-      count: 1,
-      isBaseline,
-      subject,
-      subjectDescription,
-      domain,
-      domainDescription,
-      topicName,
-      topicDescription,
-      subtopics,
-      learnerProfile,
-      params,
-      avoidStems: Array.from(globalSeenStems).slice(-50),
-    });
-
+    console.log(`[Fallback:${block.key}] Try ${fallbackTries} total ${total}`);
+    onProgress?.({ phase: "fallback", status: "progress", note: `Top-up attempt ${fallbackTries}` });
     try {
       const parsed = await callOpenAI({
         model,
-        prompt,
+        prompt: buildPrompt({
+          blockKey: block.key,
+          count: 1,
+          isBaseline,
+          subject,
+          subjectDescription,
+          domain,
+          domainDescription,
+          topicName,
+          topicDescription,
+          subtopics,
+          learnerProfile,
+          params,
+          avoidStems: Array.from(globalSeenStems).slice(-50),
+        }),
         system: systemMessage(),
-        max_completion_tokens: 1000,
+        max_completion_tokens: 800,
       });
       const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
-      if (items.length > 0) {
-        const rubricsById = new Map((parsed.rubrics || []).map((r) => [Number(r?.id), r]));
-        const it = items[0];
-        const norm = normalizeStem(it.text);
-        if (!globalSeenStems.has(norm)) {
-          const rubric = coerceRubric(rubricsById.get(it.id), block.key);
-          const merged = { ...it, rubric };
-          const step = steps.find((st) => st.key === block.key);
-          if (step) step.items.push(merged);
-          else {
-            steps.push({
-              key: block.key,
-              items: [merged],
-              recommendedTimeMin: defaultTimeForBlock(block.key),
-            });
-          }
-          globalSeenStems.add(norm);
-          total++;
-        }
+      if (items.length) {
+        steps[0].items.push({ ...items[0], rubric: isBaseline ? { option_impacts: {}, gates: {}, block: "baseline" } : coerceRubric({}, block.key) });
+        total++;
       }
     } catch (err) {
-      console.warn(`[Fallback:${block.key}] failed:`, err?.message || err);
       logBrokenJson(err?.raw || "", `fallback_${block.key}`);
-      continue;
     }
   }
 
-  const totalRecommendedTimeMin =
-    steps.reduce((acc, st) => acc + (st.recommendedTimeMin || 0), 0) || 35;
-
+  const totalRecommendedTimeMin = steps.reduce((a, s) => a + (s.recommendedTimeMin || 0), 0) || (isBaseline ? 30 : 35);
   return { steps, totalRecommendedTimeMin };
 }
 
@@ -308,22 +269,53 @@ function buildPrompt({
   params = {},
   avoidStems = [],
 }) {
-  const avoidList = avoidStems && avoidStems.length
-    ? `Avoid reusing or paraphrasing these stems:\n- ${avoidStems.join("\n- ")}`
-    : "";
+  const avoidList =
+    avoidStems && avoidStems.length
+      ? `Avoid reusing or paraphrasing these stems:\n- ${avoidStems.join("\n- ")}`
+      : "";
 
   const subtopicText = subtopics.length
     ? `Focus also on subtopics: ${subtopics.join(", ")}.`
     : "";
 
-  const profileText = learnerProfile && Object.keys(learnerProfile).length
-    ? `Learner profile hints: ${JSON.stringify(learnerProfile)}`
-    : "";
+  const profileText =
+    learnerProfile && Object.keys(learnerProfile).length
+      ? `Learner profile hints: ${JSON.stringify(learnerProfile)}`
+      : "";
 
-  const paramText = params && Object.keys(params).length
-    ? `Context parameters: ${JSON.stringify(params)}`
-    : "";
+  const paramText =
+    params && Object.keys(params).length
+      ? `Context parameters: ${JSON.stringify(params)}`
+      : "";
 
+  /* -------------------- Baseline prompt -------------------- */
+  if (isBaseline) {
+    return [
+      `Generate ${count} straightforward multiple-choice questions (MCQs) to test basic understanding of the topic.`,
+      `Do not mention dimensions like reasoning/memory/speed. Just focus on the subject and topic.`,
+      `Subject: ${subject} — ${subjectDescription || "no description"}.`,
+      `Domain: ${domain} — ${domainDescription || "no description"}.`,
+      `Topic: ${topicName} — ${topicDescription || "no description"}.`,
+      subtopicText,
+      profileText,
+      paramText,
+      avoidList,
+      "",
+      "Each question must:",
+      "- Be clear, age-appropriate, and text-only.",
+      "- Have exactly 4 distinct options labeled A–D.",
+      "- Have one correct answer key (A/B/C/D).",
+      "- Avoid trick options like 'all of the above' or 'none of the above'.",
+      "",
+      "Output strictly in JSON with shape:",
+      "{",
+      '  "questions": [ { "id": <int>, "text": <string>, "options": { "A":..,"B":..,"C":..,"D":.. } } ],',
+      '  "answers": [ { "id": <int>, "correct_answer": "A|B|C|D" } ]',
+      "}",
+    ].join("\n");
+  }
+
+  /* -------------------- CPS prompt -------------------- */
   return [
     `Generate ${count} high-quality multiple-choice questions (MCQs).`,
     `Dimension focus: ${blockKey}.`,
@@ -350,6 +342,8 @@ function buildPrompt({
     "}",
   ].join("\n");
 }
+
+
 
 /* -------------------------------------------------------------------------- */
 /* OpenAI call                                                                */

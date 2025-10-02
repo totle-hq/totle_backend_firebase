@@ -1,3 +1,4 @@
+// src/services/questionGenerator.service.js
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { Test } from "../Models/test.model.js";
@@ -17,14 +18,11 @@ const toPlain = (v) => String(v ?? "").replace(/\s+/g, " ").trim();
 
 function fixOptions(opts) {
   if (!opts || typeof opts !== "object") return null;
-
-  // Try exact A-D keys first (case-insensitive)
   const direct = ["A", "B", "C", "D"].map(
     (k) => opts[k] ?? opts[k.toLowerCase()]
   );
   let four = direct.filter((v) => v !== undefined);
 
-  // Else fall back to values list (in case model emitted an array or 1..4 keys)
   if (four.length !== 4) {
     const vals = Array.isArray(opts) ? opts : Object.values(opts);
     four = vals.filter(Boolean).slice(0, 4);
@@ -33,7 +31,6 @@ function fixOptions(opts) {
 
   const cleaned = four.map(toPlain);
   if (cleaned.some((t) => !t || BANNED_OPTION_REGEX.test(t))) return null;
-
   return { A: cleaned[0], B: cleaned[1], C: cleaned[2], D: cleaned[3] };
 }
 
@@ -50,19 +47,45 @@ function sanitizeQA(questions = [], answers = []) {
   for (const q of questions) {
     const id = Number(q?.id);
     const text = toPlain(q?.text ?? q?.question_text);
-    if (!Number.isFinite(id) || !text || text.length < 8) continue;
-    if (BANNED_STEM_REGEX.test(text)) continue;
 
-    // dedupe within this batch
+    if (!Number.isFinite(id)) {
+      console.log("⛔ Dropped (bad id):", q);
+      continue;
+    }
+    if (!text) {
+      console.log("⛔ Dropped (no text):", q);
+      continue;
+    }
+    if (text.length < 2) {  // relaxed for baseline
+      console.log("⛔ Dropped (too short):", text);
+      continue;
+    }
+    if (BANNED_STEM_REGEX.test(text)) {
+      console.log("⛔ Dropped (banned stem):", text);
+      continue;
+    }
+
     const norm = text.toLowerCase();
-    if (seenTexts.has(norm)) continue;
+    if (seenTexts.has(norm)) {
+      console.log("⛔ Dropped (duplicate stem):", text);
+      continue;
+    }
 
     const options = fixOptions(q?.options);
-    if (!options) continue;
+    if (!options) {
+      console.log("⛔ Dropped (bad options):", q?.options);
+      continue;
+    }
 
     const corr = ansById.get(id);
-    if (!["A", "B", "C", "D"].includes(corr)) continue;
-    if (!options[corr]) continue;
+    if (!["A", "B", "C", "D"].includes(corr)) {
+      console.log("⛔ Dropped (bad answer):", corr, "for Q", text);
+      continue;
+    }
+    if (!options[corr]) {
+      console.log("⛔ Dropped (answer key missing in options):", corr, options);
+      continue;
+    }
 
     cleanQs.push({ id, text, options });
     seenTexts.add(norm);
@@ -73,14 +96,15 @@ function sanitizeQA(questions = [], answers = []) {
     correct_answer: ansById.get(q.id),
   }));
 
+  console.log("✅ Sanitizer accepted:", cleanQs.length, "of", questions.length);
   return { questions: cleanQs, answers: cleanAns };
 }
-/* ------------------------------------------------------------------------ */
 
+/* ----------------------- MAIN GENERATOR ---------------------- */
 export async function generateQuestions({
   subject,
-  subjectDescription,     // ✅ used in prompt
-  domainDescription,      // ✅ used in prompt
+  subjectDescription,
+  domainDescription,
   domain,
   learnerProfile,
   topicParams,
@@ -92,51 +116,60 @@ export async function generateQuestions({
   count = 20,
 }) {
   try {
-    const prompt = buildPrompt({
-      topicName,
-      topicDescription,
-      topicParams,
-      subtopics,
-      learnerProfile,
-      domain,
-      domainDescription,
-      subject,
-      subjectDescription,
+    const batchSize = 4; // 5 parallel batches * 4 = 20
+    const numBatches = Math.ceil(count / batchSize);
+
+    const prompts = Array.from({ length: numBatches }, (_, i) => {
+      return buildPrompt({
+        topicName,
+        topicDescription,
+        topicParams,
+        subtopics,
+        learnerProfile,
+        domain,
+        domainDescription,
+        subject,
+        subjectDescription,
+        count: batchSize,
+        offset: i * batchSize,
+      });
     });
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 1,
-      // Strongly reduce formatting errors:
-      response_format: { type: "json_object" },
-      // Generating 20 hard MCQs is verbose; give enough room:
-      max_completion_tokens: 3500,
-    });
+    console.log(`🚀 Launching ${numBatches} parallel batches...`);
 
-    let raw = response.choices?.[0]?.message?.content || "{}";
+    const responses = await Promise.all(
+      prompts.map((prompt, i) =>
+        openai.chat.completions
+          .create({
+            model: "gpt-4.1", // ✅ switched from gpt-5-mini
+            messages: [{ role: "user", content: prompt }],
+            temperature: 1,
+            response_format: { type: "json_object" },
+            max_completion_tokens: 1800,
+          })
+          .then((res) => {
+            let raw = res.choices?.[0]?.message?.content || "{}";
+            raw = raw.replace(/```json|```/g, "").trim();
+            try {
+              const parsed = JSON.parse(raw);
+              console.log(`✅ Batch ${i + 1} parsed with`, parsed?.questions?.length || 0, "questions");
+              return parsed;
+            } catch (err) {
+              console.error(`❌ Batch ${i + 1} parse failed`);
+              return { questions: [], answers: [] };
+            }
+          })
+      )
+    );
 
-    // Just in case:
-    raw = raw.replace(/```json|```/g, "").trim();
+    const rawQuestions = responses.flatMap((r) => r.questions || []);
+    const rawAnswers = responses.flatMap((r) => r.answers || []);
+    console.log("🔹 Total raw questions from pipelines:", rawQuestions.length);
 
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      console.error("❌ Failed to parse GPT response:\n", raw);
-      throw new Error("Failed to generate questions: Invalid JSON from GPT");
-    }
-
-    let {
-      questions: rawQuestions = [],
-      answers: rawAnswers = [],
-      time_limit_minutes = 30,
-    } = parsed;
-
-    // 1) Strictly sanitize (no visuals, valid A–D, etc.)
+    // Sanitize
     let { questions, answers } = sanitizeQA(rawQuestions, rawAnswers);
 
-    // 2) Remove items asked earlier by this user for this topic
+    // Deduplicate against user’s past
     const previousTests = await Test.findAll({
       where: { topic_uuid: topicId, user_id: userId },
       attributes: ["questions"],
@@ -144,7 +177,9 @@ export async function generateQuestions({
 
     const previouslyAsked = new Set(
       previousTests.flatMap((t) =>
-        (t.questions || []).map((q) => toPlain(q.text || q.question_text).toLowerCase())
+        (t.questions || []).map((q) =>
+          toPlain(q.text || q.question_text).toLowerCase()
+        )
       )
     );
 
@@ -152,22 +187,25 @@ export async function generateQuestions({
       .filter((q) => !previouslyAsked.has(toPlain(q.text).toLowerCase()))
       .slice(0, count);
 
-    // Keep answers aligned to the surviving questions
     const validIds = new Set(questions.map((q) => q.id));
     answers = answers.filter((a) => validIds.has(Number(a.id)));
+
+    if (questions.length < count) {
+      console.warn(`⚠️ Only got ${questions.length}/${count} usable questions after filtering.`);
+    }
 
     return {
       questions,
       answers,
-      time_limit_minutes,
+      time_limit_minutes: 30,
     };
   } catch (error) {
-console.error("❌ Error generating Bridger questions:", error?.message || error);
-throw new Error(error?.message || "Failed to generate questions");
-
+    console.error("❌ Error generating questions:", error?.message || error);
+    throw new Error(error?.message || "Failed to generate questions");
   }
 }
 
+/* ----------------------- PROMPT ---------------------- */
 function buildPrompt({
   topicName = "",
   topicDescription = "",
@@ -178,6 +216,8 @@ function buildPrompt({
   subject = "",
   subjectDescription = "",
   domainDescription = "",
+  count = 4,
+  offset = 0,
 }) {
   const formatParams = (obj) =>
     Object.entries(obj)
@@ -192,9 +232,7 @@ function buildPrompt({
   return `
 ROLE: Senior Item Writer for teacher-qualification MCQs.
 
-GOAL: Produce **very difficult**, text-only MCQs that measure both:
-(a) deep conceptual mastery of the topic, and
-(b) the candidate's ability to TEACH it (diagnose misconceptions, choose next steps, sequence instruction, craft examples).
+GOAL: Produce **very difficult**, text-only MCQs.
 
 CONTEXT
 - Topic: ${topicName}
@@ -205,49 +243,30 @@ CONTEXT
 SUBTOPICS (coverage pool; do NOT go outside these):
 ${formattedSubtopics}
 
-LEARNER PROFILE (33 metrics):
+LEARNER PROFILE:
 ${formatParams(learnerProfile)}
 
-TOPIC PARAMETERS (7 instructional modifiers):
+TOPIC PARAMETERS:
 ${formatParams(topicParams)}
 
 STRINGENT DESIGN RULES
-1) Generate exactly 20 MCQs, IDs 1..20.
-2) **Strictly text-only**: NO references to images/figures/graphs/tables/maps/plots/schematics, and NO prompts like "refer to the figure".
+1) Generate exactly ${count} MCQs, IDs ${offset + 1}..${offset + count}.
+2) Text-only: NO references to images/figures/graphs/tables/maps/plots/schematics.
 3) Each MCQ has exactly 4 options labeled "A", "B", "C", "D". One single correct answer.
-4) Ban meta options: "All of the above", "None of the above", "Both A and B", or variants.
-5) Difficulty: target upper Bloom's levels — emphasize **application** and **analysis** with subtle near-miss distractors (common misconceptions, boundary conditions, off-by-one traps, “looks-right-but-wrong”).
-6) Include **at least 6 teachability checks** (PCK-style), still MCQs, where the stem presents a brief classroom scenario (student error, misconception, next-step choice, example selection, feedback choice, or sequencing). There must be a single best answer grounded in sound pedagogy.
-7) Spread coverage across the given subtopics. Do NOT introduce outside content.
-8) Option quality: concise, precise, and differentiable. Avoid hand-wavy wording, hedges, or tricks unrelated to the concept.
-9) Keep everything self-contained; any data needed must be included as plain text in the stem itself (no external references).
-10) No explanations, no commentary — **answers only** as requested in the schema.
+4) Ban meta options: "All of the above", "None of the above", "Both A and B".
+5) Difficulty: Bloom's application & analysis. Include subtle near-miss distractors.
+6) At least 2 per batch must be pedagogy/teachability checks.
+7) Spread coverage across given subtopics. No outside content.
+8) Options concise and precise. No fluff.
+9) Self-contained. Include any data in the stem as plain text.
+10) No explanations, only JSON.
 
-COGNITIVE EMPHASIS (follow implicitly; do not label in output)
-- Hard Recall (terminology/definitions that are easy to confuse)
-- Application (realistic situations / parameterized cases)
-- Analytical (counterexamples, edge cases, comparing approaches)
-- Personalized (if any low metrics are hinted in learnerProfile, bias a few items toward revealing such weaknesses)
-
-TIME RECOMMENDATION (implicit)
-- Default 30 minutes; +2–5 if Speed < 40% or Stress Management < 30%.
-
-OUTPUT — RETURN VALID JSON ONLY (no code fences)
+OUTPUT FORMAT (valid JSON only):
 {
   "questions": [
-    {
-      "id": 1,
-      "text": "Stem here (self-contained, text-only; no image/figure references).",
-      "options": { "A": "…", "B": "…", "C": "…", "D": "…" }
-    }
+    { "id": ${offset + 1}, "text": "Stem here", "options": { "A": "...", "B": "...", "C": "...", "D": "..." } }
   ],
-  "answers": [
-    { "id": 1, "correct_answer": "A" }
-  ],
-  "time_limit_minutes": 30
+  "answers": [ { "id": ${offset + 1}, "correct_answer": "A" } ]
 }
-  Do not explain answers or add commentary. Strictly adhere to the output format.
-`
-
-.trim();
+  `.trim();
 }

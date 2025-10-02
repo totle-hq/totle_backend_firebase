@@ -300,15 +300,17 @@ export const startTest = async (req, res) => {
     }
 
     // Cooldown guard
-    const { eligible, waitTime } = await isUserEligibleForRetest(userId, test.topic_uuid);
-    if (!eligible) {
-      return res.status(429).json({
-        success: false,
-        message: `You are still on cooldown. Try again in ${waitTime.days}d ${waitTime.hours}h ${waitTime.minutes}m ${waitTime.seconds}s`,
-        cooldown_active: true,
-        waitTime,
-      });
-    }
+const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, test.topic_uuid);
+if (!eligible) {
+  return res.status(429).json({
+    success: false,
+    message: `You are still on cooldown. Next attempt available at ${cooldown_end}`,
+    cooldown_active: true,
+    waitTime,
+    cooldown_end,
+  });
+}
+
 
     if (test.status !== "generated") {
       return res.status(400).json({ success: false, message: "Test cannot be started in its current state" });
@@ -520,8 +522,9 @@ export const checkUserTestEligibility = async (req, res) => {
     if (!userId) return res.status(400).json({ success: false, message: "Missing userId" });
     if (!topicId) return res.status(400).json({ success: false, message: "Missing topicId" });
 
-    const { eligible, waitTimeMinutes } = await isUserEligibleForRetest(userId, topicId);
-    return res.status(200).json({ success: true, data: { eligible, waitTimeMinutes } });
+const { eligible, waitTimeMinutes, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
+return res.status(200).json({ success: true, data: { eligible, waitTimeMinutes, cooldown_end } });
+
   } catch (error) {
     console.error("❌ Error checking retest eligibility:", error);
     return res.status(500).json({ success: false, message: "Failed to check eligibility", error: error.message });
@@ -536,17 +539,18 @@ export const checkRetestEligibility = async (req, res) => {
     if (!userId || !topicId) {
       return res.status(400).json({ success: false, message: "Missing userId or topicId" });
     }
+const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
 
-    const { eligible, waitTime } = await isUserEligibleForRetest(userId, topicId);
+return res.status(200).json({
+  success: true,
+  eligible,
+  waitTime,
+  cooldown_end,
+  message: eligible
+    ? "User is eligible to retake the test."
+    : `User is currently on cooldown. Next attempt available at ${cooldown_end}`,
+});
 
-    return res.status(200).json({
-      success: true,
-      eligible,
-      waitTime,
-      message: eligible
-        ? "User is eligible to retake the test."
-        : `User is currently on cooldown. Retest not allowed yet. try in ${waitTime.days}d: ${waitTime.hours}h :${waitTime.minutes}m : ${waitTime.seconds}s`,
-    });
   } catch (error) {
     console.error("❌ Error checking test eligibility:", error);
     return res.status(500).json({
@@ -831,21 +835,24 @@ export const reportTest = async (req, res) => {
   }
 };
 
-// ✅ UPDATED: Baseline-first + 7-pipeline CPS + fool-proof rubric persistence
+
+
 export const generateTest = async (req, res) => {
+  console.log("🔹 [generateTest] Request received", { body: req.body, userId: req?.user?.id });
+
   try {
     const { topicId } = req.body;
     const userId = req.user.id;
+    console.log("➡️ Extracted params", { userId, topicId });
 
     if (!userId || !topicId) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing userId or topicId.",
-      });
+      console.warn("⚠️ Missing params", { userId, topicId });
+      return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
 
-    /* -------------------- 1) Payment gate -------------------- */
+    console.log("🔹 Checking payment gate");
     const hasValidPayment = await checkTestPayment(userId, topicId);
+    console.log("✅ Payment check result:", hasValidPayment);
     if (!hasValidPayment) {
       return res.status(402).json({
         success: false,
@@ -855,32 +862,33 @@ export const generateTest = async (req, res) => {
       });
     }
 
-    /* -------------------- 2) Cooling-period gate -------------------- */
-    const { eligible, waitTime } = await isUserEligibleForRetest(userId, topicId);
-    if (!eligible) {
-      return res.status(429).json({
-        success: false,
-        message: `You are still on cooldown. Please wait ${waitTime.days}d ${waitTime.hours}h ${waitTime.minutes}m ${waitTime.seconds}s before retaking this test.`,
-        cooldown_active: true,
-        waitTime,
-      });
-    }
+    console.log("🔹 Checking cooldown for user", userId, "topic", topicId);
+const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
+if (!eligible) {
+  return res.status(429).json({
+    success: false,
+    message: `You are still on cooldown. Next attempt available at ${cooldown_end}`,
+    cooldown_active: true,
+    waitTime,
+    cooldown_end,
+  });
+}
 
-    /* -------------------- 3) Subject & Domain -------------------- */
+
+    console.log("🔹 Fetching subject/domain for topic", topicId);
     const { subject, domain } = await findSubjectAndDomain(topicId);
     const subjectName = subject?.name || "";
     const subjectDescription = subject?.description || "";
     const domainName = domain?.name || "";
     const domainDescription = domain?.description || "";
+    console.log("✅ Subject/Domain fetched:", { subjectName, domainName });
 
-    /* -------------------- 4) Topic fetch & params -------------------- */
+    console.log("🔹 Fetching topic from DB", topicId);
     const topic = await CatalogueNode.findByPk(topicId);
     if (!topic || !topic.is_topic) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid topic.",
-      });
+      return res.status(404).json({ success: false, message: "Invalid topic." });
     }
+    console.log("✅ Topic found:", topic.name);
     const topicDescription = topic.description || "";
 
     const topicParams = {
@@ -896,14 +904,16 @@ export const generateTest = async (req, res) => {
       ...(domain?.modality_mix || {}),
     };
 
-    /* -------------------- 5) Baseline check -------------------- */
+    console.log("🔹 Checking if baseline test for this user/topic");
     const priorCount = await Test.count({ where: { user_id: userId, topic_uuid: topicId } });
     const isBaseline = priorCount === 0;
+    console.log("✅ Prior tests:", priorCount, "| Mode:", isBaseline ? "Baseline" : "CPS");
 
-    /* -------------------- 6) Learner profile -------------------- */
+    console.log("🔹 Fetching learner profile for user", userId);
     const learnerProfile = await getUserLearningMetrics(userId);
+    console.log("✅ Learner profile fetched");
 
-    /* -------------------- 7) SSE: initial note -------------------- */
+    console.log("🔹 Sending SSE initial note");
     publishProgress({
       userId,
       topicId,
@@ -912,89 +922,54 @@ export const generateTest = async (req, res) => {
       note: isBaseline ? "Baseline: preparing a 20-item test…" : "Preparing CPS-aware test (7 blocks)…",
     });
 
-    /* -------------------- 8) Generate questions -------------------- */
     let flatQuestions = [];
     let flatAnswers = [];
     let time_limit_minutes = 30;
     const rubricRows = [];
 
     if (isBaseline) {
-      // ---------- BASELINE (20 items, neutral rubrics) ----------
-      publishProgress({
-        userId,
+      console.log("🔹 Using baseline generator (20 questions)");
+      const result = await generateQuestions({
+        subject: subjectName,
+        subjectDescription,
+        domain: domainName,
+        domainDescription,
+        topicName: topic.name,
+        topicDescription,
+        learnerProfile,
+        topicParams,
+        subtopics: [],
         topicId,
-        phase: "baseline",
-        status: "progress",
-        note: "Baseline generation started…",
+        userId,
+        count: 20,
       });
 
-      const seenTexts = new Set();
-      let attempts = 0;
+      time_limit_minutes = result.time_limit_minutes || 30;
+      let globalId = 1;
 
-      while (flatQuestions.length < 20 && attempts < 5) {
-        const { questions, answers } = await generateQuestions({
-          subject: subjectName,
-          subjectDescription,
-          domain: domainName,
-          domainDescription,
-          learnerProfile,
-          topicName: topic.name,
-          topicDescription,
-          topicParams,
-          topicId,
-          userId,
-          count: 20,
+      for (const item of result.questions) {
+        flatQuestions.push({ id: globalId, text: item.text, options: item.options });
+        flatAnswers.push({ id: globalId, correct_answer: result.answers.find(a => a.id === item.id)?.correct_answer });
+        rubricRows.push({
+          block_key: "baseline",
+          global_qid: globalId,
+          option_impacts: { A:{}, B:{}, C:{}, D:{} },
+          gates: {},
+          item_weight: 1.0,
         });
-
-        for (let i = 0; i < questions.length && flatQuestions.length < 20; i++) {
-          const q = questions[i];
-          const ans = answers.find((a) => a.id === q.id);
-          if (!seenTexts.has(q.text) && ans) {
-            seenTexts.add(q.text);
-            const newId = flatQuestions.length + 1;
-
-            flatQuestions.push({ id: newId, text: q.text, options: q.options });
-            flatAnswers.push({ id: newId, correct_answer: ans.correct_answer });
-
-            // ✅ Minimal neutral rubric row
-            rubricRows.push({
-              block_key: "baseline",
-              global_qid: newId, // integer
-              option_impacts: { A: {}, B: {}, C: {}, D: {} },
-              gates: {},
-              item_weight: 1.0,
-            });
-          }
-        }
-        attempts++;
+        globalId++;
       }
 
-      if (flatQuestions.length !== 20) {
+      if (flatQuestions.length < 20) {
         return res.status(500).json({
           success: false,
-          message: "Could not generate enough unique questions (baseline).",
+          message: `Baseline generation failed. Got only ${flatQuestions.length}/20 questions.`,
         });
       }
-
-      time_limit_minutes = 30;
-      publishProgress({
-        userId,
-        topicId,
-        phase: "baseline",
-        status: "done",
-        note: "Baseline questions ready.",
-      });
     } else {
-      // ---------- CPS (7 pipelines, 25 items, full rubrics) ----------
+      console.log("🔹 CPS generation started");
       const onProgress = (evt) => {
-        publishProgress({
-          userId,
-          topicId,
-          phase: evt?.phase || "unknown",
-          status: evt?.status || "progress",
-          note: evt?.note || "",
-          extra: evt?.extra || {},
-        });
+        publishProgress({ userId, topicId, ...evt });
       };
 
       const result = await generateCpsQuestionSet({
@@ -1012,14 +987,12 @@ export const generateTest = async (req, res) => {
       });
 
       time_limit_minutes = result.totalRecommendedTimeMin || 35;
-
       let globalId = 1;
       for (const step of result.steps) {
         for (const item of step.items) {
           flatQuestions.push({ id: globalId, text: item.text, options: item.options });
           flatAnswers.push({ id: globalId, correct_answer: item.answer });
 
-          // ✅ Clean numeric-only impacts
           const safeImpacts = {};
           for (const opt of ["A", "B", "C", "D"]) {
             const entry = item?.rubric?.option_impacts?.[opt] || {};
@@ -1031,26 +1004,13 @@ export const generateTest = async (req, res) => {
             safeImpacts[opt] = clean;
           }
 
-          // ✅ Ensure ENUM-safe block_key
-          const allowedKeys = [
-            "reasoning_strategy",
-            "metacognition_selfreg",
-            "memory_retrieval",
-            "speed_fluency",
-            "attention_focus",
-            "resilience_adaptability",
-            "teaching",
-          ];
-          const safeBlock = allowedKeys.includes(step.key) ? step.key : "baseline";
-
           rubricRows.push({
-            block_key: safeBlock,
-            global_qid: globalId, // integer
+            block_key: step.key,
+            global_qid: globalId,
             option_impacts: safeImpacts,
             gates: item?.rubric?.gates || {},
             item_weight: 1.0,
           });
-
           globalId++;
         }
       }
@@ -1071,7 +1031,7 @@ export const generateTest = async (req, res) => {
       });
     }
 
-    /* -------------------- 9) Payment reuse guard -------------------- */
+    console.log("🔹 Checking for unused payment");
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
     if (!payment) {
       return res.status(402).json({
@@ -1081,7 +1041,7 @@ export const generateTest = async (req, res) => {
       });
     }
 
-    /* -------------------- 10) Persist Test row -------------------- */
+    console.log("🔹 Persisting Test row");
     const count = (await Test.count()) + 1;
     const savedTest = await Test.create({
       sl_no: count,
@@ -1089,13 +1049,7 @@ export const generateTest = async (req, res) => {
       user_id: userId,
       topic_uuid: topicId,
       difficulty: isBaseline ? "baseline" : "mixed",
-      topics: [{
-        id: topic.id,
-        name: topic.name,
-        description: topic.description,
-        session_count: topic.session_count,
-        prices: topic.prices,
-      }],
+      topics: [{ id: topic.id, name: topic.name, description: topic.description, session_count: topic.session_count, prices: topic.prices }],
       questions: flatQuestions,
       answers: flatAnswers,
       test_settings: {
@@ -1108,30 +1062,26 @@ export const generateTest = async (req, res) => {
       status: "generated",
       payment_id: payment.payment_id,
     });
+    console.log("✅ Test saved with id", savedTest.test_id);
 
-    /* -------------------- 11) Persist rubrics -------------------- */
     if (rubricRows.length) {
+      console.log("🔹 Persisting rubrics:", rubricRows.length);
       await TestItemRubric.bulkCreate(
         rubricRows.map((row) => ({
           test_id: savedTest.test_id,
           block_key: row.block_key,
-          global_qid: row.global_qid, // integer
+          global_qid: row.global_qid,
           option_impacts: row.option_impacts,
           gates: row.gates,
           item_weight: row.item_weight ?? 1,
         })),
         { validate: true }
       );
+      console.log("✅ Rubrics persisted");
     }
 
-    /* -------------------- 12) Done -------------------- */
-    publishProgress({
-      userId,
-      topicId,
-      phase: "done",
-      status: "done",
-      note: "Test ready.",
-    });
+    console.log("🎉 Test generation complete", savedTest.test_id);
+    publishProgress({ userId, topicId, phase: "done", status: "done", note: "Test ready." });
 
     return res.status(200).json({
       success: true,
@@ -1152,16 +1102,12 @@ export const generateTest = async (req, res) => {
       if (userId && topicId) {
         publishProgress({ userId, topicId, phase: "error", status: "error", note: "Generation failed." });
       }
-    } catch { /* noop */ }
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to generate test.",
-      error: error.message,
-    });
+    } catch (innerErr) {
+      console.error("⚠️ SSE error reporting failed:", innerErr);
+    }
+    return res.status(500).json({ success: false, message: "Failed to generate test.", error: error.message });
   }
 };
-
 
 
 // Add to: src/controllers/TestGeneratorControllers/testGenerator.controller.js
