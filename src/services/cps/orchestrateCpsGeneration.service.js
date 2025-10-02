@@ -394,7 +394,7 @@ async function callOpenAI({ model, prompt, system, max_completion_tokens = 2000 
   try {
     const response = await openai.chat.completions.create({
       model,
-      temperature: 0.3,
+      temperature: 1,
       response_format: { type: "json_object" },
       max_completion_tokens,
       messages: baseMessages,
@@ -418,7 +418,7 @@ async function callOpenAI({ model, prompt, system, max_completion_tokens = 2000 
       const slice = lastValidJsonSlice(raw);
       const repairResponse = await openai.chat.completions.create({
         model,
-        temperature: 0.0,
+        temperature: 1,
         response_format: { type: "json_object" },
         max_completion_tokens: 2000,
         messages: [
