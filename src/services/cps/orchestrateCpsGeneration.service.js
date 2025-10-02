@@ -177,7 +177,7 @@ export async function generateCpsQuestionSet({
           model,
           prompt,
           system: systemMessage(),
-          max_tokens: 1200,
+          max_completion_tokens: 1200,
         });
 
         const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
@@ -239,7 +239,7 @@ export async function generateCpsQuestionSet({
         model,
         prompt,
         system: systemMessage(),
-        max_tokens: 1000,
+        max_completion_tokens: 1000,
       });
       const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
       if (items.length > 0) {
@@ -384,7 +384,7 @@ function lastValidJsonSlice(raw) {
 }
 
 
-async function callOpenAI({ model, prompt, system, max_tokens = 2000 }) {
+async function callOpenAI({ model, prompt, system, max_completion_tokens = 2000 }) {
   const baseMessages = [
     ...(system ? [{ role: "system", content: system }] : []),
     { role: "user", content: prompt },
@@ -396,7 +396,7 @@ async function callOpenAI({ model, prompt, system, max_tokens = 2000 }) {
       model,
       temperature: 0.3,
       response_format: { type: "json_object" },
-      max_tokens,
+      max_completion_tokens,
       messages: baseMessages,
     });
 
@@ -420,7 +420,7 @@ async function callOpenAI({ model, prompt, system, max_tokens = 2000 }) {
         model,
         temperature: 0.0,
         response_format: { type: "json_object" },
-        max_tokens: 2000,
+        max_completion_tokens: 2000,
         messages: [
           {
             role: "system",

@@ -245,10 +245,21 @@ app.get("/db", async (_req, res) => {
   }
 });
 
-// 404 for unknown routes (keep after all routes)
+// Serve React frontend build for non-API routes
+app.use(express.static(path.join(__dirname, "build")));
+
+app.get("*", (req, res, next) => {
+  if (req.originalUrl.startsWith("/api") || req.originalUrl.startsWith("/auth")) {
+    return next(); // let API routes fall through
+  }
+  res.sendFile(path.join(__dirname, "build", "index.html"));
+});
+
+// 404 for unknown API routes
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found", path: req.originalUrl });
 });
+
 
 /* -------------------- Server & Socket.IO -------------------- */
 const startServer = async () => {
