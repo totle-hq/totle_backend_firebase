@@ -32,6 +32,7 @@ import { Teachertopicstats } from '../../Models/TeachertopicstatsModel.js';
 import { CatalogueNode } from '../../Models/CatalogModels/catalogueNode.model.js';
 import { CpsProfile } from '../../Models/CpsProfile.model.js';
 import { runDbSync } from '../../config/syncDb.js';
+import { Test } from '../../Models/test.model.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -2006,5 +2007,95 @@ export const toggleSyncDb = async (req, res) => {
   } catch (error) {
     console.error("Error toggling DB sync:", error);
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+
+export const getCoolDownForAllUsers = async (req, res) => {
+  try {
+    const users = await User.findAll();
+    const data = [];
+
+    for (const user of users) {
+      const latestTest = await Test.findOne({
+        where: { user_id: user.id },
+        order: [["submitted_at", "DESC"]],
+      });
+
+      let topicName = null;
+      let topicPath = null;
+
+      if (latestTest?.topic_uuid) {
+        const topic = await CatalogueNode.findOne({
+          where: { node_id: latestTest.topic_uuid },
+        });
+
+        if (topic) {
+          topicName = topic.name;
+          topicPath = topic.address_of_node ?? null;
+        }
+      }
+
+      data.push({
+        user_id: user.id,
+        name: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        latest_cooldown: latestTest?.cooling_period ?? null,
+        latest_test_id: latestTest?.test_id ?? null,
+        topic_uuid: latestTest?.topic_uuid ?? null,
+        topic_name: topicName,
+        topic_path: topicPath,
+        submitted_at: latestTest?.submitted_at ?? null,
+      });
+    }
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("❌ Error fetching cooldowns:", err);
+    res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+};
+
+
+// ✅ PUT: Update cooling_period for selected users
+export const updateCoolDownPeriod = async (req, res) => {
+  try {
+    const { userIds = [], topic_uuid = null, cooling_period = 0 } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: "No user IDs provided" });
+    }
+
+    const results = [];
+
+    for (const userId of userIds) {
+      const latestTest = await Test.findOne({
+        where: {
+          user_id: userId,
+          ...(topic_uuid && { topic_uuid }),
+        },
+        order: [["submitted_at", "DESC"]],
+      });
+
+      if (!latestTest) {
+        results.push({ user_id: userId, status: "❌ No test found" });
+        continue;
+      }
+
+      latestTest.cooling_period = cooling_period;
+      await latestTest.save();
+
+      results.push({
+        user_id: userId,
+        test_id: latestTest.test_id,
+        new_cooldown: cooling_period,
+        status: "✅ Updated",
+      });
+    }
+
+    res.json({ success: true, updated: results });
+  } catch (err) {
+    console.error("❌ Error updating cooldowns:", err);
+    res.status(500).json({ success: false, message: "Update failed" });
   }
 };
