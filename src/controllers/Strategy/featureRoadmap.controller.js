@@ -7,10 +7,13 @@ export const getFeatures = async (req, res) => {
     const features = await FeatureRoadmap.findAll({
       order: [["priority", "ASC"]],
     });
-    res.json(features);
+
+    // Always return an array
+    res.json(Array.isArray(features) ? features : []);
   } catch (error) {
     console.error("❌ Error fetching features:", error);
-    res.status(500).json({ message: "Error fetching features" });
+    // Return [] instead of object, so frontend won't crash
+    res.status(500).json([]);
   }
 };
 
@@ -25,7 +28,7 @@ export const addFeature = async (req, res) => {
       name,
       description,
       addedBy,
-      priority: (isNaN(maxPriority) ? 0 : maxPriority + 1),
+      priority: isNaN(maxPriority) ? 0 : maxPriority + 1,
       lastModified: new Date(),
     });
 
