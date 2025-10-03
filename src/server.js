@@ -49,6 +49,8 @@ import opsCpsRouter from "./routes/ops.cps.routes.js";
 import cpsRouter from "./routes/cps.routes.js";
 import testsProgressRoutes from "./routes/tests.progress.routes.js";
 import nucleusDocsRoutes from "./routes/nucleusDocs.routes.js";  // ✅ import
+import projectTaskRoutes from "./routes/projectTask.routes.js";
+import projectBoardRoutes from "./routes/projectBoard.routes.js";
 
 import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 
@@ -227,6 +229,9 @@ app.use("/api/cps", cpsRouter);
 app.use("/api/strategy/roadmap", featureRoadmapRoutes);
 
 app.use("/api/tests/progress", testsProgressRoutes);
+app.use("/api/projects", projectBoardRoutes);
+
+app.use("/api/projects", projectTaskRoutes);
 
 
 /* -------------------- Health / Diagnostics -------------------- */

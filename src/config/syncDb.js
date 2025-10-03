@@ -26,6 +26,8 @@ import { Payment } from '../Models/PaymentModels.js';
 import { User } from '../Models/UserModels/UserModel.js';
 import { Department } from '../Models/UserModels/Department.js';
 import { FeatureRoadmap } from '../Models/Strategy/FeatureRoadmap.model.js';
+import { ProjectBoard } from "../Models/ProjectModels/ProjectBoard.model.js";
+import { ProjectTask } from "../Models/ProjectModels/ProjectTask.model.js";
 
 dotenv.config();
 
@@ -205,6 +207,20 @@ console.log('✅ FeatureRoadmap table synced successfully!');
 
     await safeSync(Task, { name: 'Task' });
     console.log('✅ Task table synced successfully!');
+
+        await safeSync(ProjectBoard, { name: "ProjectBoard" });
+    console.log("✅ ProjectBoard table synced successfully!");
+
+    await safeSync(ProjectTask, { name: "ProjectTask" });
+    console.log("✅ ProjectTask table synced successfully!");
+
+
+        await safeSync(Feature, { name: 'Feature' });
+    console.log('✅ Feature table synced successfully!');
+
+    await safeSync(Task, { name: 'Task' });
+    console.log('✅ Task table synced successfully!');
+
 
     const { Survey } = await import('../Models/SurveyModels/SurveyModel.js');
     await safeSync(Survey, { name: 'Survey' });
