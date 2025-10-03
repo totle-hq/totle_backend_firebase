@@ -25,6 +25,7 @@ import { TestItemRubric } from '../Models/TestItemRubric.model.js';
 import { Payment } from '../Models/PaymentModels.js';
 import { User } from '../Models/UserModels/UserModel.js';
 import { Department } from '../Models/UserModels/Department.js';
+import { FeatureRoadmap } from '../Models/Strategy/FeatureRoadmap.model.js';
 
 dotenv.config();
 
@@ -189,6 +190,9 @@ export async function syncDatabase() {
     const { Objective } = await import('../Models/Objectives/objective.model.js');
     await safeSync(Objective, { name: 'Objective' });
     console.log('✅ Objective table synced successfully!');
+
+    await safeSync(FeatureRoadmap, { name: 'FeatureRoadmap' });
+console.log('✅ FeatureRoadmap table synced successfully!');
 
     await safeSync(KeyResult, { name: 'KeyResult' });
     console.log('✅ KeyResult table synced successfully!');

@@ -50,6 +50,8 @@ import cpsRouter from "./routes/cps.routes.js";
 import testsProgressRoutes from "./routes/tests.progress.routes.js";
 import nucleusDocsRoutes from "./routes/nucleusDocs.routes.js";  // ✅ import
 
+import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
+
 // DB sync (your existing)
 import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
 
@@ -222,6 +224,7 @@ app.use("/research/cps", researchCpsRouter);
 app.use("/strategy/cps", strategyCpsRouter);
 app.use("/ops/cps", opsCpsRouter);
 app.use("/api/cps", cpsRouter);
+app.use("/api/strategy/roadmap", featureRoadmapRoutes);
 
 app.use("/api/tests/progress", testsProgressRoutes);
 
