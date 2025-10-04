@@ -2011,6 +2011,7 @@ export const toggleSyncDb = async (req, res) => {
 };
 
 
+// ✅ GET: Fetch all cooldown data for all users (test-wise)
 export const getAllCooldownsForAllUsers = async (req, res) => {
   try {
     const users = await User.findAll();
@@ -2039,14 +2040,14 @@ export const getAllCooldownsForAllUsers = async (req, res) => {
 
         data.push({
           user_id: user.id,
-          name: `${user.firstName}`,
+          name: `${user.firstName}`.trim(),
           email: user.email,
-          test_id: test.test_id,
+          latest_test_id: test.test_id, // match frontend expectation
           topic_uuid: test.topic_uuid,
           topic_name: topicName,
           topic_path: topicPath,
           submitted_at: test.submitted_at,
-          cooling_period: test.cooling_period ?? null,
+          latest_cooldown: test.cooling_period ?? null,
         });
       }
     }
@@ -2060,45 +2061,32 @@ export const getAllCooldownsForAllUsers = async (req, res) => {
 
 
 
-// ✅ PUT: Update cooling_period for selected users
+// ✅ PUT: Update cooling_period for selected tests
 export const updateCoolDownPeriod = async (req, res) => {
   try {
-    const { userIds = [], topic_uuid = null, cooling_period = 0 } = req.body;
+    const { testIds = [], cooling_period = 0 } = req.body;
 
-    if (!Array.isArray(userIds) || userIds.length === 0) {
-      return res.status(400).json({ message: "No user IDs provided" });
+    if (!Array.isArray(testIds) || testIds.length === 0) {
+      return res.status(400).json({ success: false, message: "No test IDs provided" });
     }
 
-    const results = [];
-
-    for (const userId of userIds) {
-      const latestTest = await Test.findOne({
+    const [affectedRows] = await Test.update(
+      { cooling_period },
+      {
         where: {
-          user_id: userId,
-          ...(topic_uuid && { topic_uuid }),
+          test_id: testIds,
         },
-        order: [["submitted_at", "DESC"]],
-      });
-
-      if (!latestTest) {
-        results.push({ user_id: userId, status: "❌ No test found" });
-        continue;
       }
+    );
 
-      latestTest.cooling_period = cooling_period;
-      await latestTest.save();
-
-      results.push({
-        user_id: userId,
-        test_id: latestTest.test_id,
-        new_cooldown: cooling_period,
-        status: "✅ Updated",
-      });
-    }
-
-    res.json({ success: true, updated: results });
+    res.json({
+      success: true,
+      updated_count: affectedRows,
+      message: `${affectedRows} test(s) updated successfully.`,
+    });
   } catch (err) {
     console.error("❌ Error updating cooldowns:", err);
     res.status(500).json({ success: false, message: "Update failed" });
   }
 };
+
