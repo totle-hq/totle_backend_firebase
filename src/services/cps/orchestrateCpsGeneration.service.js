@@ -104,6 +104,7 @@ function logBrokenJson(raw, phase) {
 /* -------------------------------------------------------------------------- */
 /* Main generator                                                             */
 /* -------------------------------------------------------------------------- */
+
 export async function generateCpsQuestionSet({
   subject = "",
   subjectDescription = "",
@@ -117,38 +118,29 @@ export async function generateCpsQuestionSet({
   isBaseline = false,
   onProgress,
 }) {
-  // PLAN: baseline split into 4 neutral pipelines
+  // -------------------- PLAN --------------------
   const PLAN = isBaseline
-    ? { baseline_reasoning: 5, baseline_memory: 5, baseline_speed: 5, baseline_misc: 5 }
+    ? { baseline: 20 } // baseline already handled elsewhere
     : {
         reasoning_strategy: 6,
         metacognition_selfreg: 4,
         memory_retrieval: 3,
         speed_fluency: 3,
-        attention_focus: 2,
-        resilience_adaptability: 2,
-        teaching: 5,
+        attention_focus: 3,
+        resilience_adaptability: 3,
+        teaching: 3,
       };
 
-  const order = Object.keys(PLAN).map((k) => ({ key: k, label: `Generating ${k}…` }));
-  const steps = [];
-  const globalSeenStems = new Set();
   const model = process.env.OPENAI_CPS_MODEL || "gpt-4.1";
+  const globalSeenStems = new Set();
+  const steps = [];
 
-  for (const s of order) {
-    const targetCount = PLAN[s.key];
-    onProgress?.({ phase: s.key, status: "progress", note: s.label });
-    console.log(`[${isBaseline ? "Baseline" : "CPS"}:${s.key}] Need ${targetCount}`);
-
-    let collected = [];
-    let tries = 0;
-
-    while (collected.length < targetCount && tries < 15) {
-      tries++;
-      console.log(`[${s.key}] Attempt ${tries} (${collected.length}/${targetCount})`);
+  // -------------------- Helper: run mini-batch --------------------
+  async function runBatch(blockKey, count) {
+    try {
       const prompt = buildPrompt({
-        blockKey: s.key,
-        count: Math.min(2, targetCount - collected.length),
+        blockKey,
+        count,
         isBaseline,
         subject,
         subjectDescription,
@@ -162,79 +154,85 @@ export async function generateCpsQuestionSet({
         avoidStems: Array.from(globalSeenStems).slice(-50),
       });
 
-      try {
-        const parsed = await callOpenAI({
-          model,
-          prompt,
-          system: systemMessage(),
-          max_completion_tokens: 1200,
-        });
-        const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
-        for (const it of items) {
-          if (collected.length >= targetCount) break;
-          const norm = normalizeStem(it.text);
-          if (globalSeenStems.has(norm) || isTooSimilar(it.text, globalSeenStems)) continue;
-
-          const rubric = isBaseline
-            ? { option_impacts: {}, gates: {}, block: "baseline" }
-            : coerceRubric((parsed.rubrics || []).find((r) => Number(r?.id) === it.id), s.key);
-
-          collected.push({ ...it, rubric });
-          globalSeenStems.add(norm);
-        }
-      } catch (err) {
-        console.warn(`[${s.key}] Parse failed:`, err.message);
-        logBrokenJson(err?.raw || "", s.key);
-      }
-    }
-
-    steps.push({ key: s.key, items: collected, recommendedTimeMin: isBaseline ? 30 : defaultTimeForBlock(s.key) });
-    onProgress?.({ phase: s.key, status: "done", note: `${collected.length}/${targetCount} items ready` });
-  }
-
-  // fallback: top up until 20 baseline or 25 CPS
-  const minTarget = isBaseline ? 20 : 25;
-  let total = steps.reduce((a, s) => a + s.items.length, 0);
-  let fallbackTries = 0;
-  while (total < minTarget && fallbackTries < 40) {
-    fallbackTries++;
-    const block = order[fallbackTries % order.length];
-    console.log(`[Fallback:${block.key}] Try ${fallbackTries} total ${total}`);
-    onProgress?.({ phase: "fallback", status: "progress", note: `Top-up attempt ${fallbackTries}` });
-    try {
       const parsed = await callOpenAI({
         model,
-        prompt: buildPrompt({
-          blockKey: block.key,
-          count: 1,
-          isBaseline,
-          subject,
-          subjectDescription,
-          domain,
-          domainDescription,
-          topicName,
-          topicDescription,
-          subtopics,
-          learnerProfile,
-          params,
-          avoidStems: Array.from(globalSeenStems).slice(-50),
-        }),
+        prompt,
         system: systemMessage(),
         max_completion_tokens: 800,
       });
+
       const items = sanitizeItems(parsed.questions, parsed.answers, globalSeenStems);
-      if (items.length) {
-        steps[0].items.push({ ...items[0], rubric: isBaseline ? { option_impacts: {}, gates: {}, block: "baseline" } : coerceRubric({}, block.key) });
-        total++;
-      }
+
+      return items.map((it) => {
+        const norm = normalizeStem(it.text);
+        globalSeenStems.add(norm);
+
+        // If rubric missing, fill defaults
+        const rubric = parsed.rubrics?.find((r) => Number(r.id) === it.id) || {};
+        return {
+          ...it,
+          rubric: coerceRubric(rubric, blockKey),
+        };
+      });
     } catch (err) {
-      logBrokenJson(err?.raw || "", `fallback_${block.key}`);
+      console.warn(`[${blockKey}] batch failed:`, err.message);
+      return [];
     }
   }
 
-  const totalRecommendedTimeMin = steps.reduce((a, s) => a + (s.recommendedTimeMin || 0), 0) || (isBaseline ? 30 : 35);
+  // -------------------- Main Parallel Runs --------------------
+  const allBatchPromises = [];
+
+  for (const [blockKey, targetCount] of Object.entries(PLAN)) {
+    // break into mini-batches of 2 (last one can be 1)
+    let remaining = targetCount;
+    while (remaining > 0) {
+      const batchSize = Math.min(2, remaining);
+      allBatchPromises.push(
+        runBatch(blockKey, batchSize).then((items) => ({ blockKey, items }))
+      );
+      remaining -= batchSize;
+    }
+  }
+
+  const results = await Promise.all(allBatchPromises);
+
+  // Group by block
+  const grouped = {};
+  for (const { blockKey, items } of results) {
+    if (!grouped[blockKey]) grouped[blockKey] = [];
+    grouped[blockKey].push(...items);
+  }
+
+  // Build steps
+  for (const [blockKey, items] of Object.entries(grouped)) {
+    steps.push({
+      key: blockKey,
+      items,
+      recommendedTimeMin: defaultTimeForBlock(blockKey),
+    });
+  }
+
+  // -------------------- Top-up until 25 --------------------
+  let total = steps.reduce((a, s) => a + s.items.length, 0);
+  let tries = 0;
+
+  while (total < 25 && tries < 40) {
+    tries++;
+    const blockKey = Object.keys(PLAN)[tries % Object.keys(PLAN).length];
+    const extra = await runBatch(blockKey, 1);
+    if (extra.length) {
+      steps.find((s) => s.key === blockKey).items.push(extra[0]);
+      total++;
+    }
+  }
+
+  const totalRecommendedTimeMin =
+    steps.reduce((a, s) => a + (s.recommendedTimeMin || 0), 0) || 35;
+
   return { steps, totalRecommendedTimeMin };
 }
+
 
 /* -------------------------------------------------------------------------- */
 /* Prompt construction                                                        */
