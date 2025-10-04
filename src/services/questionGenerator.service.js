@@ -141,7 +141,7 @@ export async function generateQuestions({
       prompts.map((prompt, i) =>
         openai.chat.completions
           .create({
-            model: "gpt-4.1", // ✅ switched from gpt-5-mini
+            model: "gpt-4o-mini", // ✅ switched from gpt-5-mini
             messages: [{ role: "user", content: prompt }],
             temperature: 1,
             response_format: { type: "json_object" },
