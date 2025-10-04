@@ -232,22 +232,24 @@ function buildPrompt({
   return `
 ROLE: Senior Item Writer for teacher-qualification MCQs.
 
-GOAL: Produce **very difficult**, text-only MCQs.
+GOAL: Produce **very difficult**, text-only MCQs. Understand the context of the topic, and the learner profile and generate questions that are tailored to the learner to test the learner's topic expertise. Use the subtopics as a strict coverage pool. Adhere to the design rules below.
 
 CONTEXT
 - Topic: ${topicName}
 - Description: ${topicDescription || ""}
-- Subject: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""}
-- Domain: ${domain}${domainDescription ? ` — ${domainDescription}` : ""}
+- Subject: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""} A subject is a collection of topics.
+- Domain: ${domain}${domainDescription ? ` — ${domainDescription}` : ""} A domain is a collection of subjects.
 
 SUBTOPICS (coverage pool; do NOT go outside these):
 ${formattedSubtopics}
 
 LEARNER PROFILE:
 ${formatParams(learnerProfile)}
+This will tell you the cognitive profile of the learner. Use this to calibrate question difficulty, complexity, and focus. For example, if the learner is weak in "application", focus on application questions. If they are strong in "knowledge", you can include more challenging analysis questions.
 
 TOPIC PARAMETERS:
 ${formatParams(topicParams)}
+This will tell you the specific parameters of the topic, such as difficulty level, prior knowledge required, and any special considerations. Use this to further tailor the questions to the topic's requirements.
 
 STRINGENT DESIGN RULES
 1) Generate exactly ${count} MCQs, IDs ${offset + 1}..${offset + count}.
