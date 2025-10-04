@@ -251,15 +251,15 @@ ${formatParams(topicParams)}
 
 STRINGENT DESIGN RULES
 1) Generate exactly ${count} MCQs, IDs ${offset + 1}..${offset + count}.
-2) Text-only: NO references to images/figures/graphs/tables/maps/plots/schematics.
-3) Each MCQ has exactly 4 options labeled "A", "B", "C", "D". One single correct answer.
+2) Text-only: NO references to images/figures/graphs/tables/maps/plots/schematics. 
+3) Each MCQ has exactly 4 options labeled "A", "B", "C", "D". One single correct answer at any cost. Strictly no partially correct answers.
 4) Ban meta options: "All of the above", "None of the above", "Both A and B".
-5) Difficulty: Bloom's application & analysis. Include subtle near-miss distractors.
+5) Difficulty: Bloom's application & analysis. Include subtle near-miss distractors. But these distractors must be clearly wrong to a well-prepared student. Avoid ambiguity.
 6) At least 2 per batch must be pedagogy/teachability checks.
-7) Spread coverage across given subtopics. No outside content.
+7) Spread coverage across given subtopics. No outside content. And strictly adhere to subtopics only. 
 8) Options concise and precise. No fluff.
 9) Self-contained. Include any data in the stem as plain text.
-10) No explanations, only JSON.
+10) No explanations, only JSON. Only JSON. No apologies.
 
 OUTPUT FORMAT (valid JSON only):
 {
