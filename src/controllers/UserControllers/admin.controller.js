@@ -2011,50 +2011,53 @@ export const toggleSyncDb = async (req, res) => {
 };
 
 
-export const getCoolDownForAllUsers = async (req, res) => {
+export const getAllCooldownsForAllUsers = async (req, res) => {
   try {
     const users = await User.findAll();
     const data = [];
 
     for (const user of users) {
-      const latestTest = await Test.findOne({
+      const tests = await Test.findAll({
         where: { user_id: user.id },
         order: [["submitted_at", "DESC"]],
       });
 
-      let topicName = null;
-      let topicPath = null;
+      for (const test of tests) {
+        let topicName = null;
+        let topicPath = null;
 
-      if (latestTest?.topic_uuid) {
-        const topic = await CatalogueNode.findOne({
-          where: { node_id: latestTest.topic_uuid },
-        });
+        if (test.topic_uuid) {
+          const topic = await CatalogueNode.findOne({
+            where: { node_id: test.topic_uuid },
+          });
 
-        if (topic) {
-          topicName = topic.name;
-          topicPath = topic.address_of_node ?? null;
+          if (topic) {
+            topicName = topic.name;
+            topicPath = topic.address_of_node ?? null;
+          }
         }
-      }
 
-      data.push({
-        user_id: user.id,
-        name: `${user.firstName} ${user.lastName}`,
-        email: user.email,
-        latest_cooldown: latestTest?.cooling_period ?? null,
-        latest_test_id: latestTest?.test_id ?? null,
-        topic_uuid: latestTest?.topic_uuid ?? null,
-        topic_name: topicName,
-        topic_path: topicPath,
-        submitted_at: latestTest?.submitted_at ?? null,
-      });
+        data.push({
+          user_id: user.id,
+          name: `${user.firstName}`,
+          email: user.email,
+          test_id: test.test_id,
+          topic_uuid: test.topic_uuid,
+          topic_name: topicName,
+          topic_path: topicPath,
+          submitted_at: test.submitted_at,
+          cooling_period: test.cooling_period ?? null,
+        });
+      }
     }
 
     res.json({ success: true, data });
   } catch (err) {
-    console.error("❌ Error fetching cooldowns:", err);
+    console.error("❌ Error fetching all cooldowns:", err);
     res.status(500).json({ success: false, message: "Something went wrong" });
   }
 };
+
 
 
 // ✅ PUT: Update cooling_period for selected users
