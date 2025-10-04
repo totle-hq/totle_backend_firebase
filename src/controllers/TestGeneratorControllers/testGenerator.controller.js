@@ -905,9 +905,13 @@ if (!eligible) {
     };
 
     console.log("🔹 Checking if baseline test for this user/topic");
+    // const priorCount = await Test.count({ where: { user_id: userId, topic_uuid: topicId } });
+    // const isBaseline = priorCount === 0;
+    // console.log("✅ Prior tests:", priorCount, "| Mode:", isBaseline ? "Baseline" : "CPS");
     const priorCount = await Test.count({ where: { user_id: userId, topic_uuid: topicId } });
-    const isBaseline = priorCount === 0;
-    console.log("✅ Prior tests:", priorCount, "| Mode:", isBaseline ? "Baseline" : "CPS");
+console.log("✅ Prior tests:", priorCount, "| Mode: forced baseline");
+const isBaseline = true;   // ✅ force baseline regardless
+
 
     console.log("🔹 Fetching learner profile for user", userId);
     const learnerProfile = await getUserLearningMetrics(userId);
