@@ -16,9 +16,9 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
 
     const now = new Date();
 
-    const session = await BookedSession.findOne({
+    const session = await Session.findOne({
       where: {
-        learner_id: id,
+        student_id: id,
         createdAt: { [Op.gt]: now }
       },
       include: [
@@ -47,7 +47,7 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
     return res.status(200).json({
       success: true,
       session: {
-        session_id: session.id,
+        session_id: session.session_id,
         scheduled_at: session.createdAt,
         teacherName: `${session.teacher.firstName} ${session.teacher.lastName||""}`,
         topicName: session.bookedTopic.name,
@@ -106,7 +106,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
       return res.status(400).json({ error: true, message: "Teacher ID is required" });
     }
 
-    const session = await BookedSession.findOne({
+    const session = await Session.findOne({
       where: {
         teacher_id: id,
       },
