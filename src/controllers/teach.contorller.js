@@ -196,7 +196,7 @@ export const getAvailabilityChart = async (req, res) => {
 
       if (!timeMap.has(scheduledTimeISO)) {
         timeMap.set(scheduledTimeISO, {
-          id: session.id, // single session id
+          id: session.session_id, // single session id
           scheduled_at: session.scheduled_at.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
           completed_at: session.completed_at?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) || null,
           topic_ids: [],
