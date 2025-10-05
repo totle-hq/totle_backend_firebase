@@ -804,7 +804,29 @@ export const updateUserProfile = async (req, res) => {
         });
       }
     }
-    console.log("Existing gender:", user.gender);
+    // ✅ Gender update logic
+if (req.body.gender) {
+  const newGender = req.body.gender.toLowerCase();
+  const validGenders = ["male", "female", "other"];
+
+  if (!validGenders.includes(newGender)) {
+    return res.status(400).json({
+      error: true,
+      message: "Invalid gender value.",
+    });
+  }
+
+  // Prevent changing gender once set, if needed
+  if (user.gender && user.gender !== newGender) {
+    return res.status(400).json({
+      error: true,
+      message: "Gender cannot be changed once set.",
+    });
+  }
+
+  updateData.gender = newGender;
+}
+
     if (qualification)
       updateData.educational_qualifications = Array.isArray(qualification)
         ? qualification
