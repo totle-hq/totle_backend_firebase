@@ -83,7 +83,8 @@ export const offerSlot = async (req, res) => {
     const duration_minutes = Math.round((completed_at - scheduled_at) / (1000 * 60));
 
     const now = new Date();
-    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    // const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const twoHoursLater = new Date(now.getTime() + 30 * 60 * 1000);
 
     if (scheduled_at < twoHoursLater) {
       return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
