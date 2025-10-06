@@ -60,14 +60,18 @@ export const reportSession = async (req, res) => {
   }
 };
 
-function parse12HourTime(dateStr, time12h) {
-  const [time, modifier] = time12h.trim().split(" ");
+function parse12HourTime(dateStr, timeStr) {
+  if (!timeStr.includes("AM") && !timeStr.includes("PM")) {
+    // It's in 24-hour format already
+    return new Date(`${dateStr}T${timeStr}:00`);
+  }
+
+  const [time, modifier] = timeStr.trim().split(" ");
   let [hours, minutes] = time.split(":").map(Number);
 
   if (modifier.toUpperCase() === "PM" && hours !== 12) hours += 12;
   if (modifier.toUpperCase() === "AM" && hours === 12) hours = 0;
 
-  // Ensure two-digit format
   const hh = String(hours).padStart(2, "0");
   const mm = String(minutes).padStart(2, "0");
 

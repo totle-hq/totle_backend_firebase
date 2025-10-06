@@ -55,10 +55,7 @@ const UserDepartment = sequelize1.define('user_departments', {
   tableName: 'user_departments_roles',
   timestamps: true,
   indexes: [
-    {
-      unique: true,
-      fields: ['roleName', 'departmentId'], // ✅ Valid unique constraint
-    },{ unique: true, fields: ['email', 'departmentId'] }
+    { unique: true, fields: ['email', 'departmentId'] }
   ],
 });
 
