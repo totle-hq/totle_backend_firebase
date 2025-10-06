@@ -596,6 +596,9 @@ export async function getTestById(req, res) {
 
     if (!test) return res.status(404).json({ success: false, message: "Test not found" });
 
+    console.log("🧪 Questions:", JSON.stringify(test.questions, null, 2));
+    console.log("✅ Answers:", JSON.stringify(test.answers, null, 2));
+
     return res.json({
       success: true,
       data: {
