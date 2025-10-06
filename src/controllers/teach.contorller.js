@@ -60,6 +60,20 @@ export const reportSession = async (req, res) => {
   }
 };
 
+function parse12HourTime(dateStr, time12h) {
+  const [time, modifier] = time12h.trim().split(" ");
+  let [hours, minutes] = time.split(":").map(Number);
+
+  if (modifier.toUpperCase() === "PM" && hours !== 12) hours += 12;
+  if (modifier.toUpperCase() === "AM" && hours === 12) hours = 0;
+
+  // Ensure two-digit format
+  const hh = String(hours).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+
+  return new Date(`${dateStr}T${hh}:${mm}:00`);
+}
+
 
 export const offerSlot = async (req, res) => {
   try {
@@ -78,8 +92,14 @@ export const offerSlot = async (req, res) => {
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split("-");
-    const scheduled_at = new Date(`${date} ${startTimeStr}`);
-    const completed_at = new Date(`${date} ${endTimeStr}`);
+    const scheduled_at = parse12HourTime(date, startTimeStr);
+    const completed_at = parse12HourTime(date, endTimeStr);
+
+    // Handle if slot crosses midnight (e.g., 11:30 PM to 12:30 AM)
+    if (completed_at <= scheduled_at) {
+      completed_at.setDate(completed_at.getDate() + 1);
+    }
+
     const duration_minutes = Math.round((completed_at - scheduled_at) / (1000 * 60));
 
     const now = new Date();
@@ -244,8 +264,13 @@ export const updateAvailabilitySlot = async (req, res) => {
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split("-");
-    const newScheduledAt = new Date(`${date} ${startTimeStr}`);
-    const newCompletedAt = new Date(`${date} ${endTimeStr}`);
+    const newScheduledAt = parse12HourTime(date, startTimeStr);
+    const newCompletedAt = parse12HourTime(date, endTimeStr);
+
+    if (newCompletedAt <= newScheduledAt) {
+      newCompletedAt.setDate(newCompletedAt.getDate() + 1);
+    }
+
     const duration_minutes = Math.round((newCompletedAt - newScheduledAt) / (1000 * 60));
 
     const now = new Date();
