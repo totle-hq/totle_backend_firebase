@@ -111,7 +111,7 @@ export const offerSlot = async (req, res) => {
     const twoHoursLater = new Date(now.getTime() + 30 * 60 * 1000);
 
     if (scheduled_at < twoHoursLater) {
-      return res.status(400).json({ message: "You can only offer a slot at least 2 hours from now." });
+      return res.status(400).json({ message: "You can only offer a slot at least 30 minutes from now." });
     }
 
     // Optional: prevent any existing session overlap (teacher-wide)
@@ -143,7 +143,6 @@ export const offerSlot = async (req, res) => {
 
       createdSessions.push(session);
     }
-    console.log("created sessions", createdSessions)
 
     return res.status(201).json({ message: "Slots offered successfully", sessions: createdSessions });
 
@@ -246,7 +245,6 @@ export const getAvailabilityChart = async (req, res) => {
         availability[dateKey].push(group);
       }
     }
-    console.log("availability", availability);
     return res.status(200).json({ availability });
 
   } catch (err) {

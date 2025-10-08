@@ -129,7 +129,7 @@ export const bookFreeSession = async (req, res) => {
 
     // ⏰ Find a slot at least 2 hours from now
     const now = new Date();
-    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const twoHoursLater = new Date(now.getTime() + 3 * 60 * 1000);
 
     const nextSlot = await Session.findOne({
       where: {
