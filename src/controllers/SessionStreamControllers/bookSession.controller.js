@@ -54,8 +54,6 @@ function getDistance(coord1, coord2) {
   return R * c; // Distance in km
 }
 
-const toUTC = (date) => new Date(date.getTime() - 5.5 * 60 * 60 * 1000);
-
 export const bookFreeSession = async (req, res) => {
   console.log("🔥 Hit bookFreeSession API");
 
@@ -64,60 +62,70 @@ export const bookFreeSession = async (req, res) => {
     const { topic_id } = req.body;
 
     if (!learner_id || !topic_id) {
-      return res.status(400).json({ error: true, message: "Learner ID and Topic ID are required" });
+      return res.status(400).json({
+        error: true,
+        message: "Learner ID and Topic ID are required",
+      });
     }
 
+    // 🧩 Validate learner
     const learner = await User.findOne({ where: { id: learner_id } });
     if (!learner) {
       console.warn("⚠️ Learner not found:", learner_id);
       return res.status(404).json({ error: true, message: "Learner not found" });
     }
-    // console.log("Session associations:", Object.keys(Session.associations));
 
-
+    // 🟢 Get all available sessions for the topic
     const availableSessions = await Session.findAll({
       where: { topic_id, status: "available" },
       raw: true,
     });
 
-
+    console.log(`📊 Found ${availableSessions.length} available sessions`);
     if (availableSessions.length < 2) {
-      console.warn("⚠️ Not enough available sessions for booking", availableSessions.length);
-      return res.status(404).json({ error: true, message: "Bridgers aren't available for this session yet" });
+      console.warn("⚠️ Not enough available sessions for booking");
+      return res.status(404).json({
+        error: true,
+        message: "Bridgers aren't available for this session yet",
+      });
     }
 
-    // 🧠 Match Scoring
+    // 🧠 Match scoring logic
     let bestSession = null;
     let highestScore = -Infinity;
 
     for (const session of availableSessions) {
-      // console.log("session:", session);
-      let teacher = await User.findOne({
-        where: { id: session.teacher_id }
+      const teacher = await User.findOne({
+        where: { id: session.teacher_id },
       });
 
-      console.log("id", session.teacher_id)
-      
-      if(!teacher.known_language_ids) {
-        console.error("❌ Teacher has no known languages, can't book session");
-        return res.status(400).json({ error: true, message: "❌ Teacher has no known languages, can't book session" });
+      if (!teacher) {
+        console.warn("⚠️ Missing teacher for session:", session.session_id);
+        continue;
       }
 
-      if(!learner.known_language_ids) {
-        console.error("❌ Learner has no known languages, can't book session");
-        return res.status(400).json({ error: true, message: "❌ Learner has no known languages, can't book session" });
+      if (!teacher.known_language_ids || !learner.known_language_ids) {
+        console.warn("⚠️ Missing language data for teacher/learner");
+        continue;
       }
-        
-      // console.log("Matching session:", session.id, "with teacher:", teacher);
+
       const mismatchPercent = calculateMismatchPercentage(
-        learner.known_language_ids || [],
-        teacher.known_language_ids || []
+        learner.known_language_ids,
+        teacher.known_language_ids
+      );
+      const distanceKm = getDistance(learner.location, teacher.location);
+      const score = getScore(
+        learner,
+        teacher,
+        mismatchPercent,
+        distanceKm,
+        learner.gender
       );
 
+      console.log(
+        `🧮 Score → Teacher ${teacher.firstName} (${session.session_id}): ${score}`
+      );
 
-      const distanceKm = getDistance(learner.location, teacher.location); // IP or lat/lng based
-      const score = getScore(learner, teacher, mismatchPercent, distanceKm, learner.gender);
-      console.log("score for session", session.session_id, ":", score);
       if (score > highestScore) {
         highestScore = score;
         bestSession = session;
@@ -125,61 +133,101 @@ export const bookFreeSession = async (req, res) => {
     }
 
     if (!bestSession) {
-      return res.status(500).json({ error: true, message: "No suitable session found" });
+      console.error("❌ No suitable session found after scoring");
+      return res
+        .status(500)
+        .json({ error: true, message: "No suitable session found" });
     }
 
-    // ⏰ Find a slot at least 2 hours from now
+    console.log("🏆 Best teacher:", bestSession.teacher_id);
+
+    // 🕒 Time logic
     const now = new Date();
-    const twoHoursLater = new Date(now.getTime() + 30 * 60 * 1000); // or 2 hours for production
-    const twoHoursLaterUTC = toUTC(twoHoursLater);
+    const bufferMinutes = 30; // 🔁 30 for testing; use 120 for production
+    const minStartTime = new Date(now.getTime() + bufferMinutes * 60 * 1000);
 
+    console.log("⏰ Now (IST):", now.toLocaleString("en-IN"));
+    console.log("⏰ Earliest allowed slot (IST):", minStartTime.toLocaleString("en-IN"));
+    console.log("⏰ Earliest allowed slot (UTC):", minStartTime.toISOString());
 
+    // 🔍 Debug all available slots for this teacher
+    const teacherSlots = await Session.findAll({
+      where: {
+        teacher_id: bestSession.teacher_id,
+        topic_id,
+        status: "available",
+      },
+      attributes: ["session_id", "scheduled_at"],
+      order: [["scheduled_at", "ASC"]],
+      raw: true,
+    });
+
+    console.log("📅 All slots for this teacher:");
+    teacherSlots.forEach((s) =>
+      console.log(
+        ` → ${s.session_id}: ${new Date(s.scheduled_at).toISOString()} (${new Date(
+          s.scheduled_at
+        ).toLocaleString("en-IN")})`
+      )
+    );
+
+    // ✅ Find next available slot after buffer time (no toUTC conversion)
     const nextSlot = await Session.findOne({
       where: {
         teacher_id: bestSession.teacher_id,
         topic_id,
         status: "available",
-        scheduled_at: { [Op.gte]: twoHoursLater }
+        scheduled_at: { [Op.gte]: minStartTime },
       },
-      order: [["scheduled_at", "ASC"]]
+      order: [["scheduled_at", "ASC"]],
     });
-    console.log("Next slot", nextSlot)
-    console.log("Next slot found:", nextSlot ? nextSlot.session_id : "None");
 
     if (!nextSlot) {
       console.warn("⚠️ No suitable future slot found for booking");
-      return res.status(404).json({ error: true, message: "Bridgers for this session will be available soon." });
+      return res.status(404).json({
+        error: true,
+        message: "Bridgers for this session will be available soon.",
+      });
     }
 
-    let topicName = await CatalogueNode.findOne({
+    console.log(
+      `✅ Next slot found: ${nextSlot.session_id} at ${new Date(
+        nextSlot.scheduled_at
+      ).toLocaleString("en-IN")}`
+    );
+
+    // 🏷️ Get topic name
+    const topic = await CatalogueNode.findOne({
       where: { node_id: topic_id },
-      attributes: ['name']
+      attributes: ["name"],
     });
 
-    // Save booking
+    // 💾 Save booking
     await BookedSession.create({
       learner_id,
       teacher_id: nextSlot.teacher_id,
       topic_id,
-      topic: topicName.name || "Unknown",
-      session_id: nextSlot.session_id
+      topic: topic?.name || "Unknown",
+      session_id: nextSlot.session_id,
     });
 
+    // 🔄 Update Session status
     await Session.update(
       { student_id: learner_id, status: "upcoming" },
       { where: { session_id: nextSlot.session_id } }
     );
 
+    // 👨‍🏫 Fetch teacher details
     const teacher = await User.findOne({
       where: { id: nextSlot.teacher_id },
-      attributes: ['firstName', 'lastName']
+      attributes: ["firstName", "lastName"],
     });
 
-    const topic = await CatalogueNode.findOne({
-      where: { node_id: topic_id },
-      attributes: ['name']
-    });
+    console.log(
+      `🎯 Booking confirmed → ${topic?.name} with ${teacher.firstName} ${teacher.lastName}`
+    );
 
+    // ✅ Return response
     return res.status(200).json({
       success: true,
       message: "Session booked successfully",
@@ -188,11 +236,12 @@ export const bookFreeSession = async (req, res) => {
         teacherName: `${teacher.firstName} ${teacher.lastName}`,
         topicName: topic?.name || "Unknown",
         scheduledAt: new Date(nextSlot.scheduled_at).toLocaleString("en-IN"),
-      }
+      },
     });
-
   } catch (err) {
     console.error("❌ Error booking session:", err);
-    return res.status(500).json({ error: true, message: "Internal server error" });
+    return res
+      .status(500)
+      .json({ error: true, message: "Internal server error" });
   }
 };
