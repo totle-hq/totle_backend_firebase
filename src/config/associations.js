@@ -208,6 +208,22 @@ const defineRelationships = () => {
   if (!Session.associations?.teacher) {
     Session.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
   }
+  // ✅ Add missing student association
+  if (!Session.associations?.student) {
+    Session.belongsTo(User, {
+      foreignKey: "student_id",
+      as: "student",
+      onDelete: "SET NULL",
+    });
+  }
+  if (!User.associations?.learningSessions) {
+    User.hasMany(Session, {
+      foreignKey: "student_id",
+      as: "learningSessions",
+      onDelete: "SET NULL",
+    });
+  }
+
   if (!User.associations?.teachingSessions) {
     User.hasMany(Session, { foreignKey: "teacher_id", as: "teachingSessions" });
   }
