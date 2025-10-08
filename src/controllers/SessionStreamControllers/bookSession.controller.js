@@ -54,6 +54,7 @@ function getDistance(coord1, coord2) {
   return R * c; // Distance in km
 }
 
+const toUTC = (date) => new Date(date.getTime() - 5.5 * 60 * 60 * 1000);
 
 export const bookFreeSession = async (req, res) => {
   console.log("🔥 Hit bookFreeSession API");
@@ -129,14 +130,16 @@ export const bookFreeSession = async (req, res) => {
 
     // ⏰ Find a slot at least 2 hours from now
     const now = new Date();
-    const twoHoursLater = new Date(now.getTime() + 3 * 60 * 1000);
+    const twoHoursLater = new Date(now.getTime() + 30 * 60 * 1000); // or 2 hours for production
+    const twoHoursLaterUTC = toUTC(twoHoursLater);
+
 
     const nextSlot = await Session.findOne({
       where: {
         teacher_id: bestSession.teacher_id,
         topic_id,
         status: "available",
-        scheduled_at: { [Op.gte]: twoHoursLater }
+        scheduled_at: { [Op.gte]: twoHoursLaterUTC }
       },
       order: [["scheduled_at", "ASC"]]
     });
@@ -183,7 +186,7 @@ export const bookFreeSession = async (req, res) => {
         sessionId: nextSlot.session_id,
         teacherName: `${teacher.firstName} ${teacher.lastName}`,
         topicName: topic?.name || "Unknown",
-        scheduledAt: nextSlot.scheduled_at,
+        scheduledAt: new Date(nextSlot.scheduled_at).toLocaleString("en-IN"),
       }
     });
 
