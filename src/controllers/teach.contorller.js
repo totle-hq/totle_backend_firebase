@@ -143,6 +143,7 @@ export const offerSlot = async (req, res) => {
 
       createdSessions.push(session);
     }
+    console.log("created sessions", createdSessions)
 
     return res.status(201).json({ message: "Slots offered successfully", sessions: createdSessions });
 
@@ -241,7 +242,7 @@ export const getAvailabilityChart = async (req, res) => {
         availability[dateKey].push(group);
       }
     }
-
+    console.log("availability", availability);
     return res.status(200).json({ availability });
 
   } catch (err) {
