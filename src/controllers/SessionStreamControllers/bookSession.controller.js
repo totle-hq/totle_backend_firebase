@@ -139,10 +139,11 @@ export const bookFreeSession = async (req, res) => {
         teacher_id: bestSession.teacher_id,
         topic_id,
         status: "available",
-        scheduled_at: { [Op.gte]: twoHoursLaterUTC }
+        scheduled_at: { [Op.gte]: twoHoursLater }
       },
       order: [["scheduled_at", "ASC"]]
     });
+    console.log("Next slot", nextSlot)
     console.log("Next slot found:", nextSlot ? nextSlot.session_id : "None");
 
     if (!nextSlot) {

@@ -25,7 +25,7 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
         { model: User, as: "teacher", attributes: ["firstName", "lastName"] },
         {
           model: CatalogueNode,
-          as: "bookedTopic",
+          as: "topic",
           attributes: ["name", "parent_id"],
           include: [
             {
@@ -114,7 +114,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
         { model: User, as: "student", attributes: ["firstName", "lastName"] },
         {
           model: CatalogueNode,
-          as: "bookedTopic",
+          as: "topic",
           attributes: ["node_id", "name", "parent_id"],
           include: [
             {
@@ -163,7 +163,7 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
       return res.status(400).json({ error: true, message: "Teacher ID is required" });
     }
 
-    const sessions = await BookedSession.findAll({
+    const sessions = await Session.findAll({
       where: { teacher_id: id },
       include: [
         {
@@ -173,7 +173,7 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
         },
         {
           model: CatalogueNode,
-          as: "bookedTopic",
+          as: "topic",
           attributes: ["name", "parent_id"],
           include: [
             {
