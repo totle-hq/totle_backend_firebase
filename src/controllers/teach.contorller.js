@@ -7,7 +7,10 @@ import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { findSubjectAndDomain } from "../utils/getsubject.js";
-import { zonedTimeToUtc } from "date-fns-tz";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const { zonedTimeToUtc } = require("date-fns-tz");
+
 
 export const reportSession = async (req, res) => {
   try {
