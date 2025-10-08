@@ -222,13 +222,17 @@ export const getAvailabilityChart = async (req, res) => {
       if (!timeMap.has(scheduledTimeISO)) {
         timeMap.set(scheduledTimeISO, {
           id: session.session_id, // single session id
-          scheduled_at: session.scheduled_at.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-          completed_at: session.completed_at?.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) || null,
+          // ✅ Show as IST (same as what frontend sent)
+          scheduled_at: new Date(session.scheduled_at).toLocaleString("en-IN"),
+          completed_at: session.completed_at
+            ? new Date(session.completed_at).toLocaleString("en-IN")
+            : null,
           topic_ids: [],
           topic_names: [],
           status: session.status,
         });
       }
+
 
       const entry = timeMap.get(scheduledTimeISO);
       entry.topic_ids.push(session.topic_id);
@@ -237,7 +241,7 @@ export const getAvailabilityChart = async (req, res) => {
 
     // 7. Fill availability
     for (const [isoTime, group] of timeMap.entries()) {
-      const dateKey = formatDate(convertUTCToIST(new Date(isoTime)));
+      const dateKey = formatDate(new Date(isoTime));
       if (availability[dateKey]) {
         availability[dateKey].push(group);
       }
