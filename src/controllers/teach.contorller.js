@@ -7,6 +7,7 @@ import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { findSubjectAndDomain } from "../utils/getsubject.js";
+import { zonedTimeToUtc } from "date-fns-tz";
 
 export const reportSession = async (req, res) => {
   try {
@@ -95,9 +96,18 @@ export const offerSlot = async (req, res) => {
       return res.status(400).json({ message: "Missing topic_ids array, date, or timeRange." });
     }
 
+    // 🕒 Convert IST (from frontend) → UTC before saving
     const [startTimeStr, endTimeStr] = timeRange.split("-");
-    const scheduled_at = parse12HourTime(date, startTimeStr);
-    const completed_at = parse12HourTime(date, endTimeStr);
+
+    const startIST = `${date}T${startTimeStr}:00+05:30`;
+    const endIST = `${date}T${endTimeStr}:00+05:30`;
+
+    const scheduled_at = zonedTimeToUtc(startIST, "Asia/Kolkata");
+    const completed_at = zonedTimeToUtc(endIST, "Asia/Kolkata");
+
+    console.log("🕒 Slot IST:", startIST, "-", endIST);
+    console.log("🕒 Slot UTC:", scheduled_at.toISOString(), "-", completed_at.toISOString());
+
 
     // Handle if slot crosses midnight (e.g., 11:30 PM to 12:30 AM)
     if (completed_at <= scheduled_at) {
@@ -169,22 +179,26 @@ export const getAvailabilityChart = async (req, res) => {
   try {
     const teacher_id = req.user.id;
 
-    const today = new Date();
-    const endDate = new Date();
-    endDate.setDate(today.getDate() + 7);
+    const todayIST = new Date();
+    const endDateIST = new Date(todayIST);
+    endDateIST.setDate(todayIST.getDate() + 7);
 
-    // 1. Get all sessions for the teacher in next 7 days
+    // ✅ Convert IST → UTC for DB query
+    const todayUTC = zonedTimeToUtc(todayIST, "Asia/Kolkata");
+    const endDateUTC = zonedTimeToUtc(endDateIST, "Asia/Kolkata");
+
     const sessions = await Session.findAll({
       where: {
         teacher_id,
         status: "available",
         scheduled_at: {
-          [Op.between]: [today, endDate],
+          [Op.between]: [todayUTC, endDateUTC],
         },
       },
       order: [["scheduled_at", "ASC"]],
       raw: true,
     });
+
 
     // 2. Get all unique topic IDs
     const allTopicIds = [...new Set(sessions.map(s => s.topic_id))];
@@ -205,10 +219,11 @@ export const getAvailabilityChart = async (req, res) => {
     // 5. Initialize availability for 7 days
     const availability = {};
     for (let i = 0; i < 7; i++) {
-      const date = new Date();
-      date.setDate(today.getDate() + i);
-      const dateKey = formatDate(convertUTCToIST(date));
+      const date = new Date(todayIST);
+      date.setDate(todayIST.getDate() + i);
+      const dateKey = date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
       availability[dateKey] = [];
+
     }
 
     // 6. Group sessions by time
@@ -216,16 +231,17 @@ export const getAvailabilityChart = async (req, res) => {
 
     for (const session of sessions) {
       const scheduledTimeISO = new Date(session.scheduled_at).toISOString();
-      const dateKey = formatDate(convertUTCToIST(session.scheduled_at));
+      const dateKey = new Date(session.scheduled_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
       if (!timeMap.has(scheduledTimeISO)) {
         timeMap.set(scheduledTimeISO, {
           id: session.session_id, // single session id
           // ✅ Show as IST (same as what frontend sent)
-          scheduled_at: new Date(session.scheduled_at).toLocaleString("en-IN"),
+          scheduled_at: new Date(session.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
           completed_at: session.completed_at
-            ? new Date(session.completed_at).toLocaleString("en-IN")
+            ? new Date(session.completed_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
             : null,
+
           topic_ids: [],
           topic_names: [],
           status: session.status,
@@ -240,7 +256,10 @@ export const getAvailabilityChart = async (req, res) => {
 
     // 7. Fill availability
     for (const [isoTime, group] of timeMap.entries()) {
-      const dateKey = formatDate(new Date(isoTime));
+      const dateKey = new Date(isoTime).toLocaleDateString("en-CA", {
+        timeZone: "Asia/Kolkata",
+      });
+
       if (availability[dateKey]) {
         availability[dateKey].push(group);
       }
@@ -271,8 +290,12 @@ export const updateAvailabilitySlot = async (req, res) => {
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split("-");
-    const newScheduledAt = parse12HourTime(date, startTimeStr);
-    const newCompletedAt = parse12HourTime(date, endTimeStr);
+    const startIST = `${date}T${startTimeStr}:00+05:30`;
+    const endIST = `${date}T${endTimeStr}:00+05:30`;
+
+    const newCompletedAt = zonedTimeToUtc(startIST, "Asia/Kolkata");
+    const newScheduledAt = zonedTimeToUtc(endIST, "Asia/Kolkata");
+
 
     if (newCompletedAt <= newScheduledAt) {
       newCompletedAt.setDate(newCompletedAt.getDate() + 1);

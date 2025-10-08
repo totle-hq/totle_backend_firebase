@@ -4,6 +4,8 @@ import { Session } from "../../Models/SessionModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
 // import { getDistance } from "../../utils/distance.js"; // Haversine or similar
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
+import { zonedTimeToUtc } from "date-fns-tz";
+
 
 function calculateMismatchPercentage(learnerLangs = [], teacherLangs = []) {
   const matches = teacherLangs.filter(lang => learnerLangs.includes(lang)).length;
@@ -144,11 +146,14 @@ export const bookFreeSession = async (req, res) => {
     // 🕒 Time logic
     const now = new Date();
     const bufferMinutes = 30; // 🔁 30 for testing; use 120 for production
-    const minStartTime = new Date(now.getTime() + bufferMinutes * 60 * 1000);
+    const minStartIST = new Date(now.getTime() + bufferMinutes * 60 * 1000);
+
+    // ✅ Convert cutoff to UTC for DB comparison
+    const minStartUTC = zonedTimeToUtc(minStartIST, "Asia/Kolkata");
 
     console.log("⏰ Now (IST):", now.toLocaleString("en-IN"));
-    console.log("⏰ Earliest allowed slot (IST):", minStartTime.toLocaleString("en-IN"));
-    console.log("⏰ Earliest allowed slot (UTC):", minStartTime.toISOString());
+    console.log("⏰ Earliest allowed slot (IST):", minStartIST.toLocaleString("en-IN"));
+    console.log("⏰ Earliest allowed slot (UTC):", minStartUTC.toISOString());
 
     // 🔍 Debug all available slots for this teacher
     const teacherSlots = await Session.findAll({
@@ -177,7 +182,7 @@ export const bookFreeSession = async (req, res) => {
         teacher_id: bestSession.teacher_id,
         topic_id,
         status: "available",
-        scheduled_at: { [Op.gte]: minStartTime },
+        scheduled_at: { [Op.gte]: minStartUTC },
       },
       order: [["scheduled_at", "ASC"]],
     });
