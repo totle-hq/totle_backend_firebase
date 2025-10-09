@@ -7,9 +7,11 @@ import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { findSubjectAndDomain } from "../utils/getsubject.js";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const { zonedTimeToUtc } = require("date-fns-tz");
+
+function zonedTimeToUtc(dateString) {
+  return new Date(dateString);
+}
+
 
 
 export const reportSession = async (req, res) => {
@@ -87,6 +89,11 @@ export const offerSlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const { topic_ids, date, timeRange } = req.body; // ✅ topic_ids is now an array
+if (typeof zonedTimeToUtc !== "function") {
+  console.error("❌ zonedTimeToUtc did not load correctly");
+} else {
+  console.log("✅ zonedTimeToUtc loaded successfully");
+}
 
     const user = await User.findByPk(teacher_id);
     const teacher_location = user.location;
@@ -105,8 +112,8 @@ export const offerSlot = async (req, res) => {
     const startIST = `${date}T${startTimeStr}:00+05:30`;
     const endIST = `${date}T${endTimeStr}:00+05:30`;
 
-    const scheduled_at = zonedTimeToUtc(startIST, "Asia/Kolkata");
-    const completed_at = zonedTimeToUtc(endIST, "Asia/Kolkata");
+    const scheduled_at = zonedTimeToUtc(`${date}T${startTimeStr}:00+05:30`, "Asia/Kolkata");
+    const completed_at = zonedTimeToUtc(`${date}T${endTimeStr}:00+05:30`, "Asia/Kolkata");
 
     console.log("🕒 Slot IST:", startIST, "-", endIST);
     console.log("🕒 Slot UTC:", scheduled_at.toISOString(), "-", completed_at.toISOString());
