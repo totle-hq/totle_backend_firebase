@@ -275,27 +275,30 @@ export const otpVerification = async (req, res) => {
 
     // Step 3: Hash password if provided
     const hashedPassword = password ? await hashPassword(password) : null;
-    const dobDate = new Date(dob);
-    const today = new Date();
-    const minDate = new Date(today.getFullYear() - 10, today.getMonth(), today.getDate());
-    if (dobDate > minDate) {
-      return res.status(400).json({ error: true, message: "You must be at least 10 years old to sign up" });
-    }
-    // Step 4: Create or update user
-const [user, created] = await User.upsert(
-  {
-    email: email || null,
-    mobile: null,
-    password: email ? hashedPassword : null,
-    isVerified: true,
-    firstName: firstName || "",
-    dob: dob,
-    gender: gender?.toLowerCase() || null,
-    status: "active",
-    updatedAt: new Date(),
-  },
-  { returning: true }
-);
+// Age calculation
+const dobDate = new Date(dob);
+const today = new Date();
+const age =
+  today.getFullYear() - dobDate.getFullYear() -
+  (today < new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate()) ? 1 : 0);
+
+// Tag minors
+const isMinor = age < 13;
+
+
+const [user, created] = await User.upsert({
+  email: email || null,
+  password: email ? hashedPassword : null,
+  isVerified: true,
+  firstName: firstName || "",
+  dob,
+  gender: gender?.toLowerCase() || null,
+  status: "active",
+  isMinor,
+  minorConsentAccepted: !isMinor || !!req.body.minorConsentAccepted,
+  updatedAt: new Date()
+}, { returning: true });
+
 await ensureCpsProfile(user.id); // ✅ make sure cps_profiles has a row for this user
 
 
@@ -369,6 +372,13 @@ export const loginUser = async (req, res) => {
       email: user.email,
       userName: user.firstName,
     };
+    if (user && user.status === "blacklist") {
+  return res.status(403).json({
+    error: true,
+    message: "Your account has been blocked by the administrator. Please contact support.",
+  });
+}
+
     const match = await comparePassword(password, user.password);
     if (!match) {
       return res.status(401).json({ error: true, message: "Invalid Password" });

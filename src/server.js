@@ -11,6 +11,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { registerChatHandlers } from "./socket/chat.socket.js";
 import chatRoutes from "./routes/chat.routes.js";
+import fs from "fs";
 
 // ---- Routes (your existing imports) ----
 import authRoutes from "./routes/UserRoutes/auth.routes.js";
@@ -72,29 +73,40 @@ app.set("trust proxy", true);
 /* -------------------- CORS -------------------- */
 // Exact origins with scheme; NO trailing slashes.
 const ORIGINS = [
+  // ✅ Local development
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5000",
+
+  // ✅ Production (frontend + backend)
   "https://totle.co",
   "https://www.totle.co",
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:5173",
-  "https://nucleus.totle.co"
+  "https://nucleus.totle.co",
+  "https://api.totle.co"
 ];
 
-
-// Build a CORS validator that returns a single allowed origin (not '*')
 const corsOptions = {
   origin(origin, cb) {
-    // Allow same-origin / server-to-server / health checks (no Origin header)
     if (!origin) return cb(null, true);
-const normalized = origin.replace(/\/$/, "");
-if (ORIGINS.includes(normalized)) return cb(null, true);
-    return cb(new Error(`Not allowed by CORS: ${origin}`));
+    const normalized = origin.replace(/\/$/, "");
+
+    // ✅ Allow production + all localhost ports (CRA, Vite, etc.)
+    if (
+      ORIGINS.includes(normalized) ||
+      /^http:\/\/localhost(:\d+)?$/.test(normalized) ||
+      /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(normalized)
+    ) {
+      return cb(null, true);
+    }
+
+    console.warn(`[CORS BLOCKED] ${origin}`);
+    cb(new Error(`Not allowed by CORS: ${origin}`));
   },
+  credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Authorization", "Content-Type"],
-  credentials: true,
-  maxAge: 86400,
   optionsSuccessStatus: 204,
+  maxAge: 86400,
 };
 
 app.use((req, _res, next) => {
@@ -131,43 +143,78 @@ app.use(
 
 app.use(
   helmet.contentSecurityPolicy({
+    useDefaults: false, // ✅ stop Helmet from merging defaults
     directives: {
       defaultSrc: ["'self'"],
+
+      /* ---------- Scripts ---------- */
       scriptSrc: [
         "'self'",
         "'unsafe-inline'",
         "'unsafe-eval'",
         "https://www.googletagmanager.com",
+        "https://checkout.razorpay.com",
+        "https://connect.facebook.net",
+        "https://www.facebook.com",
         "https://meet.jit.si",
         "https://aframe.io",
-        "https://checkout.razorpay.com",
         "https://unpkg.com",
       ],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*"],
+      scriptSrcElem: [
+        "'self'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "https://www.googletagmanager.com",
+        "https://checkout.razorpay.com",
+        "https://connect.facebook.net",
+        "https://www.facebook.com",
+        "https://meet.jit.si",
+        "https://aframe.io",
+        "https://unpkg.com",
+      ],
+
+      /* ---------- Connections (XHR / fetch / WS) ---------- */
       connectSrc: [
         "'self'",
         "https://api.totle.co",
         "wss://api.totle.co",
-        "https://www.google-analytics.com",
-        "https://stats.g.doubleclick.net",
-        "https://totle.co",
-        "https://nucleus.totle.co",
         "http://localhost:5000",
         "ws://localhost:5000",
+        "http://localhost:*",
+        "ws://localhost:*",
+        "https://www.google-analytics.com",
+        "https://stats.g.doubleclick.net",
+        "https://api-bdc.io",
+        "https://api-bdc.io/*", // ✅ covers reverse-geocode path
+        "https://api.bigdatacloud.net",
+        "https://ipinfo.io",
         "https://api.razorpay.com",
         "https://checkout.razorpay.com",
         "https://lumberjack.razorpay.com",
         "https://rzp.io",
+        "https://totle.co",
+        "https://nucleus.totle.co",
         "https://meet.jit.si",
         "https://aframe.io",
+        "https://connect.facebook.net", // ✅ FB Pixel
+        "https://www.facebook.com",     // ✅ FB SDK
       ],
-      frameSrc: ["'self'", "https://checkout.razorpay.com", "https://meet.jit.si"],
+
+      /* ---------- Styles / Fonts / Images / Frames ---------- */
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+      imgSrc: ["'self'", "data:", "blob:", "https://*"],
+      frameSrc: [
+        "'self'",
+        "https://checkout.razorpay.com",
+        "https://meet.jit.si",
+      ],
       objectSrc: ["'none'"],
     },
   })
 );
+
+
 
 app.use(compression());
 app.use(morgan("dev"));
@@ -255,15 +302,21 @@ app.get("/db", async (_req, res) => {
   }
 });
 
-// Serve React frontend build for non-API routes
-app.use(express.static(path.join(__dirname, "build")));
 
-app.get("*", (req, res, next) => {
-  if (req.originalUrl.startsWith("/api") || req.originalUrl.startsWith("/auth")) {
-    return next(); // let API routes fall through
-  }
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+// Serve React frontend only if build exists (for production)
+const buildPath = path.join(__dirname, "build");
+if (fs.existsSync(path.join(buildPath, "index.html"))) {
+  app.use(express.static(buildPath));
+  app.get("*", (req, res, next) => {
+    if (req.originalUrl.startsWith("/api") || req.originalUrl.startsWith("/auth")) {
+      return next();
+    }
+    res.sendFile(path.join(buildPath, "index.html"));
+  });
+} else {
+  console.warn("⚠️  No React build found — skipping static frontend serving");
+}
+
 
 // 404 for unknown API routes
 app.use((req, res) => {

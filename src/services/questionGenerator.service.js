@@ -230,45 +230,63 @@ function buildPrompt({
       : "None specified";
 
   return `
-ROLE: Senior Item Writer for teacher-qualification MCQs.
+ROLE: You are a **senior assessment designer** specializing in teacher-qualification multiple-choice questions (MCQs) for advanced learners.
 
-GOAL: Produce **very difficult**, text-only MCQs. Understand the context of the topic, and the learner profile and generate questions that are tailored to the learner to test the learner's topic expertise. Use the subtopics as a strict coverage pool. Adhere to the design rules below.
+OBJECTIVE: Generate **very difficult, text-only MCQs** that assess conceptual understanding, application, and analysis.  
+Each MCQ must have **exactly one correct option** that is indisputably correct, while the remaining three options must be **unique, plausible, but provably wrong**.  
+Ambiguity, overlaps, or trick phrasing are strictly forbidden.
 
-CONTEXT
-- Topic: ${topicName}
-- Description: ${topicDescription || ""}
-- Subject: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""} A subject is a collection of topics.
-- Domain: ${domain}${domainDescription ? ` — ${domainDescription}` : ""} A domain is a collection of subjects.
-
-SUBTOPICS (coverage pool; do NOT go outside these):
+CONTEXT:
+- Domain: ${domain}${domainDescription ? ` — ${domainDescription}` : ""}
+- Subject: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""}
+- Topic: ${topicName}${topicDescription ? ` — ${topicDescription}` : ""}
+- Subtopics (coverage pool only; do not go outside these):
 ${formattedSubtopics}
 
 LEARNER PROFILE:
 ${formatParams(learnerProfile)}
-This will tell you the cognitive profile of the learner. Use this to calibrate question difficulty, complexity, and focus. For example, if the learner is weak in "application", focus on application questions. If they are strong in "knowledge", you can include more challenging analysis questions.
 
 TOPIC PARAMETERS:
 ${formatParams(topicParams)}
-This will tell you the specific parameters of the topic, such as difficulty level, prior knowledge required, and any special considerations. Use this to further tailor the questions to the topic's requirements.
 
-STRINGENT DESIGN RULES
-1) Generate exactly ${count} MCQs, IDs ${offset + 1}..${offset + count}.
-2) Text-only: NO references to images/figures/graphs/tables/maps/plots/schematics. 
-3) Each MCQ has exactly 4 options labeled "A", "B", "C", "D". One single correct answer at any cost. Strictly no partially correct answers.
-4) Ban meta options: "All of the above", "None of the above", "Both A and B".
-5) Difficulty: Bloom's application & analysis. Include subtle near-miss distractors. But these distractors must be clearly wrong to a well-prepared student. Avoid ambiguity.
-6) At least 2 per batch must be pedagogy/teachability checks.
-7) Spread coverage across given subtopics. No outside content. And strictly adhere to subtopics only. 
-8) Options concise and precise. No fluff.
-9) Self-contained. Include any data in the stem as plain text.
-10) No explanations, only JSON. Only JSON. No apologies.
+STRICT QUESTION-WRITING RULES:
+1. Generate exactly ${count} MCQs, with IDs ${offset + 1}..${offset + count}.
+2. Text-only: no references to images, figures, graphs, charts, tables, maps, plots, or schematics.
+3. Each question must contain a **complete context** within its stem; it must stand alone without external reference.
+4. Provide exactly four options labeled "A", "B", "C", and "D".
+5. Only one option can be correct. The other three must each:
+   - Be unique (no repetition or semantic overlap).
+   - Be plausible distractors consistent with the topic.
+   - Contain no phrases like “All of the above”, “None of the above”, “Both A and B”, etc.
+6. The correct answer must be fully justified by the information in the stem.
+7. The difficulty level must reflect Bloom’s “Application” and “Analysis” tiers.
+8. Each batch must include at least 2 pedagogy-related or teachability-based questions.
+9. The language must be formal, academic, and unambiguous.
+10. Do not include explanations, reasoning, or commentary — **only the JSON object**.
 
 OUTPUT FORMAT (valid JSON only):
 {
   "questions": [
-    { "id": ${offset + 1}, "text": "Stem here", "options": { "A": "...", "B": "...", "C": "...", "D": "..." } }
+    {
+      "id": ${offset + 1},
+      "text": "Stem here",
+      "options": {
+        "A": "Option text",
+        "B": "Option text",
+        "C": "Option text",
+        "D": "Option text"
+      }
+    }
   ],
-  "answers": [ { "id": ${offset + 1}, "correct_answer": "A" } ]
+  "answers": [
+    { "id": ${offset + 1}, "correct_answer": "A" }
+  ]
 }
+
+Make sure:
+- The JSON is valid and strictly matches this format.
+- The options are **distinct, concise, and logically consistent**.
+- Exactly one correct option exists for each question.
   `.trim();
 }
+

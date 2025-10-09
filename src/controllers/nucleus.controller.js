@@ -34,26 +34,36 @@ export const getAllUserDetails = async (req, res) => {
     // Only apply database sorting if the field exists in the database
     const shouldSortInDatabase = databaseFields.includes(sortBy);
 
-    const { count: totalUsers, rows: users } = await User.findAndCountAll({
-      offset,
-      limit,
-      ...(shouldSortInDatabase && { order: [[sortBy, order]] }),
-      attributes: [
-        "id",
-        "firstName",
-        "lastName",
-        "email",
-        "mobile",
-        "dob",
-        "gender",
-        "known_language_ids",
-        "preferred_language_id",
-        "ipAddress",
-        "location",
-        "isLoggedIn",
-        "status",
-      ],
-    });
+// Optional filter for minors / consent status
+const where = {};
+if (req.query.filter === "minor") where.isMinor = true;
+if (req.query.filter === "adult") where.isMinor = false;
+if (req.query.filter === "pendingConsent") where.minorConsentAccepted = false;
+
+const { count: totalUsers, rows: users } = await User.findAndCountAll({
+  where,
+  offset,
+  limit,
+  ...(shouldSortInDatabase && { order: [[sortBy, order]] }),
+  attributes: [
+    "id",
+    "firstName",
+    "lastName",
+    "email",
+    "mobile",
+    "dob",
+    "gender",
+    "known_language_ids",
+    "preferred_language_id",
+    "ipAddress",
+    "location",
+    "isLoggedIn",
+    "status",
+    "isMinor",                // ✅ include new field
+    "minorConsentAccepted",   // ✅ include new field
+  ],
+});
+
 
     if (!users.length) return res.status(404).json({ error: "No users found" });
 
@@ -225,10 +235,13 @@ export const getAllUserDetails = async (req, res) => {
             `ID: ${user.preferred_language_id}`
           : null,
         gender: user.gender,
-        dob: user?.dob
-          ? new Date(user.dob).toLocaleDateString("en-GB").split("/").join("-")
-          : null,
-        ip_location:
+dob: user?.dob
+  ? new Date(user.dob).toLocaleDateString("en-GB").split("/").join("-")
+  : null,
+isMinor: user.isMinor,
+minorConsentAccepted: user.minorConsentAccepted,
+ip_location:
+
           user?.ipAddress && user?.location
             ? (() => {
                 const cleanLocation = user.location

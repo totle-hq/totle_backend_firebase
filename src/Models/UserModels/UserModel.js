@@ -139,7 +139,18 @@ const User = sequelize1.define(
       allowNull: false,
       defaultValue: "learner",
     },
-
+    isMinor: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if user is below 13 years of age at signup"
+    },
+    minorConsentAccepted: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "True if parent/guardian consent was accepted for a minor"
+    },
   },
   {
     schema: "user", // Private schema
