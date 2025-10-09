@@ -255,12 +255,49 @@ export const checkTestPaymentStatus = async (req, res) => {
     const { topicId } = req.params;
     const userId = req.user.id;
 
-    const payment = await findUnusedSuccessfulPayment(userId, topicId);
+    /* ------------------------------------------------------------------ */
+    /* 1️⃣  Check if already qualified (passed Bridger test earlier)        */
+    /* ------------------------------------------------------------------ */
+    const passed = await Test.findOne({
+      where: { user_id: userId, topic_uuid: topicId, eligible_for_bridger: true },
+    });
+    if (passed) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          already_bridger: true,
+          message: "You are already a Bridger for this topic.",
+        },
+      });
+    }
 
+    /* ------------------------------------------------------------------ */
+    /* 2️⃣  Check if user is in cooldown from a previous failed attempt     */
+    /* ------------------------------------------------------------------ */
+    const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
+    if (!eligible) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          paid: true, // treat as paid, don’t prompt again
+          cooldown_active: true,
+          waitTime,
+          cooldown_end,
+          message: `You are still on cooldown. Next attempt available at ${cooldown_end}`,
+        },
+      });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* 3️⃣  Otherwise, return normal payment requirement                    */
+    /* ------------------------------------------------------------------ */
+    const payment = await findUnusedSuccessfulPayment(userId, topicId);
     return res.status(200).json({
       success: true,
       data: {
         paid: !!payment,
+        cooldown_active: false,
+        already_bridger: false,
         amount_required: payment ? 0 : 9900,
       },
     });
@@ -273,6 +310,7 @@ export const checkTestPaymentStatus = async (req, res) => {
     });
   }
 };
+
 
 export const startTest = async (req, res) => {
   try {

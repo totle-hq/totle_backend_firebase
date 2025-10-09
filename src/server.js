@@ -72,18 +72,24 @@ app.set("trust proxy", true);
 
 /* -------------------- CORS -------------------- */
 // Exact origins with scheme; NO trailing slashes.
+/* -------------------- CORS -------------------- */
 const ORIGINS = [
-  // ✅ Local development
+  // ✅ Local development (React CRA, Vite, etc.)
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://localhost:5000",
+  "http://localhost:5173",   // ✅ added
+  "http://127.0.0.1:5173",   // ✅ added
+  "http://localhost:4173",   // ✅ added (Vite preview)
+  "http://127.0.0.1:4173",   // ✅ added
 
-  // ✅ Production (frontend + backend)
+  // ✅ Production domains
   "https://totle.co",
   "https://www.totle.co",
   "https://nucleus.totle.co",
   "https://api.totle.co"
 ];
+
 
 const corsOptions = {
   origin(origin, cb) {
@@ -174,31 +180,40 @@ app.use(
       ],
 
       /* ---------- Connections (XHR / fetch / WS) ---------- */
-      connectSrc: [
-        "'self'",
-        "https://api.totle.co",
-        "wss://api.totle.co",
-        "http://localhost:5000",
-        "ws://localhost:5000",
-        "http://localhost:*",
-        "ws://localhost:*",
-        "https://www.google-analytics.com",
-        "https://stats.g.doubleclick.net",
-        "https://api-bdc.io",
-        "https://api-bdc.io/*", // ✅ covers reverse-geocode path
-        "https://api.bigdatacloud.net",
-        "https://ipinfo.io",
-        "https://api.razorpay.com",
-        "https://checkout.razorpay.com",
-        "https://lumberjack.razorpay.com",
-        "https://rzp.io",
-        "https://totle.co",
-        "https://nucleus.totle.co",
-        "https://meet.jit.si",
-        "https://aframe.io",
-        "https://connect.facebook.net", // ✅ FB Pixel
-        "https://www.facebook.com",     // ✅ FB SDK
-      ],
+     connectSrc: [
+  "'self'",
+  "https://api.totle.co",
+  "wss://api.totle.co",
+  // ✅ Local development (Vite / CRA)
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "ws://localhost:3000",
+  "ws://localhost:5000",
+  "ws://localhost:5173",
+  "ws://localhost:4173",
+  // ✅ API + WebSocket
+  "https://totle.co",
+  "https://nucleus.totle.co",
+  "https://www.totle.co",
+  "https://api.totle.co",
+  "wss://api.totle.co",
+  // ✅ External APIs
+  "https://www.google-analytics.com",
+  "https://stats.g.doubleclick.net",
+  "https://api-bdc.io",
+  "https://api.bigdatacloud.net",
+  "https://ipinfo.io",
+  "https://api.razorpay.com",
+  "https://checkout.razorpay.com",
+  "https://lumberjack.razorpay.com",
+  "https://rzp.io",
+  "https://meet.jit.si",
+  "https://aframe.io",
+  "https://connect.facebook.net",
+  "https://www.facebook.com"
+],
 
       /* ---------- Styles / Fonts / Images / Frames ---------- */
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
