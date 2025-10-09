@@ -4,9 +4,10 @@ import { Session } from "../../Models/SessionModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
 // import { getDistance } from "../../utils/distance.js"; // Haversine or similar
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const { zonedTimeToUtc } = require("date-fns-tz");
+function zonedTimeToUtc(dateString) {
+  return new Date(dateString);
+}
+
 
 
 
