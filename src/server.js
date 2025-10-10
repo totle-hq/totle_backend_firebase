@@ -57,7 +57,7 @@ import researchRoutes from "./routes/research.routes.js";
 import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 
 // DB sync (your existing)
-import { defineModelRelationships, syncDatabase } from "./config/syncDb.js";
+import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
 
 // ----------------------------------------
 dotenv.config();
@@ -343,8 +343,7 @@ app.use((req, res) => {
 const startServer = async () => {
   try {
     // Ensure DB schema is in place
-    // await syncDatabase();
-    await defineModelRelationships();
+    await runDbSync(false);
 
     const PORT = process.env.PORT || 5000;
 
