@@ -43,7 +43,8 @@ const ALTER_BLACKLIST = new Set([
 ]);
 
 async function createSchemas(sequelize) {
-  const schemas = ['admin', 'user', 'catalog'];
+  // ✅ Added 'cps' schema without removing existing ones
+  const schemas = ['admin', 'user', 'catalog', 'cps'];
   for (const schema of schemas) {
     try {
       await sequelize.query(`CREATE SCHEMA IF NOT EXISTS "${schema}"`);
@@ -52,6 +53,7 @@ async function createSchemas(sequelize) {
       console.error(`❌ Failed to create schema '${schema}':`, error.message);
     }
   }
+  console.log("✅ All schemas verified: admin, user, catalog, cps");
 }
 
 async function createSuperAdminIfNeeded() {
@@ -138,7 +140,6 @@ async function safeSync(model, { name, allowAlter = true } = {}) {
   } catch (err) {
     const msg = String(err?.message || '');
     const code = err?.parent?.code;
-    // When Sequelize tries to drop a PK/column with FKs → 2BP01 (your crash)
     if (msg.includes('cannot drop column') || code === '2BP01') {
       console.warn(`⚠️  ${modelName}: alter failed due to dependencies; retrying without alter…`);
       await model.sync();
@@ -154,33 +155,25 @@ async function safeSync(model, { name, allowAlter = true } = {}) {
    Main Sync
 -------------------------------------------------- */
 export async function syncDatabase() {
+    console.log("🟡 syncDatabase() invoked"); // 👈 add this at the top
+
   try {
     const dbName1 = process.env.DB_NAME || 'totle';
+    console.log("🟡 creating DB if needed:", dbName1); // 👈
 
     await createDatabaseIfNeeded(dbName1);
-    await createSchemas(sequelize1);
+    console.log("🟢 Database check done"); // 👈 add this
+
+    await createSchemas(sequelize1); // ✅ now includes 'cps'
 
     // associations
     const defineRelationships = await import('../config/associations.js');
     defineRelationships.default();
     console.log('✅ Model associations defined!');
 
-    /* ---------------------------------------------
-       DO NOT run global alter for entire DB.
-       (This was causing DROP COLUMN on user.sessions.id)
-    ---------------------------------------------- */
-
-    // If you still want a broad pass for new tables ONLY, you can do:
-    // await sequelize1.sync(); // no alter
-    // But we’ll rely on explicit, ordered syncs below.
-
     console.log('🔄 Syncing tables in the correct order...');
-
-    // Keep your earlier fix/ordering for marketplace enum/table:
     console.log('🔍 Ensuring enum values exist for catalog.enum_teacher_topic_stats_tier...');
-    
 
-    // Blog/Survey/Admin/etc. (dynamic imports preserved)
     const { Admin } = await import('../Models/UserModels/AdminModel.js');
     await safeSync(Admin, { name: 'Admin' });
     await safeSync(Language, { name: "Language" }); 
@@ -194,7 +187,7 @@ export async function syncDatabase() {
     console.log('✅ Objective table synced successfully!');
 
     await safeSync(FeatureRoadmap, { name: 'FeatureRoadmap' });
-console.log('✅ FeatureRoadmap table synced successfully!');
+    console.log('✅ FeatureRoadmap table synced successfully!');
 
     await safeSync(KeyResult, { name: 'KeyResult' });
     console.log('✅ KeyResult table synced successfully!');
@@ -208,19 +201,11 @@ console.log('✅ FeatureRoadmap table synced successfully!');
     await safeSync(Task, { name: 'Task' });
     console.log('✅ Task table synced successfully!');
 
-        await safeSync(ProjectBoard, { name: "ProjectBoard" });
+    await safeSync(ProjectBoard, { name: "ProjectBoard" });
     console.log("✅ ProjectBoard table synced successfully!");
 
     await safeSync(ProjectTask, { name: "ProjectTask" });
     console.log("✅ ProjectTask table synced successfully!");
-
-
-        await safeSync(Feature, { name: 'Feature' });
-    console.log('✅ Feature table synced successfully!');
-
-    await safeSync(Task, { name: 'Task' });
-    console.log('✅ Task table synced successfully!');
-
 
     const { Survey } = await import('../Models/SurveyModels/SurveyModel.js');
     await safeSync(Survey, { name: 'Survey' });
@@ -228,34 +213,28 @@ console.log('✅ FeatureRoadmap table synced successfully!');
     const { Question } = await import('../Models/SurveyModels/QuestionModel.js');
     await safeSync(Question, { name: 'Question' });
 
-    // await safeSync(Test, { name: 'Test' });
-
     const { CatalogueNode } = await import('../Models/CatalogModels/catalogueNode.model.js');
     await safeSync(CatalogueNode, { name: 'CatalogueNode' });
 
     await Department.sync({ alter: true });
 
     await safeSync(BookedSession, { name: 'BookedSession' });
-    await safeSync(CpsProfile, { name: "CpsProfile" });
+
+    // ✅ Sync CPS profiles under cps schema
+await safeSync(CpsProfile, { name: "CpsProfile", allowAlter: false });
 
     await safeSync(ProgressionThresholds, { name: 'ProgressionThresholds' });
     console.log('✅ ProgressionThresholds table synced successfully!');
 
-    // 🚫 Sessions is blacklisted (no alter)
     await safeSync(Session, { name: 'Session', allowAlter: false });
 
-    // DO NOT call sequelize1.sync({ alter: true }) again here.
-    // If you want a final "create missing only" pass:
-    await safeSync(Payment, { name: "Payment" });  // 👈 add this before Test
+    await safeSync(Payment, { name: "Payment" });  
     await safeSync(Test, { name: "Test" });
     await safeSync(TestItemRubric, { name: "TestItemRubric" });
 
-
     await sequelize1.sync();
-
     console.log('✅ All tables synced successfully!');
 
-    // Seeders / bootstrap
     await insertLanguagesIfNeeded();
     await SupportQueriesMasterSeeder();
     await createSuperAdminIfNeeded();
@@ -267,7 +246,6 @@ console.log('✅ FeatureRoadmap table synced successfully!');
   }
 }
 
-
 export const runDbSync = async (isSyncNeeded = false) => {
   if (isSyncNeeded) {
     console.log("⚙️ Running full DB sync...");
@@ -277,3 +255,22 @@ export const runDbSync = async (isSyncNeeded = false) => {
     await defineModelRelationships();
   }
 };
+
+import path from "path";
+import url from "url";
+
+const thisFile = url.fileURLToPath(import.meta.url);
+const entryFile = path.resolve(process.argv[1] || "");
+
+if (thisFile === entryFile) {
+  console.log("⚙️ Running direct DB sync...");
+  syncDatabase()
+    .then(() => {
+      console.log("✅ Database synced successfully!");
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error("❌ Database sync failed:", err);
+      process.exit(1);
+    });
+}

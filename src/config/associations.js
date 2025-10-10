@@ -1,4 +1,4 @@
-// config/associations.js
+// src/config/associations.js
 import { Admin } from "../Models/UserModels/AdminModel.js";
 import { Blog } from "../Models/SurveyModels/BlogModel.js";
 import { Language } from "../Models/LanguageModel.js";
@@ -79,13 +79,46 @@ const defineRelationships = () => {
   }
 
   /* =========================
-   * CPS Profile (1:1)
+   * CPS Profile (1:N)
    * ========================= */
-  if (!User.associations?.cpsProfile) {
-    User.hasOne(CpsProfile, { foreignKey: "user_id", as: "cpsProfile", onDelete: "CASCADE", onUpdate: "CASCADE" });
+  // Each user can have multiple CPS profiles (IQ + per Domain)
+  if (!User.associations?.cpsProfiles) {
+    User.hasMany(CpsProfile, {
+      foreignKey: "user_id",
+      as: "cpsProfiles",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
   }
+
   if (!CpsProfile.associations?.user) {
-    CpsProfile.belongsTo(User, { foreignKey: "user_id", as: "user", onDelete: "CASCADE", onUpdate: "CASCADE" });
+    CpsProfile.belongsTo(User, {
+      foreignKey: "user_id",
+      as: "user",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  // Optional domain linkage (for context_ref_id)
+  if (!CpsProfile.associations?.domain) {
+    CpsProfile.belongsTo(CatalogueNode, {
+      foreignKey: "context_ref_id",
+      as: "domain",
+      constraints: false,
+      onDelete: "SET NULL",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!CatalogueNode.associations?.cpsProfiles) {
+    CatalogueNode.hasMany(CpsProfile, {
+      foreignKey: "context_ref_id",
+      as: "cpsProfiles",
+      constraints: false,
+      onDelete: "SET NULL",
+      onUpdate: "CASCADE",
+    });
   }
 
   /* =========================
@@ -169,7 +202,6 @@ const defineRelationships = () => {
 
   /* =========================
    * CatalogueNode self refs
-   * (Keep both aliases only if you really use them)
    * ========================= */
   if (!CatalogueNode.associations?.parentNode) {
     CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "parentNode", onDelete: "CASCADE" });
@@ -208,7 +240,6 @@ const defineRelationships = () => {
   if (!Session.associations?.teacher) {
     Session.belongsTo(User, { foreignKey: "teacher_id", as: "teacher" });
   }
-  // ✅ Add missing student association
   if (!Session.associations?.student) {
     Session.belongsTo(User, {
       foreignKey: "student_id",
@@ -258,9 +289,6 @@ const defineRelationships = () => {
   /* =========================
    * Payments (NO session_id)
    * ========================= */
-  // IMPORTANT: Do NOT create Payment↔Session associations.
-  // They would inject a phantom session_id column and break inserts.
-
   if (!User.associations?.payments) {
     User.hasMany(Payment, { foreignKey: "user_id", as: "payments" });
   }
@@ -268,7 +296,6 @@ const defineRelationships = () => {
     Payment.belongsTo(User, { foreignKey: "user_id", as: "user" });
   }
 
-  // Test payment linkage (via Test.payment_id)
   if (!Test.associations?.payment) {
     Test.belongsTo(Payment, { foreignKey: "payment_id", as: "payment", onDelete: "RESTRICT", onUpdate: "CASCADE" });
   }
@@ -299,12 +326,13 @@ const defineRelationships = () => {
   if (!TestItemRubric.associations?.test) {
     TestItemRubric.belongsTo(Test, { foreignKey: "test_id", as: "test", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
+
   if (!BookedSession.associations?.teacherStats) {
     BookedSession.hasOne(Teachertopicstats, {
-      foreignKey: "teacher_id",       // match teacher_id
-      sourceKey: "teacher_id",        // from BookedSession
+      foreignKey: "teacher_id",
+      sourceKey: "teacher_id",
       as: "teacherStats",
-      constraints: false              // avoid Sequelize auto constraints
+      constraints: false
     });
   }
   if (!Teachertopicstats.associations?.bookedSession) {
@@ -331,6 +359,7 @@ const defineRelationships = () => {
       constraints: false
     });
   }
+
   if (!Test.associations?.user) {
     Test.belongsTo(User, {
       foreignKey: "user_id",
@@ -345,7 +374,6 @@ const defineRelationships = () => {
       onDelete: "CASCADE",
     });
   }
-
 };
 
 export default defineRelationships;

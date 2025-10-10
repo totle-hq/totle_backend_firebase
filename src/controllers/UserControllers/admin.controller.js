@@ -119,9 +119,8 @@ export const adminLogin = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
+console.log("[CPS] Skipped for Nucleus users — CPS applies only to app-side users (teachers/learners).");
 
-    const cpsSummary = await ensureAllCpsProfiles();
-    console.log("[CPS] Ensured all profiles");
 
     const token = jwt.sign(
       {
@@ -164,38 +163,51 @@ export const adminLogin = async (req, res) => {
   }
 };
 
-
 export const ensureAllCpsProfiles = async () => {
   try {
-    const users = await User.findAll({ attributes: ["id"] });
+    // Only learners and teachers should have CPS profiles
+    const eligibleRoles = ["learner", "teacher", "bridger", "expert", "master", "legend"];
+
+    const users = await User.findAll({
+      where: { role: eligibleRoles },
+      attributes: ["id"],
+    });
 
     let createdCount = 0;
     let existingCount = 0;
 
     for (const u of users) {
       const [profile, created] = await CpsProfile.findOrCreate({
-        where: { user_id: u.id },
-        defaults: { user_id: u.id },
+        where: {
+          user_id: u.id,
+          context_type: "IQ", // mandatory for CPS
+        },
+        defaults: {
+          user_id: u.id,
+          context_type: "IQ",
+          context_ref_id: null,
+          tests_seen: 0,
+        },
       });
+
       if (created) createdCount++;
       else existingCount++;
     }
 
     return {
       success: true,
-      message: "CPS profiles ensured for all users",
+      message: "CPS profiles ensured for all eligible app users",
       summary: {
-        totalUsers: users.length,
+        totalEligible: users.length,
         createdProfiles: createdCount,
         existingProfiles: existingCount,
       },
     };
   } catch (err) {
     console.error("[Research CPS] ensure-all-profiles failed:", err);
-    throw err; // bubble up so adminLogin can handle
+    throw err;
   }
 };
-
 
 export const getAdminDetails = async (req, res) => {
   try {

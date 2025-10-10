@@ -1,12 +1,13 @@
-// routes/admin.cps.routes.js
+// src/routes/admin.cps.routes.js
 import express from "express";
 import { Op } from "sequelize";
 import { User } from "../Models/UserModels/UserModel.js";
 import { CpsProfile } from "../Models/CpsProfile.model.js";
+import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 
 const router = express.Router();
 
-/** ---- whitelist of CPS fields (47) ---- */
+/* ----------------------------- CPS FIELD LIST ----------------------------- */
 const CPS_FIELDS = [
   // Dimension 1 — Reasoning & Strategy (10)
   "pattern_recognition","abstraction_capacity","rule_inference","decision_tree_depth","problem_decomposition",
@@ -47,18 +48,21 @@ const DIMENSIONS = {
 
 function avg(obj, keys) {
   const vals = keys.map(k => Number(obj?.[k] ?? 0));
-  return vals.length ? Number((vals.reduce((a,b)=>a+b,0) / vals.length).toFixed(2)) : 0;
+  return vals.length ? Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)) : 0;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                                LIST ROUTE                                  */
+/* -------------------------------------------------------------------------- */
 /**
  * GET /admin/cps
- * List users with CPS snapshot.
- * Query:
- *   q=<nameOrEmail>       (search)
- *   sort=<field>          (firstName|lastName|email|<any CPS field>)
- *   dir=asc|desc
- *   limit=10 (default) / offset=0
- *   min_<field>=X / max_<field>=Y  (filter by any CPS field)
+ * ?context_type=IQ|DOMAIN|TOPIC
+ * ?context_ref_id=<uuid>
+ * ?q=<name|email>
+ * ?sort=<field>
+ * ?dir=asc|desc
+ * ?limit=10
+ * ?offset=0
  */
 router.get("/", async (req, res) => {
   try {
@@ -68,33 +72,34 @@ router.get("/", async (req, res) => {
       dir = "desc",
       limit = "10",
       offset = "0",
-      // dynamic min_/max_ filters read from req.query below
+      context_type = "IQ",
+      context_ref_id = null,
     } = req.query;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 100);
     const off = Math.max(parseInt(offset, 10) || 0, 0);
 
-    // Search on user name/email
+    // User filters
     const userWhere = {};
     if (q) {
       userWhere[Op.or] = [
         { firstName: { [Op.iLike]: `%${q}%` } },
-        { lastName:  { [Op.iLike]: `%${q}%` } },
-        { email:     { [Op.iLike]: `%${q}%` } },
+        { lastName: { [Op.iLike]: `%${q}%` } },
+        { email: { [Op.iLike]: `%${q}%` } },
       ];
     }
 
-    // Per-field CPS filters: min_<field>, max_<field>
-    const cpsWhere = {};
+    // CPS filters
+    const cpsWhere = { context_type };
+    if (context_ref_id) cpsWhere.context_ref_id = context_ref_id;
+
     for (const f of CPS_FIELDS) {
       const minKey = `min_${f}`;
       const maxKey = `max_${f}`;
-      const hasMin = minKey in req.query;
-      const hasMax = maxKey in req.query;
-      if (hasMin || hasMax) {
+      if (minKey in req.query || maxKey in req.query) {
         cpsWhere[f] = {};
-        if (hasMin) cpsWhere[f][Op.gte] = Number(req.query[minKey]);
-        if (hasMax) cpsWhere[f][Op.lte] = Number(req.query[maxKey]);
+        if (minKey in req.query) cpsWhere[f][Op.gte] = Number(req.query[minKey]);
+        if (maxKey in req.query) cpsWhere[f][Op.lte] = Number(req.query[maxKey]);
       }
     }
 
@@ -104,40 +109,54 @@ router.get("/", async (req, res) => {
     if (["firstName","lastName","email","createdAt","updatedAt"].includes(sort)) {
       order.push([sort, dirNorm]);
     } else if (CPS_FIELDS.includes(sort)) {
-      order.push([{ model: CpsProfile, as: "cpsProfile" }, sort, dirNorm]);
-    } else if (sort === "updated_at") {
-      order.push([{ model: CpsProfile, as: "cpsProfile" }, "updated_at", dirNorm]);
+      order.push([{ model: CpsProfile, as: "cpsProfiles" }, sort, dirNorm]);
     } else {
-      order.push([{ model: CpsProfile, as: "cpsProfile" }, "updated_at", "DESC"]);
+      order.push([{ model: CpsProfile, as: "cpsProfiles" }, "updated_at", "DESC"]);
     }
 
+    // Query users + CPS
     const { rows, count } = await User.findAndCountAll({
       where: userWhere,
       include: [
         {
           model: CpsProfile,
-          as: "cpsProfile",
-          required: true, // only users that have a CPS row (all new + backfilled)
+          as: "cpsProfiles",
+          required: true,
           where: cpsWhere,
-          attributes: ["user_id","updated_at", ...CPS_FIELDS],
+          attributes: [
+            "user_id",
+            "context_type",
+            "context_ref_id",
+            "updated_at",
+            ...CPS_FIELDS,
+          ],
+          include: [
+            {
+              model: CatalogueNode,
+              as: "domain",
+              attributes: ["node_id", "name", "node_type"],
+            },
+          ],
         },
       ],
       order,
       limit: lim,
       offset: off,
-      distinct: true, // correct count with joins
+      distinct: true,
       attributes: ["id","firstName","lastName","email","status","location","createdAt","updatedAt"],
     });
 
-    // Compute quick dimension averages for the list view
-    const data = rows.map(u => {
-      const p = u.cpsProfile || {};
-      return {
+    // Shape data
+    const data = rows.map((u) => {
+      const profiles = Array.isArray(u.cpsProfiles) ? u.cpsProfiles : [];
+      return profiles.map((p) => ({
         id: u.id,
         name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
         email: u.email,
         status: u.status,
         location: u.location,
+        context_type: p.context_type,
+        context_ref: p.domain ? p.domain.name : null,
         updated_at: p.updated_at,
         dims: {
           reasoning_strategy:       avg(p, DIMENSIONS.reasoning_strategy),
@@ -147,37 +166,47 @@ router.get("/", async (req, res) => {
           metacognition_regulation: avg(p, DIMENSIONS.metacognition_regulation),
           resilience_adaptability:  avg(p, DIMENSIONS.resilience_adaptability),
         },
-      };
-    });
+      }));
+    }).flat();
 
-    res.json({
-      total: count,
-      limit: lim,
-      offset: off,
-      items: data,
-    });
+    res.json({ total: count, limit: lim, offset: off, items: data });
   } catch (err) {
     console.error("[CPS] list failed:", err);
     res.status(500).json({ error: true, message: "Failed to fetch CPS users." });
   }
 });
 
-/**
- * GET /admin/cps/:userId
- * Detail: user basics + all 47 params grouped by dimension + dimension averages.
- */
+/* -------------------------------------------------------------------------- */
+/*                                DETAIL ROUTE                                */
+/* -------------------------------------------------------------------------- */
 router.get("/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+    const { context_type = "IQ", context_ref_id = null } = req.query;
 
     const user = await User.findOne({
       where: { id: userId },
       include: [
         {
           model: CpsProfile,
-          as: "cpsProfile",
+          as: "cpsProfiles",
           required: true,
-          attributes: ["user_id","created_at","updated_at", ...CPS_FIELDS],
+          where: { context_type, context_ref_id },
+          attributes: [
+            "user_id",
+            "context_type",
+            "context_ref_id",
+            "created_at",
+            "updated_at",
+            ...CPS_FIELDS,
+          ],
+          include: [
+            {
+              model: CatalogueNode,
+              as: "domain",
+              attributes: ["node_id", "name", "node_type"],
+            },
+          ],
         },
       ],
       attributes: ["id","firstName","lastName","email","status","location","createdAt","updatedAt"],
@@ -185,14 +214,22 @@ router.get("/:userId", async (req, res) => {
 
     if (!user) return res.status(404).json({ error: true, message: "User not found" });
 
-    const p = user.cpsProfile || {};
-    const grouped = {};
-    for (const [dim, keys] of Object.entries(DIMENSIONS)) {
-      grouped[dim] = {
-        fields: Object.fromEntries(keys.map(k => [k, Number(p[k] ?? 0)])),
-        average: avg(p, keys),
+    const profiles = user.cpsProfiles || [];
+    const cpsDetails = profiles.map((p) => {
+      const grouped = {};
+      for (const [dim, keys] of Object.entries(DIMENSIONS)) {
+        grouped[dim] = {
+          fields: Object.fromEntries(keys.map(k => [k, Number(p[k] ?? 0)])),
+          average: avg(p, keys),
+        };
+      }
+      return {
+        context_type: p.context_type,
+        context_ref: p.domain ? p.domain.name : null,
+        updated_at: p.updated_at,
+        dimensions: grouped,
       };
-    }
+    });
 
     res.json({
       user: {
@@ -204,10 +241,7 @@ router.get("/:userId", async (req, res) => {
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
       },
-      cps: {
-        updated_at: p.updated_at,
-        dimensions: grouped,
-      },
+      cps: cpsDetails,
     });
   } catch (err) {
     console.error("[CPS] detail failed:", err);
@@ -215,14 +249,14 @@ router.get("/:userId", async (req, res) => {
   }
 });
 
-/**
- * PATCH /admin/cps/:userId
- * Optional admin edit for 1..n CPS values. Body: { field:value, ... }
- * Only allows whitelisted CPS fields.
- */
+/* -------------------------------------------------------------------------- */
+/*                                PATCH ROUTE                                 */
+/* -------------------------------------------------------------------------- */
 router.patch("/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
+    const { context_type = "IQ", context_ref_id = null } = req.query;
+
     const payload = {};
     for (const [k, v] of Object.entries(req.body || {})) {
       if (CPS_FIELDS.includes(k)) payload[k] = Number(v);
@@ -232,10 +266,12 @@ router.patch("/:userId", async (req, res) => {
     }
 
     const [n] = await CpsProfile.update(payload, {
-      where: { user_id: userId },
-      returning: false,
+      where: { user_id: userId, context_type, context_ref_id },
     });
-    if (!n) return res.status(404).json({ error: true, message: "CPS row not found for user." });
+
+    if (!n) {
+      return res.status(404).json({ error: true, message: "CPS row not found for specified context." });
+    }
 
     res.json({ ok: true });
   } catch (err) {

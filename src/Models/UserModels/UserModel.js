@@ -159,39 +159,4 @@ const User = sequelize1.define(
   }
 );
 
-// Ensure a CPS row exists for every NEW user (raw SQL, no model dependency)
-User.afterCreate(async (user, options) => {
-  const { transaction } = options || {};
-  try {
-    await CpsProfile.findOrCreate({
-      where: { user_id: user.id },
-      defaults: { user_id: user.id },
-      transaction,
-    });
-    console.log("[CPS] ensured cps_profile for", user.id);
-  } catch (err) {
-    console.error("[CPS] failed to ensure cps_profile for", user.id, err);
-  }
-});
-
-User.afterBulkCreate(async (users, options) => {
-  const { transaction } = options || {};
-  try {
-    await Promise.all(
-      users.map(u =>
-        CpsProfile.findOrCreate({
-          where: { user_id: u.id },
-          defaults: { user_id: u.id },
-          transaction,
-        })
-      )
-    );
-    console.log("[CPS] ensured cps_profile for", users.length, "users");
-  } catch (err) {
-    console.error("[CPS] bulk cps_profile ensure failed", err);
-  }
-});
-
-
-
 export { User };
