@@ -3,6 +3,7 @@ import { User } from "../../Models/UserModels/UserModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
 import { SessionAttendance } from "../../Models/SessionAttendance.js";
 import dotenv from "dotenv";
+import { Session } from "../../Models/SessionModel.js";
 dotenv.config();
 
 export const getSessionStreamDetails = async (req, res) => {
@@ -23,9 +24,9 @@ export const getSessionStreamDetails = async (req, res) => {
 
     const fullName = `${userRecord.firstName} ${userRecord.lastName}`;
 
-    const learner = await BookedSession.findOne({ where: { learner_id: id, session_id: sessionId } });
+    const learner = await Session.findOne({ where: { learner_id: id, session_id: sessionId } });
     console.log("learner:", learner);
-    const teacher = await BookedSession.findOne({ where: { teacher_id: id, session_id: sessionId } });
+    const teacher = await Session.findOne({ where: { teacher_id: id, session_id: sessionId } });
     console.log("teacher:", teacher);
 
     if (!learner && !teacher) {
