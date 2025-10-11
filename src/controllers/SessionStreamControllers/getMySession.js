@@ -114,7 +114,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
         { model: User, as: "student", attributes: ["firstName", "lastName"] },
         {
           model: CatalogueNode,
-          as: "topic",
+          as: "catalogueNode",
           attributes: ["node_id", "name", "parent_id"],
           include: [
             {
@@ -125,7 +125,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
           ]
         }
       ],
-      order: [["createdAt", "ASC"]],
+      order: [["scheduled_at", "ASC"]],
     });
     
     if (!session) {
@@ -139,11 +139,11 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
       success: true,
       session: {
         session_id: session.session_id,
-        studentName: session.learner_id
+        studentName: session.student_id
           ? `${session.student.firstName}`
           : "Unknown",
-        topicName: session.bookedTopic?.name || "Unknown",
-        subject: session.bookedTopic?.parentNode?.name || "Unknown",
+        topicName: session.catalogueNode?.name || "Unknown",
+        subject: session.catalogueNode?.parentNode?.name || "Unknown",
         scheduled_at: session.createdAt,
       }
     });
