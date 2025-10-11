@@ -84,7 +84,7 @@ export const getStudentSessions = async (req, res) => {
     });
 
     const formatted = sessions.map(session => ({
-      session_id: session.id,
+      session_id: session.session_id,
       teacherName: `${session.teacher.firstName} ${session.teacher.lastName}`,
       topicName: session.topic.name,
       scheduled_at: session.scheduled_at,
