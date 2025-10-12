@@ -351,8 +351,8 @@ const startServer = async () => {
 
     // Socket.IO with strict CORS (must mirror HTTP CORS)
     const io = new Server(server, {
-      path: "/socket.io",
-      transports: ["websocket", "polling"], // client sends EIO=4 polling fallback
+      // path: "/socket.io",
+      // transports: ["websocket", "polling"], // client sends EIO=4 polling fallback
       cors: {
         origin: (origin, cb) => {
           if (!origin) return cb(null, true); // server-to-server/no-origin
@@ -384,11 +384,11 @@ io.on("connection", (socket) => {
   });
 
   // Forward signal (offer, answer, candidate)
-  socket.on("signal", ({ sessionId, userId, type, data }) => {
-    if (!sessionId) return;
-    console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
-    socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
-  });
+  // socket.on("signal", ({ sessionId, userId, type, data }) => {
+  //   if (!sessionId) return;
+  //   console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
+  //   socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
+  // });
 
   // Handle hangup
   socket.on("hangup", ({ sessionId, userId }) => {
@@ -411,8 +411,8 @@ io.on("connection", (socket) => {
       console.error("UncaughtException:", err);
     });
 
-    server.listen(PORT, () => {
-      console.log(`🚀 Server running with WebSocket on port ${PORT}`);
+    server.listen(PORT,'0.0.0.0', () => {
+      console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
     });
   } catch (error) {
     console.error("❌ Error during database setup or server start:", error);

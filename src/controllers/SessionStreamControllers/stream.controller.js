@@ -1,11 +1,21 @@
 import jwt from "jsonwebtoken";
 import { User } from "../../Models/UserModels/UserModel.js";
-import { BookedSession } from "../../Models/BookedSession.js";
 import { SessionAttendance } from "../../Models/SessionAttendance.js";
 import dotenv from "dotenv";
 import { Session } from "../../Models/SessionModel.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 dotenv.config();
+
+const streamApiKey = process.env.STREAM_API_KEY;
+const streamApiSecret = process.env.STREAM_API_SECRET;
+
+function createStreamVideoToken(userId, secret, expiresInSeconds = 2 * 60 * 60) {
+  const payload = {
+    user_id: userId, // Stream expects 'user_id'
+    exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
+  };
+  return jwt.sign(payload, secret);
+}
 
 export const getSessionStreamDetails = async (req, res) => {
   try {
@@ -25,7 +35,7 @@ export const getSessionStreamDetails = async (req, res) => {
 
     const fullName = `${userRecord.firstName} ${userRecord.lastName}`;
 
-    // Include teacher, student, topic, and parentNode (subject)
+    // Get the session
     const session = await Session.findOne({
       where: { session_id: sessionId },
       include: [
@@ -57,47 +67,36 @@ export const getSessionStreamDetails = async (req, res) => {
 
     const role = session.student_id === id ? "learner" : "teacher";
 
-    // ✅ Mark attendance
+    // Mark attendance
     await SessionAttendance.upsert({
       user_id: id,
       session_id: sessionId,
       joined_at: new Date(),
     });
 
-    // 🔐 JWT token for WebSocket authentication
-    const socketToken = jwt.sign(
-      {
-        userId: userRecord.id,
-        name: fullName,
-        sessionId,
-        role,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "2h" }
-    );
+    // --- THIS IS THE IMPORTANT PART ---
+    const streamToken = createStreamVideoToken(id, streamApiSecret);
 
-    // ✅ Build clean structured response
+    // Return what the frontend expects
     return res.status(200).json({
       success: true,
+      callId: session.session_id,
+      userName: fullName,
+      userRole: role,
+      apiKey: streamApiKey,       // <-- safe for frontend
+      token: streamToken,         // <-- your Stream Video token
+      user: { id: id.toString(), name: fullName },
       session: {
         session_id: session.session_id,
-        teacher: session.teacher
-          ? `${session.teacher.firstName} ${session.teacher.lastName}`
-          : "Unknown",
-        student: session.student
-          ? `${session.student.firstName} ${session.student.lastName}`
-          : "Unknown",
+        teacher: session.teacher ? `${session.teacher.firstName} ${session.teacher.lastName}` : "Unknown",
+        student: session.student ? `${session.student.firstName} ${session.student.lastName}` : "Unknown",
         topic: session.catalogueNode?.name || "Unknown",
         subject: session.catalogueNode?.parentNode?.name || "Unknown",
         scheduled_at: session.scheduled_at,
-      },
-      role,
-      token: socketToken,
-      user: { id: userRecord.id, name: fullName },
+      }
     });
   } catch (err) {
-    console.error("❌ WebRTC session init error:", err);
-    res.status(500).json({ error: "Failed to get WebRTC session details" });
+    console.error("❌ Stream Video session init error:", err);
+    res.status(500).json({ error: "Failed to get Stream session details" });
   }
 };
-
