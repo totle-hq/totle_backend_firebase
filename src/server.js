@@ -10,6 +10,10 @@ import { fileURLToPath } from "url";
 import http from "http";
 import { Server } from "socket.io";
 import { registerChatHandlers } from "./socket/chat.socket.js";
+// --- CPS Generator infrastructure ---
+import { registerCpsGeneratorNamespace } from "./events/cpsGeneratorEvents.js";
+import { getRedis } from "./utils/redisClient.js";
+
 import chatRoutes from "./routes/chat.routes.js";
 import fs from "fs";
 
@@ -53,11 +57,12 @@ import nucleusDocsRoutes from "./routes/nucleusDocs.routes.js";  // ✅ import
 import projectTaskRoutes from "./routes/projectTask.routes.js";
 import projectBoardRoutes from "./routes/projectBoard.routes.js";
 import researchRoutes from "./routes/research.routes.js";
-
+import cpsLogsRoutes from "./routes/cpsLogs.routes.js";
 import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 
 // DB sync (your existing)
 import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
+import { initCpsModels } from "./Models/Cps/index.js";
 
 // ----------------------------------------
 dotenv.config();
@@ -296,6 +301,7 @@ app.use("/api/projects", projectBoardRoutes);
 
 app.use("/api/projects", projectTaskRoutes);
 app.use("/api/research", researchRoutes);
+app.use("/api/cps/logs", cpsLogsRoutes);
 
 
 /* -------------------- Health / Diagnostics -------------------- */
@@ -344,8 +350,14 @@ const startServer = async () => {
   try {
     // Ensure DB schema is in place
     await runDbSync(false);
+// 🔹 Initialize CPS model associations after DB sync
+initCpsModels();
+console.log("✅ CPS model associations initialized");
 
     const PORT = process.env.PORT || 5000;
+    // 🔹 Initialize Redis (shared across app)
+const redis = getRedis();
+app.set("redis", redis);
 
     const server = http.createServer(app);
 
@@ -372,6 +384,40 @@ global.io = io;
 
 // Register chat handlers once (for all connections)
 registerChatHandlers(io);
+// 🔹 Register CPS Generator event namespace (/cps-generator)
+registerCpsGeneratorNamespace(io);
+/* -------------------------------------------------------------
+   CPS OBSERVATORY LOG EMITTER  — used by all CPS pipelines
+------------------------------------------------------------- */
+global.emitCpsLog = (log) => {
+  if (!global.io) return;
+  try {
+    global.io.emit("cps:observatory:update", log);
+    console.log("📡 [CPS OBS] →", log.type, log.status, log.batch_id || log.id);
+  } catch (err) {
+    console.error("❌ [CPS OBS] Emit failed:", err.message);
+  }
+};
+
+// optional: scale horizontally via Redis pub/sub
+if (redis) {
+  const sub = redis.duplicate();
+  await sub.connect();
+  await sub.subscribe("cps:observatory:update", (msg) => {
+    try {
+      const data = JSON.parse(msg);
+      global.io.emit("cps:observatory:update", data);
+    } catch (e) {
+      console.error("[Redis→Socket] bad payload:", e.message);
+    }
+  });
+  console.log("🔄 Redis subscriber active for cps:observatory:update");
+}
+
+
+// Make IO globally available to controllers/services
+app.set("io", io);
+
 
 io.on("connection", (socket) => {
   console.log("🔌 WebSocket connected:", socket.id);

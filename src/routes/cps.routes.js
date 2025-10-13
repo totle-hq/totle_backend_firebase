@@ -1,5 +1,12 @@
 import express from "express";
 import { updateCpsProfileFromTest } from "../services/cps/cpsEma.service.js";
+import {
+  generateIqTestController,
+  generateIqTestControllerPost,
+} from "../controllers/cpsTestGenerator.controller.js";
+import { submitIQTestController } from "../controllers/cpsTestSubmit.controller.js";
+
+
 
 const router = express.Router();
 
@@ -22,5 +29,14 @@ router.post("/apply/:testId", async (req, res) => {
     res.status(400).json({ error: String(err?.message || err) });
   }
 });
+
+// GET with query overrides
+router.get("/generate-iq-test/:userId", generateIqTestController);
+
+// POST with JSON body overrides (optional)
+router.post("/generate-iq-test/:userId", generateIqTestControllerPost);
+
+router.post("/submit-iq-test", submitIQTestController);
+
 
 export default router;

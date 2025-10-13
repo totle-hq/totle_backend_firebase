@@ -1,13 +1,13 @@
-// Models/UserModels/UserModel.js
+// src/Models/UserModels/UserModel.js
 import { DataTypes } from "sequelize";
-import { sequelize1 } from "../../config/sequelize.js"; // Use the main DB connection
+import { sequelize1 } from "../../config/sequelize.js";
 import { CpsProfile } from "../CpsProfile.model.js";
 
 const User = sequelize1.define(
   "User",
   {
     id: {
-      type: DataTypes.UUID, // ✅ Use UUID as primary key
+      type: DataTypes.UUID,
       primaryKey: true,
       defaultValue: DataTypes.UUIDV4,
     },
@@ -53,7 +53,7 @@ const User = sequelize1.define(
       allowNull: true,
     },
     known_language_ids: {
-      type: DataTypes.ARRAY(DataTypes.INTEGER), // ✅ Stores multiple language IDs
+      type: DataTypes.ARRAY(DataTypes.INTEGER),
       allowNull: true,
     },
     preferred_language_id: {
@@ -65,7 +65,7 @@ const User = sequelize1.define(
       allowNull: true,
     },
     educational_qualifications: {
-      type: DataTypes.ARRAY(DataTypes.STRING), // ✅ Stores multiple qualifications
+      type: DataTypes.ARRAY(DataTypes.STRING),
       allowNull: true,
     },
     currentOccupation: {
@@ -73,7 +73,7 @@ const User = sequelize1.define(
       allowNull: true,
     },
     skills: {
-      type: DataTypes.ARRAY(DataTypes.STRING), // ✅ Stores multiple skills
+      type: DataTypes.ARRAY(DataTypes.STRING),
       allowNull: true,
     },
     years_of_experience: {
@@ -95,11 +95,11 @@ const User = sequelize1.define(
     ipAddress: {
       type: DataTypes.STRING,
       allowNull: true,
-      field: 'ip_address', // ✅ maps to snake_case column in DB
-      comment: "User's IP address"
+      field: "ip_address",
+      comment: "User's IP address",
     },
     profilePictureUrl: {
-      type: DataTypes.TEXT, // ✅ Store image as BLOB
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     profile_picture_id: {
@@ -143,20 +143,48 @@ const User = sequelize1.define(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
-      comment: "True if user is below 13 years of age at signup"
+      comment: "True if user is below 13 years of age at signup",
     },
     minorConsentAccepted: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
-      comment: "True if parent/guardian consent was accepted for a minor"
+      comment: "True if parent/guardian consent was accepted for a minor",
     },
   },
   {
-    schema: "user", // Private schema
-    tableName: "users", // Table name
+    schema: "user",
+    tableName: "users",
     timestamps: true,
   }
 );
+
+// ✅ Define associations
+User.hasMany(CpsProfile, {
+  foreignKey: "user_id",
+  as: "cpsProfile",
+});
+
+CpsProfile.belongsTo(User, {
+  foreignKey: "user_id",
+  as: "user",
+});
+
+// ✅ Hook: Automatically create baseline CPS IQ profile for new users
+User.afterCreate(async (user, options) => {
+  try {
+    await sequelize1.query(
+      `
+      INSERT INTO "cps"."cps_profiles" (user_id, context_type, context_ref_id)
+      VALUES ($1, 'IQ', NULL)
+      ON CONFLICT (user_id, context_type, context_ref_id) DO NOTHING;
+      `,
+      { bind: [user.id], transaction: options?.transaction }
+    );
+    console.log(`[UserHook] CPS IQ profile seeded for ${user.id}`);
+  } catch (err) {
+    console.error(`[UserHook] Failed to seed CPS for ${user.id}:`, err.message);
+  }
+});
 
 export { User };

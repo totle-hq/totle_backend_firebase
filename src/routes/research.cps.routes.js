@@ -67,6 +67,14 @@ function avg(obj, keys) {
  *   full=1       (include all 47 fields in each item)
  *   min_<field>=X / max_<field>=Y (filter on any CPS field)
  */
+/* -------------------------------------------------------------------------- */
+/*  Enhanced Multi-Context CPS Research Endpoints (IQ | DOMAIN | TOPIC | ALL) */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /research/cps/users
+ * Supports ?context=IQ|DOMAIN|TOPIC|ALL
+ */
 router.get("/users", async (req, res) => {
   try {
     const {
@@ -77,6 +85,7 @@ router.get("/users", async (req, res) => {
       limit = "10",
       offset = "0",
       full = "1",
+      context = "ALL", // <-- NEW
     } = req.query;
 
     const lim = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 200);
@@ -93,36 +102,19 @@ router.get("/users", async (req, res) => {
       ];
     }
 
-    // CPS filters
+    // Date filter
     const cpsWhere = {};
-    for (const f of CPS_FIELDS) {
-      const minKey = `min_${f}`;
-      const maxKey = `max_${f}`;
-      if (minKey in req.query || maxKey in req.query) {
-        cpsWhere[f] = {};
-        if (minKey in req.query) cpsWhere[f][Op.gte] = Number(req.query[minKey]);
-        if (maxKey in req.query) cpsWhere[f][Op.lte] = Number(req.query[maxKey]);
-      }
-    }
-    // days filter on updated_at
     if (days && Number(days) > 0) {
       const ms = Number(days) * 24 * 60 * 60 * 1000;
       cpsWhere.updated_at = { [Op.gte]: new Date(Date.now() - ms) };
     }
-
-    // Sorting
-    const order = [];
-    if (["firstName","lastName","email","createdAt","updatedAt"].includes(sort)) {
-      order.push([sort, dirNorm]);
-    } else if (CPS_FIELDS.includes(sort)) {
-      order.push([{ model: CpsProfile, as: "cpsProfile" }, sort, dirNorm]);
-    } else if (sort === "updated_at") {
-      order.push([{ model: CpsProfile, as: "cpsProfile" }, "updated_at", dirNorm]);
-    } else {
-      order.push([{ model: CpsProfile, as: "cpsProfile" }, "updated_at", "DESC"]);
+    // Context filter
+    if (["IQ","DOMAIN","TOPIC"].includes(context.toUpperCase())) {
+      cpsWhere.context_type = context.toUpperCase();
     }
 
-    const { rows, count } = await User.findAndCountAll({
+    // Fetch all CPS rows per user (not just one)
+    const users = await User.findAll({
       where: userWhere,
       include: [
         {
@@ -130,100 +122,167 @@ router.get("/users", async (req, res) => {
           as: "cpsProfile",
           required: true,
           where: cpsWhere,
-          attributes: ["user_id","updated_at", ...CPS_FIELDS],
+          attributes: ["user_id","context_type","context_ref_id","updated_at", ...CPS_FIELDS],
         },
       ],
-      order,
+      attributes: ["id","firstName","lastName","email","status","location","createdAt","updatedAt"],
+      order: [["updatedAt", dirNorm]],
       limit: lim,
       offset: off,
       distinct: true,
-      attributes: ["id","firstName","lastName","email","status","location","createdAt","updatedAt"],
     });
 
-    const items = rows.map(u => {
-      const p = u.cpsProfile || {};
-      const base = {
+    const items = users.map(u => {
+      const profiles = Array.isArray(u.cpsProfile) ? u.cpsProfile : [u.cpsProfile];
+      const groupedByContext = {};
+
+      for (const p of profiles) {
+        const ctx = p.context_type || "IQ";
+        if (!groupedByContext[ctx]) groupedByContext[ctx] = [];
+        groupedByContext[ctx].push(p);
+      }
+
+      // Compute averages per context
+      const ctxAverages = {};
+      for (const [ctx, list] of Object.entries(groupedByContext)) {
+        const merged = {};
+        for (const f of CPS_FIELDS) {
+          const vals = list.map(l => Number(l[f] ?? 0));
+          merged[f] = vals.length ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
+        }
+        ctxAverages[ctx] = {
+          updated_at: list[0]?.updated_at,
+          dims: {
+            reasoning_strategy:       avg(merged, DIMENSIONS.reasoning_strategy),
+            memory_retrieval:         avg(merged, DIMENSIONS.memory_retrieval),
+            processing_fluency:       avg(merged, DIMENSIONS.processing_fluency),
+            attention_focus:          avg(merged, DIMENSIONS.attention_focus),
+            metacognition_regulation: avg(merged, DIMENSIONS.metacognition_regulation),
+            resilience_adaptability:  avg(merged, DIMENSIONS.resilience_adaptability),
+          },
+          params: full === "1" ? Object.fromEntries(CPS_FIELDS.map(k => [k, Number(merged[k] ?? 0)])) : {},
+        };
+      }
+
+      // Aggregate view for context=ALL
+      const combined = (() => {
+if (Object.keys(ctxAverages).length === 1) return Object.values(ctxAverages)[0];
+
+// If each context omitted params (full=0), use their dims instead
+const hasParams = Object.values(ctxAverages).some(c => Object.keys(c.params || {}).length > 0);
+const allVals = {};
+
+if (hasParams) {
+  for (const k of CPS_FIELDS) {
+    const ctxVals = Object.values(ctxAverages).map(c => c.params?.[k] ?? 0);
+    allVals[k] = ctxVals.length ? ctxVals.reduce((a,b)=>a+b,0) / ctxVals.length : 0;
+  }
+} else {
+  // fallback: use dimension averages
+  for (const [dim, keys] of Object.entries(DIMENSIONS)) {
+    const dimVals = Object.values(ctxAverages).map(c => c.dims?.[dim] ?? 0);
+    allVals[dim] = dimVals.length ? dimVals.reduce((a,b)=>a+b,0) / dimVals.length : 0;
+  }
+}
+
+        return {
+          dims: {
+            reasoning_strategy:       avg(allVals, DIMENSIONS.reasoning_strategy),
+            memory_retrieval:         avg(allVals, DIMENSIONS.memory_retrieval),
+            processing_fluency:       avg(allVals, DIMENSIONS.processing_fluency),
+            attention_focus:          avg(allVals, DIMENSIONS.attention_focus),
+            metacognition_regulation: avg(allVals, DIMENSIONS.metacognition_regulation),
+            resilience_adaptability:  avg(allVals, DIMENSIONS.resilience_adaptability),
+          },
+          params: allVals,
+        };
+      })();
+
+      return {
         id: u.id,
         name: `${u.firstName || ""} ${u.lastName || ""}`.trim(),
         email: u.email,
         status: u.status,
         location: u.location,
-        updated_at: p.updated_at,
-        dims: {
-          reasoning_strategy:       avg(p, DIMENSIONS.reasoning_strategy),
-          memory_retrieval:         avg(p, DIMENSIONS.memory_retrieval),
-          processing_fluency:       avg(p, DIMENSIONS.processing_fluency),
-          attention_focus:          avg(p, DIMENSIONS.attention_focus),
-          metacognition_regulation: avg(p, DIMENSIONS.metacognition_regulation),
-          resilience_adaptability:  avg(p, DIMENSIONS.resilience_adaptability),
-        },
+        contexts: ctxAverages, // NEW
+        combined,              // NEW
       };
-      if (full === "1") {
-        base.params = Object.fromEntries(CPS_FIELDS.map(k => [k, Number(p[k] ?? 0)]));
-      }
-      return base;
     });
 
-    res.json({ total: count, limit: lim, offset: off, items });
+    res.json({ total: items.length, limit: lim, offset: off, items });
   } catch (err) {
-    console.error("[Research CPS] list failed:", err);
-    res.status(500).json({ error: true, message: "Failed to fetch CPS research list." });
+    console.error("[Research CPS] multi-context list failed:", err);
+    res.status(500).json({ error: true, message: "Failed to fetch CPS list." });
   }
 });
 
 /**
  * GET /research/cps/users/:userId
- * Full 47-parameter snapshot (grouped) for a user.
+ * Returns full grouped CPS for IQ, DOMAIN, TOPIC separately.
  */
 router.get("/users/:userId", async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const user = await User.findOne({
-      where: { id: userId },
-      include: [
-        {
-          model: CpsProfile,
-          as: "cpsProfile",
-          required: true,
-          attributes: ["user_id","created_at","updated_at", ...CPS_FIELDS],
-        },
-      ],
-      attributes: ["id","firstName","lastName","email","status","location","createdAt","updatedAt"],
+    const profiles = await CpsProfile.findAll({
+      where: { user_id: userId },
+      attributes: ["user_id","context_type","context_ref_id","created_at","updated_at", ...CPS_FIELDS],
     });
-    if (!user) return res.status(404).json({ error: true, message: "User not found" });
 
-    const p = user.cpsProfile || {};
+    if (!profiles.length) {
+      return res.status(404).json({ error: true, message: "No CPS profiles found for user." });
+    }
+
     const grouped = {};
-    for (const [dim, keys] of Object.entries(DIMENSIONS)) {
-      grouped[dim] = {
-        fields: Object.fromEntries(keys.map(k => [k, Number(p[k] ?? 0)])),
-        average: avg(p, keys),
+    for (const p of profiles) {
+      const ctx = p.context_type || "IQ";
+      const base = {
+        created_at: p.created_at,
+        updated_at: p.updated_at,
+        dimensions: {},
+        all_params: Object.fromEntries(CPS_FIELDS.map(k => [k, Number(p[k] ?? 0)])),
+      };
+      for (const [dim, keys] of Object.entries(DIMENSIONS)) {
+        base.dimensions[dim] = {
+          average: avg(p, keys),
+          fields: Object.fromEntries(keys.map(k => [k, Number(p[k] ?? 0)])),
+        };
+      }
+      if (!grouped[ctx]) grouped[ctx] = [];
+      grouped[ctx].push(base);
+    }
+
+    // Aggregate per context type (average across all domains/topics)
+    const aggregated = {};
+    for (const [ctx, arr] of Object.entries(grouped)) {
+      const merged = {};
+      for (const f of CPS_FIELDS) {
+        const vals = arr.map(x => x.all_params[f]);
+        merged[f] = vals.length ? vals.reduce((a,b)=>a+b,0) / vals.length : 0;
+      }
+      aggregated[ctx] = {
+        average_dims: {
+          reasoning_strategy:       avg(merged, DIMENSIONS.reasoning_strategy),
+          memory_retrieval:         avg(merged, DIMENSIONS.memory_retrieval),
+          processing_fluency:       avg(merged, DIMENSIONS.processing_fluency),
+          attention_focus:          avg(merged, DIMENSIONS.attention_focus),
+          metacognition_regulation: avg(merged, DIMENSIONS.metacognition_regulation),
+          resilience_adaptability:  avg(merged, DIMENSIONS.resilience_adaptability),
+        },
+        all_params: merged,
       };
     }
 
     res.json({
-      user: {
-        id: user.id,
-        name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-        email: user.email,
-        status: user.status,
-        location: user.location,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-      cps: {
-        created_at: p.created_at,
-        updated_at: p.updated_at,
-        dimensions: grouped,
-        all_params: Object.fromEntries(CPS_FIELDS.map(k => [k, Number(p[k] ?? 0)])),
-      },
+      userId,
+      contexts: aggregated,
     });
   } catch (err) {
-    console.error("[Research CPS] detail failed:", err);
-    res.status(500).json({ error: true, message: "Failed to fetch CPS research detail." });
+    console.error("[Research CPS] multi-context detail failed:", err);
+    res.status(500).json({ error: true, message: "Failed to fetch CPS detail." });
   }
 });
+
 
 /**
  * GET /research/cps/export.csv

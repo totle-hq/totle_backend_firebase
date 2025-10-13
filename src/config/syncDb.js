@@ -1,4 +1,6 @@
 // src/config/syncDb.js
+import { initCpsModels } from "../Models/Cps/index.js";
+
 import { ensureFounder } from '../controllers/UserControllers/superAdmin.controller.js';
 import { insertLanguages } from '../controllers/language.controller.js';
 import { Language } from '../Models/LanguageModel.js';
@@ -165,6 +167,7 @@ export async function syncDatabase() {
     console.log("🟢 Database check done"); // 👈 add this
 
     await createSchemas(sequelize1); // ✅ now includes 'cps'
+initCpsModels();
 
     // associations
     const defineRelationships = await import('../config/associations.js');
@@ -220,8 +223,47 @@ export async function syncDatabase() {
 
     await safeSync(BookedSession, { name: 'BookedSession' });
 
-    // ✅ Sync CPS profiles under cps schema
-await safeSync(CpsProfile, { name: "CpsProfile", allowAlter: false });
+  // ✅ Sync CPS profiles under cps schema (permanent deep fix, schema-level isolation)
+console.log("🧠 Preparing CPS schema and enums before syncing CpsProfile...");
+
+try {
+  // 1️⃣ Ensure cps schema exists (never assume public)
+  await sequelize1.query(`CREATE SCHEMA IF NOT EXISTS "cps"`);
+  console.log("✅ 'cps' schema verified or created.");
+
+  // 2️⃣ Drop *every* duplicate enum across all schemas — root cause of 21000 error
+  await sequelize1.query(`
+    DO $$
+    DECLARE
+      rec RECORD;
+    BEGIN
+      -- Drop same-named enums across every namespace
+      FOR rec IN
+        SELECT n.nspname AS schema_name, t.typname
+        FROM pg_type t
+        JOIN pg_namespace n ON n.oid = t.typnamespace
+        WHERE t.typname = 'enum_cps_cps_profiles_context_type'
+      LOOP
+        EXECUTE format('DROP TYPE IF EXISTS "%I"."%I" CASCADE;', rec.schema_name, rec.typname);
+      END LOOP;
+
+      -- Drop global (unqualified) version if it still exists
+      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_cps_cps_profiles_context_type') THEN
+        EXECUTE 'DROP TYPE "enum_cps_cps_profiles_context_type" CASCADE;';
+      END IF;
+    END $$;
+  `);
+  console.log("🧹 All enum_cps_cps_profiles_context_type variants dropped globally.");
+
+  // 3️⃣ Force recreate cps.cps_profiles cleanly
+  await sequelize1.query(`DROP TABLE IF EXISTS "cps"."cps_profiles" CASCADE;`);
+  console.log("🗑️ Dropped any stale cps_profiles table.");
+
+  await CpsProfile.sync({ force: true });
+  console.log("✅ Recreated cps.cps_profiles table successfully (force sync).");
+} catch (err) {
+  console.error("❌ CpsProfile sync section failed hard:", err.message);
+}
 
     await safeSync(ProgressionThresholds, { name: 'ProgressionThresholds' });
     console.log('✅ ProgressionThresholds table synced successfully!');

@@ -31,19 +31,23 @@ import { sequelize1 } from "../../config/sequelize.js"; // ✅ for raw SQL inser
 
 dotenv.config();
 
-// --- CPS helper: ensure "user.cps_profiles" row exists for a user_id ---
+// --- CPS helper: ensure baseline IQ CPS profile exists for a new user ---
 async function ensureCpsProfile(userId, transaction) {
   try {
     await sequelize1.query(
-      `INSERT INTO "user"."cps_profiles"(user_id) VALUES ($1)
-       ON CONFLICT (user_id) DO NOTHING;`,
+      `
+      INSERT INTO "cps"."cps_profiles" (user_id, context_type, context_ref_id)
+      VALUES ($1, 'IQ', NULL)
+      ON CONFLICT (user_id, context_type, context_ref_id) DO NOTHING;
+      `,
       { bind: [userId], transaction }
     );
-    // console.log("[CPS] ensured cps_profile for", userId);
+    console.log(`[CPS] Ensured baseline IQ profile for user ${userId}`);
   } catch (e) {
-    console.error("[CPS] ensure cps_profile failed for", userId, e.message);
+    console.error(`[CPS] Failed to ensure CPS profile for ${userId}:`, e.message);
   }
 }
+
 
 
 // const storage = multer.diskStorage({

@@ -56,6 +56,18 @@ const CpsProfile = sequelize1.define(
       allowNull: true,
       comment: "Most recent Test.test_id that updated this profile",
     },
+    average_dims: {
+  type: DataTypes.JSONB,
+  allowNull: true,
+  comment: "Aggregated per-parameter CPS averages (47-parameter JSON)",
+},
+overall_score: {
+  type: DataTypes.FLOAT,
+  allowNull: true,
+  defaultValue: 0,
+  comment: "Overall CPS normalized score derived from parameter averages",
+},
+
 
     /* ---------- 47 CPS parameters ---------- */
     // --- Dimension 1 — Reasoning & Strategy ---
