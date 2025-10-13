@@ -140,6 +140,8 @@ overall_score: {
       { fields: ["context_type"] },
       { fields: ["context_ref_id"] },
       { unique: true, fields: ["user_id", "context_type", "context_ref_id"] }, // ✅ one row per context
+        { unique: true, fields: ["user_id", "context_type"], name: "unique_user_context" },
+
     ],
   }
 );

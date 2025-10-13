@@ -356,37 +356,19 @@ async function persistGeneratedItems({
       { transaction: trx }
     );
 
-// 🧩 Rubric mapping
-// Priority 1: explicit weights (from pipeline)
-// Priority 2: fallback to rubric_tags (equal weights)
-if (Array.isArray(item.weights) && item.weights.length > 0) {
-  for (const w of item.weights) {
-    await CpsRubricMapping.create(
-      {
-        question_id: qb.id,
-        parameter_name: w.parameter.trim().toLowerCase(),
-        weight: parseFloat(w.weight) || 0,
-      },
-      { transaction: trx }
-    );
-  }
-} else if (Array.isArray(item.rubric_tags) && item.rubric_tags.length > 0) {
-  const cleanTags = item.rubric_tags
-    .map((t) => t?.trim().toLowerCase())
-    .filter(Boolean);
-  const weight = parseFloat((1 / cleanTags.length).toFixed(4));
-  for (const tag of cleanTags) {
-    await CpsRubricMapping.create(
-      {
-        question_id: qb.id,
-        parameter_name: tag,
-        weight,
-      },
-      { transaction: trx }
-    );
-  }
-}
-
+    // Rubric mapping (if item.weights supplied later, wire here)
+    if (Array.isArray(item.weights)) {
+      for (const w of item.weights) {
+        await CpsRubricMapping.create(
+          {
+            question_id: qb.id,
+            parameter_name: w.parameter,
+            weight: w.weight,
+          },
+          { transaction: trx }
+        );
+      }
+    }
 
     // Generation log (accepted)
     await CpsGenerationLog.create(
