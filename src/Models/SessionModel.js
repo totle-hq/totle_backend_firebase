@@ -7,7 +7,7 @@ import { Teachertopicstats } from "./TeachertopicstatsModel.js";
 export const Session = sequelize1.define(
   "Session",
   {
-    session_id: {   // 🔄 renamed from "id" to align with Payment.session_id FK
+    session_id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
@@ -21,12 +21,14 @@ export const Session = sequelize1.define(
     student_id: {
       type: DataTypes.UUID,
       allowNull: true,
-      comment: "Reference to the learner attending the session (nullable until booked)",
+      comment:
+        "Reference to the learner attending the session (nullable until booked)",
     },
     topic_id: {
       type: DataTypes.UUID,
       allowNull: false,
-      comment: "Reference to the CatalogueNode (topic) this session is for",
+      comment:
+        "Reference to the CatalogueNode (topic) this session is for",
     },
     scheduled_at: {
       type: DataTypes.DATE,
@@ -60,30 +62,45 @@ export const Session = sequelize1.define(
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: "available",
-      comment: "Lifecycle status of the session (available, booked, completed, etc.)",
+      comment:
+        "Lifecycle status of the session (available, booked, upcoming, completed, etc.)",
     },
   },
   {
     schema: "user",
     tableName: "sessions",
-    timestamps: true, // ✅ Ensure created_at & updated_at are present
-    comment: "Stores all teacher–learner sessions with scheduling, tier, and status metadata",
+    timestamps: true, // createdAt / updatedAt
+    comment:
+      "Stores all teacher–learner sessions with scheduling, tier, and status metadata",
   }
 );
 
-// 🔗 Link Session to CatalogueNode
+/* ---------------- Associations ---------------- */
+
+// Session → Topic
 Session.belongsTo(CatalogueNode, {
   foreignKey: "topic_id",
   as: "topic",
 });
 
-// ⚡ Auto-fill session_tier & session_level from teacher’s topic stats
+// Session → TeacherTopicStats (by teacher_id; filtered by node_id in queries)
+Session.belongsTo(Teachertopicstats, {
+  foreignKey: "teacher_id",   // column on Session
+  targetKey: "teacherId",     // attribute on Teachertopicstats (mapped to DB teacher_id)
+  as: "teacherTopicStats",
+});
+
+/* ------------- Hooks ------------- */
+/**
+ * Auto-fill session_tier & session_level from teacher’s topic stats at creation.
+ * NOTE: Use model attribute names (teacherId), not raw column names.
+ */
 Session.beforeCreate(async (session) => {
   try {
     const teacherStats = await Teachertopicstats.findOne({
       where: {
-        teacher_id: session.teacher_id,
-        node_id: session.topic_id,
+        teacherId: session.teacher_id, // ✅ attribute name
+        node_id: session.topic_id,     // already snake_case attribute
       },
       attributes: ["tier", "level"],
       raw: true,
@@ -92,8 +109,17 @@ Session.beforeCreate(async (session) => {
     if (teacherStats) {
       session.session_tier = teacherStats.tier || "free";
       session.session_level = teacherStats.level || "Bridger";
+    } else {
+      // hard default if no stats row exists
+      session.session_tier = "free";
+      session.session_level = "Bridger";
     }
   } catch (error) {
     console.error("❌ Error in Session.beforeCreate hook:", error);
+    // keep safe defaults
+    if (!session.session_tier) session.session_tier = "free";
+    if (!session.session_level) session.session_level = "Bridger";
   }
 });
+
+export default Session;
