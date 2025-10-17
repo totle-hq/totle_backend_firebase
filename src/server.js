@@ -59,10 +59,14 @@ import projectBoardRoutes from "./routes/projectBoard.routes.js";
 import researchRoutes from "./routes/research.routes.js";
 import cpsLogsRoutes from "./routes/cpsLogs.routes.js";
 import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
+import iqQuestionRoutes from "./routes/cps/iqQuestion.routes.js";
 
 // DB sync (your existing)
 import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
 import { initCpsModels } from "./Models/Cps/index.js";
+
+// ✅ Ensure all base models & associations are loaded exactly once at boot
+import "./Models/index.js";
 
 // ----------------------------------------
 dotenv.config();
@@ -75,8 +79,6 @@ const app = express();
 // If you're behind ALB / Nginx, trust proxy for correct protocol/ips
 app.set("trust proxy", true);
 
-/* -------------------- CORS -------------------- */
-// Exact origins with scheme; NO trailing slashes.
 /* -------------------- CORS -------------------- */
 const ORIGINS = [
   // ✅ Local development (React CRA, Vite, etc.)
@@ -94,7 +96,6 @@ const ORIGINS = [
   "https://nucleus.totle.co",
   "https://api.totle.co"
 ];
-
 
 const corsOptions = {
   origin(origin, cb) {
@@ -122,8 +123,8 @@ const corsOptions = {
 
 app.use((req, _res, next) => {
   // small visibility into who is blocked by CORS
-const normalized = req.headers.origin?.replace(/\/$/, "");
-if (normalized && !ORIGINS.includes(normalized)) {
+  const normalized = req.headers.origin?.replace(/\/$/, "");
+  if (normalized && !ORIGINS.includes(normalized)) {
     console.warn(`[CORS] Blocked origin: ${req.headers.origin} ${req.method} ${req.originalUrl}`);
   }
   next();
@@ -137,7 +138,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Preflight for all routes
@@ -185,40 +185,40 @@ app.use(
       ],
 
       /* ---------- Connections (XHR / fetch / WS) ---------- */
-     connectSrc: [
-  "'self'",
-  "https://api.totle.co",
-  "wss://api.totle.co",
-  // ✅ Local development (Vite / CRA)
-  "http://localhost:3000",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:4173",
-  "ws://localhost:3000",
-  "ws://localhost:5000",
-  "ws://localhost:5173",
-  "ws://localhost:4173",
-  // ✅ API + WebSocket
-  "https://totle.co",
-  "https://nucleus.totle.co",
-  "https://www.totle.co",
-  "https://api.totle.co",
-  "wss://api.totle.co",
-  // ✅ External APIs
-  "https://www.google-analytics.com",
-  "https://stats.g.doubleclick.net",
-  "https://api-bdc.io",
-  "https://api.bigdatacloud.net",
-  "https://ipinfo.io",
-  "https://api.razorpay.com",
-  "https://checkout.razorpay.com",
-  "https://lumberjack.razorpay.com",
-  "https://rzp.io",
-  "https://meet.jit.si",
-  "https://aframe.io",
-  "https://connect.facebook.net",
-  "https://www.facebook.com"
-],
+      connectSrc: [
+        "'self'",
+        "https://api.totle.co",
+        "wss://api.totle.co",
+        // ✅ Local development (Vite / CRA)
+        "http://localhost:3000",
+        "http://localhost:5000",
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "ws://localhost:3000",
+        "ws://localhost:5000",
+        "ws://localhost:5173",
+        "ws://localhost:4173",
+        // ✅ API + WebSocket
+        "https://totle.co",
+        "https://nucleus.totle.co",
+        "https://www.totle.co",
+        "https://api.totle.co",
+        "wss://api.totle.co",
+        // ✅ External APIs
+        "https://www.google-analytics.com",
+        "https://stats.g.doubleclick.net",
+        "https://api-bdc.io",
+        "https://api.bigdatacloud.net",
+        "https://ipinfo.io",
+        "https://api.razorpay.com",
+        "https://checkout.razorpay.com",
+        "https://lumberjack.razorpay.com",
+        "https://rzp.io",
+        "https://meet.jit.si",
+        "https://aframe.io",
+        "https://connect.facebook.net",
+        "https://www.facebook.com"
+      ],
 
       /* ---------- Styles / Fonts / Images / Frames ---------- */
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
@@ -233,8 +233,6 @@ app.use(
     },
   })
 );
-
-
 
 app.use(compression());
 app.use(morgan("dev"));
@@ -275,7 +273,6 @@ app.use("/api", departmentRoutes);
 
 app.use("/api/nucleus-docs", nucleusDocsRoutes);
 
-
 app.use("/api/teach", insights);
 app.use("/api/progress", progressRoutes);
 
@@ -302,7 +299,7 @@ app.use("/api/projects", projectBoardRoutes);
 app.use("/api/projects", projectTaskRoutes);
 app.use("/api/research", researchRoutes);
 app.use("/api/cps/logs", cpsLogsRoutes);
-
+app.use("/api", iqQuestionRoutes);
 
 /* -------------------- Health / Diagnostics -------------------- */
 app.get("/", (_req, res) => {
@@ -323,7 +320,6 @@ app.get("/db", async (_req, res) => {
   }
 });
 
-
 // Serve React frontend only if build exists (for production)
 const buildPath = path.join(__dirname, "build");
 if (fs.existsSync(path.join(buildPath, "index.html"))) {
@@ -338,26 +334,27 @@ if (fs.existsSync(path.join(buildPath, "index.html"))) {
   console.warn("⚠️  No React build found — skipping static frontend serving");
 }
 
-
 // 404 for unknown API routes
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found", path: req.originalUrl });
 });
 
-
 /* -------------------- Server & Socket.IO -------------------- */
 const startServer = async () => {
   try {
-    // Ensure DB schema is in place
+    // 🔹 Initialize CPS model associations BEFORE DB sync
+    initCpsModels();
+    console.log("✅ CPS model associations initialized");
+
+    // 🔹 Ensure DB schema with associations known
     await runDbSync(false);
-// 🔹 Initialize CPS model associations after DB sync
-initCpsModels();
-console.log("✅ CPS model associations initialized");
+    console.log("✅ DB sync complete");
 
     const PORT = process.env.PORT || 5000;
+
     // 🔹 Initialize Redis (shared across app)
-const redis = getRedis();
-app.set("redis", redis);
+    const redis = getRedis();
+    app.set("redis", redis);
 
     const server = http.createServer(app);
 
@@ -368,8 +365,8 @@ app.set("redis", redis);
       cors: {
         origin: (origin, cb) => {
           if (!origin) return cb(null, true); // server-to-server/no-origin
-const normalized = origin.replace(/\/$/, "");
-if (ORIGINS.includes(normalized)) return cb(null, true);
+          const normalized = origin.replace(/\/$/, "");
+          if (ORIGINS.includes(normalized)) return cb(null, true);
           return cb(new Error(`Socket.IO CORS blocked: ${origin}`));
         },
         methods: ["GET", "POST"],
@@ -380,74 +377,72 @@ if (ORIGINS.includes(normalized)) return cb(null, true);
       allowEIO3: false, // you are on EIO=4; keep false to avoid legacy quirks
     });
 
-global.io = io;
+    global.io = io;
 
-// Register chat handlers once (for all connections)
-registerChatHandlers(io);
-// 🔹 Register CPS Generator event namespace (/cps-generator)
-registerCpsGeneratorNamespace(io);
-/* -------------------------------------------------------------
-   CPS OBSERVATORY LOG EMITTER  — used by all CPS pipelines
-------------------------------------------------------------- */
-global.emitCpsLog = (log) => {
-  if (!global.io) return;
-  try {
-    global.io.emit("cps:observatory:update", log);
-    console.log("📡 [CPS OBS] →", log.type, log.status, log.batch_id || log.id);
-  } catch (err) {
-    console.error("❌ [CPS OBS] Emit failed:", err.message);
-  }
-};
+    // Register chat handlers once (for all connections)
+    registerChatHandlers(io);
+    // 🔹 Register CPS Generator event namespace (/cps-generator)
+    registerCpsGeneratorNamespace(io);
 
-// optional: scale horizontally via Redis pub/sub
-if (redis) {
-  const sub = redis.duplicate();
-  await sub.connect();
-  await sub.subscribe("cps:observatory:update", (msg) => {
-    try {
-      const data = JSON.parse(msg);
-      global.io.emit("cps:observatory:update", data);
-    } catch (e) {
-      console.error("[Redis→Socket] bad payload:", e.message);
+    /* -------------------------------------------------------------
+       CPS OBSERVATORY LOG EMITTER  — used by all CPS pipelines
+    ------------------------------------------------------------- */
+    global.emitCpsLog = (log) => {
+      if (!global.io) return;
+      try {
+        global.io.emit("cps:observatory:update", log);
+        console.log("📡 [CPS OBS] →", log.type, log.status, log.batch_id || log.id);
+      } catch (err) {
+        console.error("❌ [CPS OBS] Emit failed:", err.message);
+      }
+    };
+
+    // optional: scale horizontally via Redis pub/sub
+    if (redis) {
+      const sub = redis.duplicate();
+      await sub.connect();
+      await sub.subscribe("cps:observatory:update", (msg) => {
+        try {
+          const data = JSON.parse(msg);
+          global.io.emit("cps:observatory:update", data);
+        } catch (e) {
+          console.error("[Redis→Socket] bad payload:", e.message);
+        }
+      });
+      console.log("🔄 Redis subscriber active for cps:observatory:update");
     }
-  });
-  console.log("🔄 Redis subscriber active for cps:observatory:update");
-}
 
+    // Make IO globally available to controllers/services
+    app.set("io", io);
 
-// Make IO globally available to controllers/services
-app.set("io", io);
+    io.on("connection", (socket) => {
+      console.log("🔌 WebSocket connected:", socket.id);
 
+      // Join signaling room
+      socket.on("join", ({ sessionId, userId, role }) => {
+        if (!sessionId) return;
+        socket.join(sessionId);
+        console.log(`🟢 ${role ?? "user"} ${userId ?? ""} joined session ${sessionId}`);
+      });
 
-io.on("connection", (socket) => {
-  console.log("🔌 WebSocket connected:", socket.id);
+      // Forward signal (offer, answer, candidate)
+      socket.on("signal", ({ sessionId, userId, type, data }) => {
+        if (!sessionId) return;
+        console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
+        socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
+      });
 
-  // Join signaling room
-  socket.on("join", ({ sessionId, userId, role }) => {
-    if (!sessionId) return;
-    socket.join(sessionId);
-    console.log(`🟢 ${role ?? "user"} ${userId ?? ""} joined session ${sessionId}`);
-  });
+      // Handle hangup
+      socket.on("hangup", ({ sessionId, userId }) => {
+        if (!sessionId) return;
+        console.log(`🔴 Hangup by ${userId ?? "unknown"} in ${sessionId}`);
+        socket.to(sessionId).emit("hangup");
+      });
 
-  // Forward signal (offer, answer, candidate)
-  socket.on("signal", ({ sessionId, userId, type, data }) => {
-    if (!sessionId) return;
-    console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
-    socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
-  });
-
-  // Handle hangup
-  socket.on("hangup", ({ sessionId, userId }) => {
-    if (!sessionId) return;
-    console.log(`🔴 Hangup by ${userId ?? "unknown"} in ${sessionId}`);
-    socket.to(sessionId).emit("hangup");
-  });
-
-  socket.on("disconnect", (reason) => {
-    console.log(`❌ WebSocket disconnected: ${socket.id} (${reason})`);
-  });
-});
-
+      socket.on("disconnect", (reason) => {
+        console.log(`❌ WebSocket disconnected: ${socket.id} (${reason})`);
+      });
+    });
 
     // Process-level safety nets
     process.on("unhandledRejection", (err) => {
