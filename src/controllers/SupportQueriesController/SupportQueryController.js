@@ -55,22 +55,21 @@ export const getSupportQueries = async (req, res) => {
       include: [
         {
           model: User,
-          attributes: ["id", "firstName", "email"], // adjust fields as needed
+          as: "user", // must match your associations.js alias
+          attributes: ["id", "firstName", "email"],
         },
       ],
       order: [["created_at", "DESC"]],
     });
 
-    if (!queries || queries.length === 0) {
-      return res.status(404).json({ message: "No support queries found." });
-    }
-
-    res.status(200).json(queries);
+    // Always return an array; let the client show "No results" if empty
+    res.status(200).json(queries ?? []);
   } catch (err) {
     console.error("Failed to fetch support queries:", err.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 export const getQueriesList = async (req, res) => {
   try {

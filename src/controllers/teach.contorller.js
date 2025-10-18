@@ -1,18 +1,27 @@
+// src/controllers/teach.contorller.js
+// -----------------------------------------------------------------------------
+// TEACH (Availability & related)
+// - Free-hand X→Y availability with min 90 mins
+// - Edit keeps/updates topics across the grouped slot window
+// - Consistent “≥30 minutes from now” gate
+// - getAvailabilityChart returns a REAL Session PK (session_id) for editing
+// -----------------------------------------------------------------------------
+
+import { Op, fn, col } from "sequelize";
 import { SessionSummaires } from "../Models/SessionsummariesModel.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
-import { Op, fn, col } from "sequelize";
-// import { Topic } from "../Models/CatalogModels/TopicModel.js";
 import { User } from "../Models/UserModels/UserModel.js";
 import { ModerationFlag } from "../Models/moderatonflagsModel.js";
 import { Session } from "../Models/SessionModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { findSubjectAndDomain } from "../utils/getsubject.js";
 
-function zonedTimeToUtc(dateString) {
+// We pass +05:30 in ISO strings, so a plain Date ctor suffices.
+function zonedTimeToUtc(dateString /*, tzIgnored */) {
   return new Date(dateString);
 }
 
-
+/* ------------------------------- Report Session ---------------------------- */
 
 export const reportSession = async (req, res) => {
   try {
@@ -24,11 +33,7 @@ export const reportSession = async (req, res) => {
     }
 
     const session = await Session.findByPk(sessionId);
-
-    if (!session) {
-      return res.status(404).json({ error: "Session not found" });
-    }
-
+    if (!session) return res.status(404).json({ error: "Session not found" });
     if (session.teacher_id !== teacher_id) {
       return res.status(403).json({ error: "Not authorized to report this session" });
     }
@@ -38,119 +43,78 @@ export const reportSession = async (req, res) => {
       return res.status(400).json({ error: "Invalid reportStatus value" });
     }
 
-    // Set session status
-    if (reportStatus === "completed") {
-      session.status = "completed";
-    } else {
-      session.status = "flagged";
-    }
-
+    session.status = reportStatus === "completed" ? "completed" : "flagged";
     await session.save();
 
     await ModerationFlag.create({
-      sessionId: session.id,
+      sessionId: session.session_id, // store true PK
       reporterId: teacher_id,
       reason: reportStatus,
       notes: notes || null,
-      status: "open"
+      status: "open",
     });
 
     return res.status(200).json({
       message: "Session report and flag submitted successfully",
-      session
+      session,
     });
-
   } catch (err) {
     console.error("Report session error:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
-function parse12HourTime(dateStr, timeStr) {
-  if (!timeStr.includes("AM") && !timeStr.includes("PM")) {
-    // It's in 24-hour format already
-    return new Date(`${dateStr}T${timeStr}:00`);
-  }
-
-  const [time, modifier] = timeStr.trim().split(" ");
-  let [hours, minutes] = time.split(":").map(Number);
-
-  if (modifier.toUpperCase() === "PM" && hours !== 12) hours += 12;
-  if (modifier.toUpperCase() === "AM" && hours === 12) hours = 0;
-
-  const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-
-  return new Date(`${dateStr}T${hh}:${mm}:00`);
-}
-
+/* ----------------------------- Offer Availability -------------------------- */
+// FREE-HAND X→Y with min 90 mins; at least 30 minutes in the future.
 
 export const offerSlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
-    const { topic_ids, date, timeRange } = req.body; // ✅ topic_ids is now an array
-if (typeof zonedTimeToUtc !== "function") {
-  console.error("❌ zonedTimeToUtc did not load correctly");
-} else {
-  console.log("✅ zonedTimeToUtc loaded successfully");
-}
+    const { topic_ids, date, timeRange } = req.body;
 
     const user = await User.findByPk(teacher_id);
-    const teacher_location = user.location;
-
-    if (!teacher_location) {
+    if (!user?.location) {
       return res.status(400).json({ message: "Please fill in your location in profile to offer a slot." });
     }
 
-    if (!Array.isArray(topic_ids) || topic_ids.length === 0 || !date || !timeRange) {
+    if (!Array.isArray(topic_ids) || topic_ids.length === 0 || !date || !timeRange || !timeRange.includes("-")) {
       return res.status(400).json({ message: "Missing topic_ids array, date, or timeRange." });
     }
 
-    // 🕒 Convert IST (from frontend) → UTC before saving
     const [startTimeStr, endTimeStr] = timeRange.split("-");
+    let scheduled_at = new Date(`${date}T${startTimeStr}:00+05:30`);
+    let completed_at = new Date(`${date}T${endTimeStr}:00+05:30`);
 
-    const startIST = `${date}T${startTimeStr}:00+05:30`;
-    const endIST = `${date}T${endTimeStr}:00+05:30`;
+    // Handle crossing midnight
+    if (completed_at <= scheduled_at) completed_at.setDate(completed_at.getDate() + 1);
 
-    const scheduled_at = zonedTimeToUtc(`${date}T${startTimeStr}:00+05:30`, "Asia/Kolkata");
-    const completed_at = zonedTimeToUtc(`${date}T${endTimeStr}:00+05:30`, "Asia/Kolkata");
+    const duration_minutes = Math.round((completed_at.getTime() - scheduled_at.getTime()) / 60000);
 
-    console.log("🕒 Slot IST:", startIST, "-", endIST);
-    console.log("🕒 Slot UTC:", scheduled_at.toISOString(), "-", completed_at.toISOString());
-
-
-    // Handle if slot crosses midnight (e.g., 11:30 PM to 12:30 AM)
-    if (completed_at <= scheduled_at) {
-      completed_at.setDate(completed_at.getDate() + 1);
+    // Min 90 minutes rule
+    if (duration_minutes < 90) {
+      return res.status(400).json({ message: "Minimum slot length is 90 minutes." });
     }
 
-    const duration_minutes = Math.round((completed_at - scheduled_at) / (1000 * 60));
-
-    const now = new Date();
-    // const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-    const twoHoursLater = new Date(now.getTime() + 30 * 60 * 1000);
-
-    if (scheduled_at < twoHoursLater) {
+    // At least 30 minutes from now
+    const minStart = new Date(Date.now() + 30 * 60 * 1000);
+    if (scheduled_at < minStart) {
       return res.status(400).json({ message: "You can only offer a slot at least 30 minutes from now." });
     }
 
-    // Optional: prevent any existing session overlap (teacher-wide)
+    // Prevent overlapping available slots for this teacher
     const overlapping = await Session.findOne({
       where: {
         teacher_id,
         status: "available",
         scheduled_at: { [Op.lt]: completed_at },
-        completed_at: { [Op.gt]: scheduled_at }
-      }
+        completed_at: { [Op.gt]: scheduled_at },
+      },
     });
-
     if (overlapping) {
       return res.status(400).json({ message: "You already have an offered slot during this time." });
     }
 
-    // ✅ Create one session for each topic
     const createdSessions = [];
-
     for (const topic_id of topic_ids) {
       const session = await Session.create({
         teacher_id,
@@ -158,32 +122,21 @@ if (typeof zonedTimeToUtc !== "function") {
         scheduled_at,
         completed_at,
         duration_minutes,
-        status: "available"
+        status: "available",
       });
-
       createdSessions.push(session);
     }
 
     return res.status(201).json({ message: "Slots offered successfully", sessions: createdSessions });
-
   } catch (err) {
     console.error("Offer slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
-const convertUTCToIST = (utcDate) => {
-  const istOffsetMs = 5.5 * 60 * 60 * 1000;
-  return new Date(new Date(utcDate).getTime() + istOffsetMs);
-};
-
-// Helper to format date as 'YYYY-MM-DD'
-const formatDate = (dateObj) => {
-  return dateObj.toISOString().split("T")[0];
-};
-
-
-
+/* ----------------------------- Availability Chart -------------------------- */
+// Returns next 7 days; groups multiple topics under the same time window.
+// IMPORTANT: returns the REAL PK (`session_id`) so the frontend can PUT.
 
 export const getAvailabilityChart = async (req, res) => {
   try {
@@ -193,7 +146,6 @@ export const getAvailabilityChart = async (req, res) => {
     const endDateIST = new Date(todayIST);
     endDateIST.setDate(todayIST.getDate() + 7);
 
-    // ✅ Convert IST → UTC for DB query
     const todayUTC = zonedTimeToUtc(todayIST, "Asia/Kolkata");
     const endDateUTC = zonedTimeToUtc(endDateIST, "Asia/Kolkata");
 
@@ -201,144 +153,131 @@ export const getAvailabilityChart = async (req, res) => {
       where: {
         teacher_id,
         status: "available",
-        scheduled_at: {
-          [Op.between]: [todayUTC, endDateUTC],
-        },
+        scheduled_at: { [Op.between]: [todayUTC, endDateUTC] },
       },
       order: [["scheduled_at", "ASC"]],
       raw: true,
     });
 
-
-    // 2. Get all unique topic IDs
-    const allTopicIds = [...new Set(sessions.map(s => s.topic_id))];
-
-    // 3. Fetch topic names
-    const topicRecords = await CatalogueNode.findAll({
-      where: { node_id: allTopicIds },
-      attributes: ["node_id", "name"],
-      raw: true,
-    });
-
-    // 4. Create a topic ID to name map
+    // Build topic map
+    const allTopicIds = [...new Set(sessions.map((s) => s.topic_id))];
+    const topicRecords = allTopicIds.length
+      ? await CatalogueNode.findAll({
+          where: { node_id: allTopicIds },
+          attributes: ["node_id", "name"],
+          raw: true,
+        })
+      : [];
     const topicMap = {};
-    topicRecords.forEach(topic => {
-      topicMap[topic.node_id] = topic.name;
-    });
+    for (const t of topicRecords) topicMap[t.node_id] = t.name;
 
-    // 5. Initialize availability for 7 days
+    // Init availability buckets for 7 days (keys in en-CA)
     const availability = {};
     for (let i = 0; i < 7; i++) {
-      const date = new Date(todayIST);
-      date.setDate(todayIST.getDate() + i);
-      const dateKey = date.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-      availability[dateKey] = [];
-
+      const d = new Date(todayIST);
+      d.setDate(todayIST.getDate() + i);
+      const key = d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      availability[key] = [];
     }
 
-    // 6. Group sessions by time
+    // Group by scheduled_at (start time)
     const timeMap = new Map();
-
     for (const session of sessions) {
-      const scheduledTimeISO = new Date(session.scheduled_at).toISOString();
-      const dateKey = new Date(session.scheduled_at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-
-      if (!timeMap.has(scheduledTimeISO)) {
-        timeMap.set(scheduledTimeISO, {
-          id: session.session_id, // single session id
-          // ✅ Show as IST (same as what frontend sent)
+      const startIso = new Date(session.scheduled_at).toISOString();
+      if (!timeMap.has(startIso)) {
+        timeMap.set(startIso, {
+          id: session.session_id, // ✅ REAL PK for edit
           scheduled_at: new Date(session.scheduled_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
           completed_at: session.completed_at
             ? new Date(session.completed_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })
             : null,
-
           topic_ids: [],
           topic_names: [],
           status: session.status,
         });
       }
-
-
-      const entry = timeMap.get(scheduledTimeISO);
+      const entry = timeMap.get(startIso);
       entry.topic_ids.push(session.topic_id);
       entry.topic_names.push(topicMap[session.topic_id] || "Unknown");
     }
 
-    // 7. Fill availability
-    for (const [isoTime, group] of timeMap.entries()) {
-      const dateKey = new Date(isoTime).toLocaleDateString("en-CA", {
-        timeZone: "Asia/Kolkata",
-      });
-
-      if (availability[dateKey]) {
-        availability[dateKey].push(group);
-      }
+    for (const [iso, group] of timeMap.entries()) {
+      const key = new Date(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      if (availability[key]) availability[key].push(group);
     }
-    return res.status(200).json({ availability });
 
+    return res.status(200).json({ availability });
   } catch (err) {
     console.error("Error fetching availability chart:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
-
-
-
-
+/* ------------------------------- Update Slot ------------------------------- */
+// Edits a whole grouped slot window (start/end) and its topics.
+// - Correct start/end mapping
+// - Min 90 mins
+// - ≥ 30 mins from now
+// - If topic_ids omitted, keep existing topics for that window
 
 export const updateAvailabilitySlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const sessionId = req.params.id;
-    const { date, timeRange, topic_ids = [] } = req.body;
+    let { date, timeRange, topic_ids } = req.body;
 
-    const session = await Session.findByPk(sessionId);
-
-    if (!session || session.teacher_id !== teacher_id || session.status !== "available") {
+    const reference = await Session.findByPk(sessionId);
+    if (!reference || reference.teacher_id !== teacher_id || reference.status !== "available") {
       return res.status(404).json({ error: "Slot not found or unauthorized" });
+    }
+
+    if (!date || !timeRange || !timeRange.includes("-")) {
+      return res.status(400).json({ error: "Missing or invalid date/timeRange" });
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split("-");
     const startIST = `${date}T${startTimeStr}:00+05:30`;
     const endIST = `${date}T${endTimeStr}:00+05:30`;
 
-    const newCompletedAt = zonedTimeToUtc(startIST, "Asia/Kolkata");
-    const newScheduledAt = zonedTimeToUtc(endIST, "Asia/Kolkata");
+    // ✅ Correct assignment: start → scheduled_at, end → completed_at
+    let newScheduledAt = new Date(startIST);
+    let newCompletedAt = new Date(endIST);
+    if (newCompletedAt <= newScheduledAt) newCompletedAt.setDate(newCompletedAt.getDate() + 1);
 
+    const duration_minutes = Math.round((newCompletedAt.getTime() - newScheduledAt.getTime()) / 60000);
 
-    if (newCompletedAt <= newScheduledAt) {
-      newCompletedAt.setDate(newCompletedAt.getDate() + 1);
+    // Min 90 minutes
+    if (duration_minutes < 90) {
+      return res.status(400).json({ error: "Minimum slot length is 90 minutes." });
     }
 
-    const duration_minutes = Math.round((newCompletedAt - newScheduledAt) / (1000 * 60));
-
-    const now = new Date();
-    const twoHoursLater = new Date(now.getTime() + 30 * 60 * 1000);
-    if (newScheduledAt < twoHoursLater) {
-      console.warn("warned slot");
-      return res.status(400).json({ error: "Updated slot must be at least 2 hours ahead." });
+    // At least 30 minutes from now
+    const minStart = new Date(Date.now() + 30 * 60 * 1000);
+    if (newScheduledAt < minStart) {
+      return res.status(400).json({ error: "Updated slot must start at least 30 minutes from now." });
     }
 
-    // 1. Find all existing sessions for the slot (same scheduled/completed time and teacher)
+    // All sessions in the old grouped window
     const existingSessions = await Session.findAll({
       where: {
         teacher_id,
         status: "available",
-        scheduled_at: session.scheduled_at,
-        completed_at: session.completed_at,
+        scheduled_at: reference.scheduled_at,
+        completed_at: reference.completed_at,
       },
     });
 
-    // 2. Get existing topic_ids
-    const existingTopicIds = existingSessions.map((s) => s.topic_id);
+    // If topics omitted, keep existing topics
+    if (!Array.isArray(topic_ids)) {
+      topic_ids = [...new Set(existingSessions.map((s) => s.topic_id))];
+    }
 
-    // 3. Find which topic_ids to add or remove
+    const existingTopicIds = existingSessions.map((s) => s.topic_id);
     const toAdd = topic_ids.filter((id) => !existingTopicIds.includes(id));
     const toKeep = topic_ids.filter((id) => existingTopicIds.includes(id));
     const toRemove = existingTopicIds.filter((id) => !topic_ids.includes(id));
 
-    // 4. Update sessions to keep
+    // Move kept topics
     for (const s of existingSessions) {
       if (toKeep.includes(s.topic_id)) {
         s.scheduled_at = newScheduledAt;
@@ -348,29 +287,30 @@ export const updateAvailabilitySlot = async (req, res) => {
       }
     }
 
-    // 5. Delete sessions for removed topic_ids
-    await Session.destroy({
-      where: {
+    // Remove dropped topics
+    if (toRemove.length) {
+      await Session.destroy({
+        where: {
+          teacher_id,
+          status: "available",
+          topic_id: toRemove,
+          scheduled_at: reference.scheduled_at,
+          completed_at: reference.completed_at,
+        },
+      });
+    }
+
+    // Add new topics
+    if (toAdd.length) {
+      const newRows = toAdd.map((topic_id) => ({
         teacher_id,
+        topic_id,
+        scheduled_at: newScheduledAt,
+        completed_at: newCompletedAt,
         status: "available",
-        topic_id: toRemove,
-        scheduled_at: session.scheduled_at,
-        completed_at: session.completed_at,
-      },
-    });
-
-    // 6. Create new sessions for added topic_ids
-    const newSessions = toAdd.map((topic_id) => ({
-      teacher_id,
-      topic_id,
-      scheduled_at: newScheduledAt,
-      completed_at: newCompletedAt,
-      status: "available",
-      duration_minutes,
-    }));
-
-    if (newSessions.length > 0) {
-      await Session.bulkCreate(newSessions);
+        duration_minutes,
+      }));
+      await Session.bulkCreate(newRows);
     }
 
     return res.status(200).json({
@@ -385,22 +325,21 @@ export const updateAvailabilitySlot = async (req, res) => {
   }
 };
 
+/* -------------------------------- Delete Slot ------------------------------ */
+// Deletes the whole grouped window (all topics) at that start/end.
 
 export const deleteAvailabilitySlot = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const sessionId = req.params.id;
 
-    // 1. Find the reference session
     const session = await Session.findByPk(sessionId);
-
     if (!session || session.teacher_id !== teacher_id || session.status !== "available") {
       return res.status(404).json({ error: "Slot not found or unauthorized" });
     }
 
     const { scheduled_at, completed_at } = session;
 
-    // 2. Delete all sessions with same slot time for this teacher
     const deletedCount = await Session.destroy({
       where: {
         teacher_id,
@@ -414,14 +353,13 @@ export const deleteAvailabilitySlot = async (req, res) => {
       message: "Slot deleted successfully",
       deleted_sessions: deletedCount,
     });
-
   } catch (err) {
     console.error("Delete slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
-
+/* ------------------------------ Session Join Gate -------------------------- */
 
 export const validateSessionTime = async (req, res) => {
   try {
@@ -429,7 +367,7 @@ export const validateSessionTime = async (req, res) => {
 
     const session = await Session.findByPk(sessionId);
     if (!session) {
-      return res.status(404).json({ joinAllowed: false, reason: 'Session not found' });
+      return res.status(404).json({ joinAllowed: false, reason: "Session not found" });
     }
 
     const now = new Date();
@@ -439,20 +377,16 @@ export const validateSessionTime = async (req, res) => {
     const endWindow = new Date(scheduled.getTime() + 15 * 60000);
 
     const joinAllowed = now >= startWindow && now <= endWindow;
-    const reason = joinAllowed
-      ? 'Join allowed within window'
-      : 'Join not allowed: Outside valid time window';
+    const reason = joinAllowed ? "Join allowed within window" : "Join not allowed: Outside valid time window";
 
     return res.status(200).json({ joinAllowed, reason });
   } catch (err) {
-    console.error('Time validation failed:', err);
-    return res.status(500).json({ joinAllowed: false, reason: 'Internal server error' });
+    console.error("Time validation failed:", err);
+    return res.status(500).json({ joinAllowed: false, reason: "Internal server error" });
   }
 };
 
-
-
-
+/* ------------------------------ Eligibility Check -------------------------- */
 
 export const validateEligibility = async (req, res) => {
   try {
@@ -460,46 +394,35 @@ export const validateEligibility = async (req, res) => {
     const { topicId } = req.body;
 
     if (!topicId) {
-      return res.status(400).json({ error: 'Missing topicId' });
+      return res.status(400).json({ error: "Missing topicId" });
     }
 
     const stat = await Teachertopicstats.findOne({ where: { teacherId, topicId } });
-
     if (!stat) {
-      return res.status(404).json({
-        eligible: false,
-        reason: 'No teacher record found for this topic'
-      });
+      return res.status(404).json({ eligible: false, reason: "No teacher record found for this topic" });
     }
 
     const { level, rating, sessionCount } = stat;
 
     let eligible = false;
-    let reason = 'Eligibility criteria not met';
+    let reason = "Eligibility criteria not met";
 
-    if (['Expert', 'Master', 'Legend'].includes(level)) {
+    if (["Expert", "Master", "Legend"].includes(level)) {
       eligible = true;
       reason = `Eligible for paid sessions at ${level} level`;
-    } else if (level === 'Bridger' && rating >= 4.5 && sessionCount >= 20) {
+    } else if (level === "Bridger" && rating >= 4.5 && sessionCount >= 20) {
       eligible = true;
-      reason = 'Eligible based on performance (high rating + session count)';
+      reason = "Eligible based on performance (high rating + session count)";
     }
 
-    return res.status(200).json({
-      eligible,
-      level,
-      rating,
-      sessionCount,
-      reason
-    });
-
+    return res.status(200).json({ eligible, level, rating, sessionCount, reason });
   } catch (err) {
-    console.error('Eligibility validation failed:', err);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    console.error("Eligibility validation failed:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
-
+/* ------------------------------- Session Summary --------------------------- */
 
 export const getSessionSummary = async (req, res) => {
   try {
@@ -508,35 +431,30 @@ export const getSessionSummary = async (req, res) => {
     const { id: sessionId } = req.params;
 
     const summary = await SessionSummaires.findOne({ where: { sessionId } });
+    if (!summary) return res.status(404).json({ error: "Summary not found" });
 
-    if (!summary) {
-      return res.status(404).json({ error: 'Summary not found' });
-    }
-
-    const isEditable = summary.teacherId === userId &&
-      ['Bridger', 'Expert', 'Master', 'Legend'].includes(userRole);
+    const isEditable = summary.teacherId === userId && ["Bridger", "Expert", "Master", "Legend"].includes(userRole);
 
     return res.status(200).json({
       summaryText: summary.summaryText,
       tags: summary.tags,
       submittedAt: summary.submittedAt,
-      editable: isEditable
+      editable: isEditable,
     });
   } catch (err) {
-    console.error('Error fetching session summary:', err);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    console.error("Error fetching session summary:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
+/* --------------------------------- Progression ----------------------------- */
+
 const levelProgression = {
-  Bridger: { next: 'Expert', sessions: 20, rating: 4.2 },
-  Expert: { next: 'Master', sessions: 50, rating: 4.5 },
-  Master: { next: 'Legend', sessions: 100, rating: 4.7 },
-  Legend: null // No next level
+  Bridger: { next: "Expert", sessions: 20, rating: 4.2 },
+  Expert: { next: "Master", sessions: 50, rating: 4.5 },
+  Master: { next: "Legend", sessions: 100, rating: 4.7 },
+  Legend: null,
 };
-
-
-
 
 export const getMyProgression = async (req, res) => {
   try {
@@ -545,17 +463,9 @@ export const getMyProgression = async (req, res) => {
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
       include: [
-        {
-          model: CatalogueNode,
-          as: "Topic",
-          attributes: ['node_id', 'name', 'parent_id']
-        },
-        {
-          model: User,
-          as: "teacher",
-          attributes: ['id', 'location']
-        }
-      ]
+        { model: CatalogueNode, as: "Topic", attributes: ["node_id", "name", "parent_id"] },
+        { model: User, as: "teacher", attributes: ["id", "location"] },
+      ],
     });
 
     const result = await Promise.all(
@@ -564,10 +474,8 @@ export const getMyProgression = async (req, res) => {
         const topicId = stat.Topic?.node_id;
         const topicName = stat.Topic?.name || "Unknown";
 
-        // Find subject and domain
         const { subject, domain } = await findSubjectAndDomain(topicId);
-
-        const progression = levelProgression[level]; // You should have this map defined
+        const progression = levelProgression[level];
 
         if (!progression) {
           return {
@@ -580,12 +488,12 @@ export const getMyProgression = async (req, res) => {
             sessionsToNextlevel: 0,
             meetsRatingForNextlevel: null,
             subject,
-            domain
+            domain,
           };
         }
 
         const sessionsRemaining = Math.max(0, progression.sessions - sessionCount);
-        const meetsRating = rating >= progression.rating;
+       const meetsRating = rating >= progression.rating;
 
         return {
           topicId,
@@ -597,7 +505,7 @@ export const getMyProgression = async (req, res) => {
           sessionsToNextlevel: sessionsRemaining,
           meetsRatingForNextlevel: meetsRating,
           subject,
-          domain
+          domain,
         };
       })
     );
@@ -609,6 +517,7 @@ export const getMyProgression = async (req, res) => {
   }
 };
 
+/* -------------------------- Upcoming Booked Sessions ----------------------- */
 
 export const getUpcomingBookedSessions = async (req, res) => {
   try {
@@ -616,111 +525,87 @@ export const getUpcomingBookedSessions = async (req, res) => {
     const now = new Date();
 
     const sessions = await Session.findAll({
-      where: {
-        teacher_id: teacherId,
-        status: "booked",
-        scheduled_at: {
-          [Op.gt]: now,
-        },
-      },
+      where: { teacher_id: teacherId, status: "booked", scheduled_at: { [Op.gt]: now } },
       order: [["scheduled_at", "ASC"]],
     });
 
     const formatted = [];
+    for (const s of sessions) {
+      let topicName = "N/A";
+      let subject = "N/A";
 
-   for (const s of sessions) {
-  // Declare variables at the top
-  let topicName = "N/A";
-  let subject = "N/A";
+      if (s.topic_id) {
+        const topic = await CatalogueNode.findByPk(s.topic_id, { attributes: ["name"] });
+        const result = await findSubjectAndDomain(s.topic_id);
+        subject = result.subject || "N/A";
+        topicName = topic?.name || "N/A";
+      }
 
-  if (s.topic_id) {
-    const topic = await CatalogueNode.findByPk(s.topic_id, {
-      attributes: ["name"],
-    });
-    const result = await findSubjectAndDomain(s.topic_id);
-    subject = result.subject || "N/A";
-    topicName = topic?.name || "N/A";
-  }
+      let learner = null;
+      if (s.student_id) {
+        const student = await User.findByPk(s.student_id, {
+          attributes: ["id", "firstName", "lastName", "email"],
+        });
+        learner = {
+          id: student?.id || null,
+          name: student ? `${student.firstName} ${student.lastName}` : "Unknown",
+          email: student?.email || "Not Available",
+        };
+      }
 
-  // Fetch student info manually
-  let learner = null;
-  if (s.student_id) {
-    const student = await User.findByPk(s.student_id, {
-      attributes: ["id", "firstName", "lastName", "email"],
-    });
-    learner = {
-      id: student?.id || null,
-      name: student?.firstName + " " + student?.lastName || "Unknown",
-      email: student?.email || "Not Available",
-    };
-  }
-
-  formatted.push({
-    session_id: s.id,
-    scheduled_at: s.scheduled_at,
-    completed_at: s.completed_at,
-    topic_id: s.topic_id,
-    topic_name: topicName,
-    learner,
-    subject,
-    status: s.status,
-  });
-}
-
+      formatted.push({
+        session_id: s.session_id, // ✅ true PK
+        scheduled_at: s.scheduled_at,
+        completed_at: s.completed_at,
+        topic_id: s.topic_id,
+        topic_name: topicName,
+        learner,
+        subject,
+        status: s.status,
+      });
+    }
 
     return res.status(200).json({ sessions: formatted });
-
   } catch (error) {
     console.error("❌ Error fetching upcoming booked sessions:", error);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
 
-
-
-
+/* ------------------------------- Feedback Summary -------------------------- */
+// If you use CatalogueNode instead of Topic, adapt accordingly. Count column
+// updated to Session.session_id to reflect your PK.
 
 export const getFeedbackSummary = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
     const feedbackData = await Session.findAll({
-      where: {
-        teacher_id:teacherId,
-        feedback_rating: { [Op.not]: null }
-      },
+      where: { teacher_id: teacherId, feedback_rating: { [Op.not]: null } },
       attributes: [
         "topicId",
         [fn("AVG", col("feedback_rating")), "averageRating"],
-    [fn("COUNT", col("Session.id")), "sessionCount"]
-
+        [fn("COUNT", col("Session.session_id")), "sessionCount"], // ✅ use PK column
       ],
-      group: ["topic_id", "Topic.id"],
-      include: [
-        {
-          model: Topic,
-          attributes: ["id", "name"],
-        }
-      ]
+      group: ["topic_id"], // adjust includes/groups if you join a Topic/CatalogueNode table
     });
 
-    const result = feedbackData.map(row => ({
+    const result = feedbackData.map((row) => ({
       topicId: row.topicId,
       topicName: row.Topic?.name || "Unknown",
       averageRating: parseFloat(row.get("averageRating")),
-      sessionCount: parseInt(row.get("sessionCount"))
+      sessionCount: parseInt(row.get("sessionCount")),
     }));
 
-    // Optional: Add overall average
-    const overallAvg =
-      result.reduce((acc, r) => acc + r.averageRating * r.sessionCount, 0) /
-      result.reduce((acc, r) => acc + r.sessionCount, 0);
+    const totalSessions = result.reduce((acc, r) => acc + r.sessionCount, 0);
+    const weightedSum = result.reduce((acc, r) => acc + r.averageRating * r.sessionCount, 0);
+    const overallAvg = totalSessions ? weightedSum / totalSessions : 0;
 
     return res.status(200).json({
       teacherId,
       averageRating: parseFloat(overallAvg.toFixed(2)),
-      totalFeedbacks: result.reduce((acc, r) => acc + r.sessionCount, 0),
-      feedbackByTopic: result
+      totalFeedbacks: totalSessions,
+      feedbackByTopic: result,
     });
   } catch (err) {
     console.error("Feedback summary error:", err);
@@ -728,37 +613,30 @@ export const getFeedbackSummary = async (req, res) => {
   }
 };
 
+/* --------------------------- Qualified Topics APIs ------------------------- */
+
 export const getMyQualifiedTopics = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
-      include: [
-        {
-          model: CatalogueNode,
-          as: "Topic",
-          attributes: ["node_id", "name", "parent_id"]
-        }
-      ]
+      include: [{ model: CatalogueNode, as: "Topic", attributes: ["node_id", "name", "parent_id"] }],
     });
 
     const topicsMap = {};
-
     for (const stat of stats) {
       const topic = stat.Topic;
-      if (!topic) continue; // Skip if no associated topic
+      if (!topic) continue;
 
-      // Fetch parent subject node
       const subjectNode = await CatalogueNode.findByPk(topic.parent_id, {
-        attributes: ["node_id", "name", "parent_id"]
+        attributes: ["node_id", "name", "parent_id"],
       });
 
-      // Fetch domain node (parent of subject)
       let domainNode = null;
       if (subjectNode?.parent_id) {
         domainNode = await CatalogueNode.findByPk(subjectNode.parent_id, {
-          attributes: ["node_id", "name"]
+          attributes: ["node_id", "name"],
         });
       }
 
@@ -788,24 +666,18 @@ export const getMyTopicsWithStats = async (req, res) => {
         {
           model: CatalogueNode,
           // as: "Topic",
-          attributes: ["node_id", "name", "parent_id"]
-        }
-      ]
+          attributes: ["node_id", "name", "parent_id"],
+        },
+      ],
     });
 
     const topicsWithStats = [];
-
     for (const stat of stats) {
       const topic = stat.Topic;
       if (!topic) continue;
 
-      // Fetch sessions taught on this topic by this teacher
       const sessions = await Session.findAll({
-        where: {
-          teacher_id: teacherId,
-          topic_id: topic.node_id,
-          status: "completed", // Only completed sessions
-        },
+        where: { teacher_id: teacherId, topic_id: topic.node_id, status: "completed" },
         attributes: ["student_id"],
       });
 
