@@ -4,6 +4,8 @@ import { Session } from "../../Models/SessionModel.js";
 import { BookedSession } from "../../Models/BookedSession.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
+import { findAvailableSlot } from "../../services/sessionAvailability.service.js";
+import { assertTeacherBuffer } from "../../services/session.service.js";
 
 /* ============================================================================
    Utilities
@@ -216,28 +218,76 @@ export const bookFreeSession = async (req, res) => {
     const now = new Date();
     const minStartUTC = zonedTimeToUtc(new Date(now.getTime() + 30 * 60 * 1000));
 
-    const nextSlot = await Session.findOne({
-      where: {
-        teacher_id: best.teacher_id,
-        topic_id,
-        status: "available",
-        session_tier: "free",
-        scheduled_at: { [Op.gte]: minStartUTC },
-      },
-      order: [["scheduled_at", "ASC"]],
-    });
-    if (!nextSlot)
-      return res.status(404).json({ error: true, message: "Free-tier slots will be available soon." });
+    // -------------------------------------------
+// 1️⃣ Find teacher’s declared availability
+// -------------------------------------------
+// -------------------------------------------
+// 1️⃣ Pick the teacher’s earliest available slot for that topic
+// -------------------------------------------
+const availSlot = await Session.findOne({
+  where: {
+    teacher_id: best.teacher_id,
+    topic_id,
+    status: "available",
+    session_tier: "free",
+  },
+  order: [["scheduled_at", "ASC"]],
+});
+
+if (!availSlot) {
+  return res.status(404).json({
+    error: true,
+    message: "This teacher currently has no active availability window.",
+  });
+}
+
+// -------------------------------------------
+// 2️⃣ Compute proposed 90-minute window starting at that availability
+// -------------------------------------------
+const proposedStart = new Date(availSlot.scheduled_at);
+const proposedEnd = new Date(proposedStart.getTime() + 90 * 60000);
+
+// -------------------------------------------
+// 3️⃣ Validate Bridger buffer (reuse your existing service)
+// -------------------------------------------
+await assertTeacherBuffer({
+  teacherId: best.teacher_id,
+  startAt: proposedStart,
+  durationMinutes: 90,
+  level: "Bridger",
+});
+
+// -------------------------------------------
+// 4️⃣ Create new session row (learner-specific booking)
+// -------------------------------------------
+const nextSlot = await Session.create({
+  teacher_id: best.teacher_id,
+  topic_id,
+  scheduled_at: proposedStart,
+  completed_at: proposedEnd,
+  duration_minutes: 90,
+  session_tier: "free",
+  status: "available",
+});
 
     const topic = await CatalogueNode.findByPk(topic_id, { attributes: ["name"], raw: true });
 
-    await BookedSession.create({
-      learner_id,
-      teacher_id: nextSlot.teacher_id,
-      topic_id,
-      topic: topic?.name || "Unknown",
-      session_id: nextSlot.session_id,
-    });
+// ✅ check if BookedSession model actually has "status" column before inserting
+const bookedPayload = {
+  learner_id,
+  teacher_id: nextSlot.teacher_id,
+  topic_id,
+  topic: topic?.name || "Unknown",
+  session_id: nextSlot.session_id,
+};
+
+// add status only if column exists
+if (BookedSession.rawAttributes.status) {
+  bookedPayload.status = "initiated";
+}
+
+await BookedSession.create(bookedPayload);
+
 
     await Session.update(
       { student_id: learner_id, status: "upcoming", session_tier: "free" },
@@ -295,13 +345,18 @@ export const bookPaidSession = async (req, res) => {
 
     const topic = await CatalogueNode.findByPk(s.topic_id, { attributes: ["name"], raw: true });
 
-    await BookedSession.create({
-      learner_id,
-      teacher_id: s.teacher_id,
-      topic_id: s.topic_id,
-      topic: topic?.name || "Unknown",
-      session_id: s.session_id,
-    });
+const bookedPayload = {
+  learner_id,
+  teacher_id: s.teacher_id,
+  topic_id: s.topic_id,
+  topic: topic?.name || "Unknown",
+  session_id: s.session_id,
+};
+if (BookedSession.rawAttributes.status) {
+  bookedPayload.status = "initiated";
+}
+await BookedSession.create(bookedPayload);
+
 
     await Session.update(
       { student_id: learner_id, status: "upcoming", session_tier: "paid" },
@@ -320,6 +375,82 @@ export const bookPaidSession = async (req, res) => {
     });
   } catch (e) {
     console.error("❌ bookPaidSession:", e);
+    return res.status(500).json({ error: true, message: "Internal server error" });
+  }
+};
+
+/** POST /api/session/book/custom
+ *  Allows a learner to choose any 90-minute window inside a teacher’s available slot.
+ */
+export const bookCustomSlot = async (req, res) => {
+  try {
+    const learner_id = req.user?.id;
+    const { topic_id, teacher_id, start_time } = req.body;
+
+    if (!learner_id || !topic_id || !teacher_id || !start_time)
+      return res.status(400).json({ error: true, message: "Missing required fields" });
+
+    // 1️⃣ Verify teacher slot exists and is available
+    const start = new Date(start_time);
+    const end = new Date(start.getTime() + 90 * 60000); // 90-min window
+
+    const slot = await Session.findOne({
+      where: {
+        teacher_id,
+        topic_id,
+        status: "available",
+        scheduled_at: { [Op.lte]: start },
+        completed_at: { [Op.gte]: end },
+      },
+    });
+
+    if (!slot)
+      return res.status(404).json({
+        error: true,
+        message: "No available slot covering that 90-minute window.",
+      });
+
+    // 2️⃣ Prevent overlapping bookings for learner
+    const conflict = await Session.findOne({
+      where: {
+        student_id: learner_id,
+        status: { [Op.in]: ["booked", "upcoming"] },
+        [Op.or]: [
+          { scheduled_at: { [Op.between]: [start, end] } },
+          { completed_at: { [Op.between]: [start, end] } },
+        ],
+      },
+    });
+    if (conflict)
+      return res.status(409).json({ error: true, message: "You already have a session in this time window." });
+
+    // 3️⃣ Create a derived session for this learner
+    const booked = await Session.create({
+      teacher_id,
+      student_id: learner_id,
+      topic_id,
+      scheduled_at: start,
+      completed_at: end,
+      duration_minutes: 90,
+      status: "upcoming",
+      session_tier: "free", // can extend later
+      session_level: slot.session_level || "Bridger",
+    });
+
+    // 4️⃣ Mark parent slot as 'partially booked' if needed (optional)
+    // leave original slot intact for future use / analytics
+
+    return res.status(201).json({
+      success: true,
+      message: "Custom 90-minute session booked successfully.",
+      data: {
+        sessionId: booked.session_id,
+        scheduledAt: booked.scheduled_at,
+        completedAt: booked.completed_at,
+      },
+    });
+  } catch (err) {
+    console.error("❌ bookCustomSlot:", err);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
