@@ -1,99 +1,106 @@
 // src/Models/BookedSession.js
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
+import { User } from "./UserModels/UserModel.js";
 import { Session } from "./SessionModel.js";
+import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
+
+/* -------------------------------------------------------------------------- */
+/*                            BOOKED SESSION MODEL                            */
+/* -------------------------------------------------------------------------- */
 
 export const BookedSession = sequelize1.define(
   "BookedSession",
   {
-    id: {
+    booked_session_id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
+      comment: "Primary key for booked sessions",
     },
 
-    // who/what
-    teacher_id: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      comment: "Teacher who will deliver the session",
-    },
     learner_id: {
       type: DataTypes.UUID,
       allowNull: false,
-      comment: "Learner who booked",
+      comment: "ID of the learner who booked the session",
     },
+
+    teacher_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      comment: "ID of the teacher who owns the booked session",
+    },
+
     topic_id: {
       type: DataTypes.UUID,
       allowNull: false,
-      comment: "CatalogueNode id",
-    },
-    topic: {
-      type: DataTypes.STRING,
-      allowNull: false,
-      comment: "Denormalized topic name snapshot at booking time",
+      comment: "Linked topic from CatalogueNode",
     },
 
-    // link to concrete session slot (can be null while payment pending)
     session_id: {
       type: DataTypes.UUID,
-      allowNull: true,
-      comment:
-        "References user.sessions.session_id once a concrete slot is reserved",
+      allowNull: false,
+      comment: "Linked session slot",
     },
 
-    // (Optional) booking lifecycle; keep if you need it here
     status: {
-      type: DataTypes.ENUM("initiated", "paid", "confirmed", "cancelled", "refunded"),
+      type: DataTypes.ENUM(
+        "initiated",
+        "paid",
+        "confirmed",
+        "cancelled",
+        "refunded"
+      ),
       allowNull: false,
       defaultValue: "initiated",
       comment: "Booking/payment state",
+    },
+
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
+
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
   },
   {
     schema: "user",
     tableName: "booked_sessions",
     timestamps: true,
-
-    indexes: [
-      // fast lookups
-      { name: "booked_sessions_session_idx", fields: ["session_id"] },
-      { name: "booked_sessions_teacher_idx", fields: ["teacher_id", "createdAt"] },
-      { name: "booked_sessions_learner_idx", fields: ["learner_id", "createdAt"] },
-
-      // prevent double-booking the same concrete session
-      // (unique WHERE session_id IS NOT NULL)
-      {
-        unique: true,
-        name: "booked_sessions_session_unique_notnull",
-        fields: ["session_id"],
-        where: { session_id: { [sequelize1.Sequelize.Op.ne]: null } },
-      },
-    ],
   }
 );
 
-/* --------- Associations (FKs for eager-loading & integrity) --------- */
+/* -------------------------------------------------------------------------- */
+/*                                 ASSOCIATIONS                               */
+/* -------------------------------------------------------------------------- */
 
-// BookedSession → Session (optional while payment pending)
-BookedSession.belongsTo(Session, {
-  foreignKey: "session_id",
-  targetKey: "session_id",
-  as: "session",
-});
+if (!BookedSession.associations?.learner) {
+  BookedSession.belongsTo(User, {
+    foreignKey: "learner_id",
+    as: "learner",
+  });
+}
 
-// You can also add belongsTo(User) for teacher/learner if your User model is available here.
+if (!BookedSession.associations?.teacher) {
+  BookedSession.belongsTo(User, {
+    foreignKey: "teacher_id",
+    as: "teacher",
+  });
+}
 
-/* --------- Hooks (optional, but helpful) --------- */
-// If you want to ensure topic fields match the linked Session once session_id is set
-BookedSession.beforeSave(async (row) => {
-  if (row.session_id && (!row.topic_id || !row.topic)) {
-    const s = await Session.findByPk(row.session_id, { attributes: ["topic_id"], include: [] });
-    if (s) {
-      row.topic_id = row.topic_id || s.topic_id;
-      // If you want the name snapshot, resolve CatalogueNode name here (or in the booking service)
-    }
-  }
-});
+if (!BookedSession.associations?.session) {
+  BookedSession.belongsTo(Session, {
+    foreignKey: "session_id",
+    as: "session",
+  });
+}
 
-export default BookedSession;
+if (!BookedSession.associations?.topic) {
+  BookedSession.belongsTo(CatalogueNode, {
+    foreignKey: "topic_id",
+    as: "topic",
+  });
+}

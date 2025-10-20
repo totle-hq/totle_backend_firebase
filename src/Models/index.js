@@ -1,4 +1,8 @@
 // src/Models/index.js
+// -----------------------------------------------------------------------------
+// Centralized Model Association Loader
+// -----------------------------------------------------------------------------
+
 import { Session } from "./SessionModel.js";
 import { User } from "./UserModels/UserModel.js";
 import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
@@ -9,18 +13,39 @@ import { IQQuestion } from "./CpsModels/IQQuestion.model.js";
 import { IQChoice } from "./CpsModels/IQChoice.model.js";
 import { IQRubric } from "./CpsModels/IQRubric.model.js";
 
-// helper to avoid double-adding same alias
+// -----------------------------------------------------------------------------
+// Utility: safe association checker
+// -----------------------------------------------------------------------------
 const hasAssoc = (Model, alias) => !!Model.associations?.[alias];
 
-// --- Session associations ---
+// -----------------------------------------------------------------------------
+// SESSION ↔ USER ↔ TOPIC RELATIONSHIPS
+// -----------------------------------------------------------------------------
+
+// Session → User (teacher & student)
 if (!hasAssoc(Session, "teacher")) {
   Session.belongsTo(User, { as: "teacher", foreignKey: "teacher_id" });
 }
+if (!hasAssoc(Session, "student")) {
+  Session.belongsTo(User, { as: "student", foreignKey: "student_id" });
+}
+
+// Session → CatalogueNode (topic)
 if (!hasAssoc(Session, "topic")) {
   Session.belongsTo(CatalogueNode, { as: "topic", foreignKey: "topic_id" });
 }
 
-// --- CPS profile association ---
+// User → Sessions (teaching / attending)
+if (!hasAssoc(User, "taughtSessions")) {
+  User.hasMany(Session, { foreignKey: "teacher_id", as: "taughtSessions" });
+}
+if (!hasAssoc(User, "attendedSessions")) {
+  User.hasMany(Session, { foreignKey: "student_id", as: "attendedSessions" });
+}
+
+// -----------------------------------------------------------------------------
+// CPS PROFILE RELATIONSHIPS
+// -----------------------------------------------------------------------------
 if (!hasAssoc(User, "cpsProfile")) {
   User.hasOne(CpsProfile, { foreignKey: "user_id", as: "cpsProfile" });
 }
@@ -28,7 +53,10 @@ if (!hasAssoc(CpsProfile, "user")) {
   CpsProfile.belongsTo(User, { foreignKey: "user_id", as: "user" });
 }
 
-// --- IQ Test associations ---
+// -----------------------------------------------------------------------------
+// IQ TEST RELATIONSHIPS
+// -----------------------------------------------------------------------------
+
 // Question → Choices
 if (!hasAssoc(IQQuestion, "choices")) {
   IQQuestion.hasMany(IQChoice, {
@@ -67,4 +95,15 @@ if (!hasAssoc(IQRubric, "choice")) {
   });
 }
 
-export { Session, User, CatalogueNode, CpsProfile, IQQuestion, IQChoice, IQRubric };
+// -----------------------------------------------------------------------------
+// EXPORTS
+// -----------------------------------------------------------------------------
+export {
+  Session,
+  User,
+  CatalogueNode,
+  CpsProfile,
+  IQQuestion,
+  IQChoice,
+  IQRubric,
+};

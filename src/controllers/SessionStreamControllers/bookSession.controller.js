@@ -63,9 +63,12 @@ async function getDomainMinRating(topicId) {
   return Number.isFinite(v) && v > 0 ? v : 4;
 }
 
-/** ORM-safe: fetch teacherIds eligible for topic by tier/rating */
-async function getEligibleTeacherIds(topicId, tier, minRating = 4) {
+/** ORM-safe: fetch teacherIds eligible for topic by tier/rating
+ *  Optionally exclude a given userId (for self-booking prevention)
+ */
+async function getEligibleTeacherIds(topicId, tier, minRating = 4, excludeUserId = null) {
   const where = { node_id: topicId };
+
   if (tier === "free") {
     where.tier = "free";
   } else if (tier === "paid") {
@@ -74,9 +77,23 @@ async function getEligibleTeacherIds(topicId, tier, minRating = 4) {
   } else {
     return [];
   }
-  const rows = await Teachertopicstats.findAll({ where, attributes: ["teacherId"], raw: true });
-  return rows.map((r) => r.teacherId);
+
+  const rows = await Teachertopicstats.findAll({
+    where,
+    attributes: ["teacherId"],
+    raw: true,
+  });
+
+  let teacherIds = rows.map((r) => r.teacherId);
+
+  // ✅ New: Exclude the learner if they are also a teacher for the same topic
+  if (excludeUserId && teacherIds.includes(excludeUserId)) {
+    teacherIds = teacherIds.filter((id) => id !== excludeUserId);
+  }
+
+  return teacherIds;
 }
+
 
 /* ============================================================================
    Discovery (listing) endpoints — hard filters on BOTH teacher stats & session row
@@ -88,7 +105,7 @@ export const listFreeSessions = async (req, res) => {
     const topicId = req.query.topicId;
     if (!topicId) return res.status(400).json({ error: true, message: "topicId is required" });
 
-    const teacherIds = await getEligibleTeacherIds(topicId, "free");
+const teacherIds = await getEligibleTeacherIds(req.query.topicId, "free", 4, req.user?.id);
     if (teacherIds.length === 0) return res.status(200).json({ success: true, sessions: [] });
 
     const sessions = await Session.findAll({
@@ -157,15 +174,12 @@ export const listPaidSessions = async (req, res) => {
   }
 };
 
-/* ============================================================================
-   Booking endpoints
-   ============================================================================ */
-
-/** POST /api/session/book  — auto-match FREE */
+/** POST /api/session/book — auto-match FREE */
 export const bookFreeSession = async (req, res) => {
   try {
     const learner_id = req.user?.id;
     const { topic_id } = req.body;
+
     if (!learner_id || !topic_id)
       return res.status(400).json({ error: true, message: "learner_id and topic_id are required" });
 
@@ -177,26 +191,32 @@ export const bookFreeSession = async (req, res) => {
 
     const teacherIds = await getEligibleTeacherIds(topic_id, "free");
     if (teacherIds.length === 0)
-      return res
-        .status(404)
-        .json({ error: true, message: "No free-tier teachers available for this topic yet." });
+      return res.status(404).json({ error: true, message: "No free-tier teachers available yet." });
 
+    // 🔍 get all available slots for all eligible teachers
     const candidates = await Session.findAll({
       where: {
         topic_id,
         status: "available",
-        session_tier: "free",      // 🔒 double-check on row
+        session_tier: "free",
         teacher_id: { [Op.in]: teacherIds },
       },
       attributes: ["session_id", "teacher_id", "scheduled_at", "duration_minutes"],
+      order: [["scheduled_at", "ASC"]],
       raw: true,
     });
     if (candidates.length === 0)
       return res.status(404).json({ error: true, message: "No free-tier slots available yet." });
 
-    let best = null;
-    let bestScore = -Infinity;
-    for (const s of candidates) {
+    const now = new Date();
+    const minStart = new Date(now.getTime() + 30 * 60 * 1000); // ≥30 min from now
+    const validSlots = candidates.filter(c => new Date(c.scheduled_at) > minStart);
+    if (validSlots.length === 0)
+      return res.status(400).json({ error: true, message: "No future slots available." });
+
+    // 🧮 score & sort teachers
+    const scored = [];
+    for (const s of validSlots) {
       const teacher = await User.findByPk(s.teacher_id, {
         attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
         raw: true,
@@ -207,92 +227,86 @@ export const bookFreeSession = async (req, res) => {
         teacher.known_language_ids
       );
       const dist = getDistance(learner.location, teacher.location);
-      const score = scoreTeacher(learner, teacher, mismatch, dist);
-      if (score > bestScore) {
-        bestScore = score;
-        best = s;
+      scored.push({ ...s, score: scoreTeacher(learner, teacher, mismatch, dist) });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    if (scored.length === 0)
+      return res.status(404).json({ error: true, message: "No suitable free slot found." });
+
+    let chosen = null;
+    for (const s of scored) {
+      try {
+        const availSlot = await Session.findOne({
+          where: {
+            teacher_id: s.teacher_id,
+            topic_id,
+            status: "available",
+            session_tier: "free",
+            scheduled_at: { [Op.gt]: now },
+          },
+          order: [["scheduled_at", "ASC"]],
+        });
+        if (!availSlot) continue;
+
+        const proposedStart = new Date(availSlot.scheduled_at);
+        const proposedEnd = new Date(proposedStart.getTime() + 90 * 60000);
+
+        await assertTeacherBuffer({
+          teacherId: s.teacher_id,
+          startAt: proposedStart,
+          durationMinutes: 90,
+          level: "Bridger",
+          excludeSessionId: availSlot.session_id,
+        });
+
+        chosen = { teacher_id: s.teacher_id, proposedStart, proposedEnd, baseId: availSlot.session_id };
+        break; // stop at first passing teacher
+      } catch (e) {
+        // skip teacher if buffer fails
+        continue;
       }
     }
-    if (!best) return res.status(404).json({ error: true, message: "No suitable free slot found" });
 
-    const now = new Date();
-    const minStartUTC = zonedTimeToUtc(new Date(now.getTime() + 30 * 60 * 1000));
+    if (!chosen)
+      return res.status(404).json({ error: true, message: "No valid upcoming slot available." });
+const nextSlot = await Session.findOne({
+  where: { session_id: chosen.baseId },
+});
 
-    // -------------------------------------------
-// 1️⃣ Find teacher’s declared availability
-// -------------------------------------------
-// -------------------------------------------
-// 1️⃣ Pick the teacher’s earliest available slot for that topic
-// -------------------------------------------
-const availSlot = await Session.findOne({
-  where: {
-    teacher_id: best.teacher_id,
-    topic_id,
-    status: "available",
+await Session.update(
+  {
+    student_id: learner_id,
+    teacher_id: nextSlot.teacher_id,
+    status: "upcoming",
     session_tier: "free",
   },
-  order: [["scheduled_at", "ASC"]],
-});
+  { where: { session_id: nextSlot.session_id } }
+);
 
-if (!availSlot) {
-  return res.status(404).json({
-    error: true,
-    message: "This teacher currently has no active availability window.",
-  });
-}
 
-// -------------------------------------------
-// 2️⃣ Compute proposed 90-minute window starting at that availability
-// -------------------------------------------
-const proposedStart = new Date(availSlot.scheduled_at);
-const proposedEnd = new Date(proposedStart.getTime() + 90 * 60000);
-
-// -------------------------------------------
-// 3️⃣ Validate Bridger buffer (reuse your existing service)
-// -------------------------------------------
-await assertTeacherBuffer({
-  teacherId: best.teacher_id,
-  startAt: proposedStart,
-  durationMinutes: 90,
-  level: "Bridger",
-});
-
-// -------------------------------------------
-// 4️⃣ Create new session row (learner-specific booking)
-// -------------------------------------------
-const nextSlot = await Session.create({
-  teacher_id: best.teacher_id,
-  topic_id,
-  scheduled_at: proposedStart,
-  completed_at: proposedEnd,
-  duration_minutes: 90,
-  session_tier: "free",
-  status: "available",
-});
 
     const topic = await CatalogueNode.findByPk(topic_id, { attributes: ["name"], raw: true });
+    const bookedPayload = {
+      learner_id,
+      teacher_id: nextSlot.teacher_id,
+      topic_id,
+      topic: topic?.name || "Unknown",
+      session_id: nextSlot.session_id,
+    };
+    if (BookedSession.rawAttributes.status) bookedPayload.status = "initiated";
+    await BookedSession.create(bookedPayload);
 
-// ✅ check if BookedSession model actually has "status" column before inserting
-const bookedPayload = {
-  learner_id,
-  teacher_id: nextSlot.teacher_id,
-  topic_id,
-  topic: topic?.name || "Unknown",
-  session_id: nextSlot.session_id,
-};
+  await Session.update(
+  {
+    student_id: learner_id,
+    teacher_id: nextSlot.teacher_id,
+    status: "upcoming",
+    session_tier: "free",
+  },
+  { where: { session_id: nextSlot.session_id } }
+);
 
-// add status only if column exists
-if (BookedSession.rawAttributes.status) {
-  bookedPayload.status = "initiated";
-}
-
-await BookedSession.create(bookedPayload);
-
-
-    await Session.update(
-      { student_id: learner_id, status: "upcoming", session_tier: "free" },
-      { where: { session_id: nextSlot.session_id } }
-    );
 
     const teacher = await User.findByPk(nextSlot.teacher_id, {
       attributes: ["firstName", "lastName"],
@@ -314,6 +328,7 @@ await BookedSession.create(bookedPayload);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
 
 /** POST /api/session/book/paid  — book specific PAID session (re-validate gates) */
 export const bookPaidSession = async (req, res) => {
@@ -358,10 +373,16 @@ if (BookedSession.rawAttributes.status) {
 await BookedSession.create(bookedPayload);
 
 
-    await Session.update(
-      { student_id: learner_id, status: "upcoming", session_tier: "paid" },
-      { where: { session_id: s.session_id } }
-    );
+await Session.update(
+  {
+    student_id: learner_id,
+    teacher_id: s.teacher_id,
+    status: "upcoming",
+    session_tier: "paid",
+  },
+  { where: { session_id: s.session_id } }
+);
+
 
     return res.status(200).json({
       success: true,

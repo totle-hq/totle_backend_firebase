@@ -43,7 +43,7 @@ import epicsRoutes from "./routes/Objectives/epic.routes.js";
 import featureRoutes from "./routes/Objectives/feature.routes.js";
 import taskRoutes from "./routes/Objectives/task.routes.js";
 import WeekOverlayRoutes from "./routes/WeekOverlay.routes.js";
-import getPaidTeacher from "./routes/SessionRoutes/PaidSession.routes.js";
+import PaidSessionRoutes from "./routes/SessionRoutes/PaidSession.routes.js";
 import EndeavorRoutes from "./routes/EndeavorRoutes/Endeavor.routes.js";
 import newsfeedRoutes from "./routes/newsfeed.routes.js";
 import departmentRoutes from "./routes/department.routes.js";
@@ -281,7 +281,6 @@ app.use("/api/nucleus", userMangaeRoutes);
 
 app.use("/api/attendance", attendenceRoutes);
 app.use("/api/WeekOverlay", WeekOverlayRoutes);
-app.use("/api/marketplace", getPaidTeacher);
 
 app.use("/catalogue", EndeavorRoutes);
 app.use("/api/chat", chatRoutes);
@@ -300,6 +299,8 @@ app.use("/api/projects", projectTaskRoutes);
 app.use("/api/research", researchRoutes);
 app.use("/api/cps/logs", cpsLogsRoutes);
 app.use("/api", iqQuestionRoutes);
+
+app.use('/api/session/paid', PaidSessionRoutes);
 
 /* -------------------- Health / Diagnostics -------------------- */
 app.get("/", (_req, res) => {

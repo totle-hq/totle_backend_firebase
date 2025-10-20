@@ -101,75 +101,69 @@ export const getStudentSessions = async (req, res) => {
 export const getFirstUpcomingTeacherSession = async (req, res) => {
   try {
     const { id } = req.user;
+    if (!id) return res.status(400).json({ error: true, message: "Teacher ID is required" });
 
-    if (!id) {
-      return res.status(400).json({ error: true, message: "Teacher ID is required" });
-    }
+    const now = new Date();
 
     const session = await Session.findOne({
       where: {
         teacher_id: id,
+        status: { [Op.in]: ["upcoming", "booked"] },
+        scheduled_at: { [Op.gt]: now },
       },
       include: [
         { model: User, as: "student", attributes: ["firstName", "lastName"] },
         {
           model: CatalogueNode,
-          as: "catalogueNode",
-          attributes: ["node_id", "name", "parent_id"],
-          include: [
-            {
-              model: CatalogueNode,
-              as: "parentNode",   // 👈 this is the subject
-              attributes: ["node_id", "name", "parent_id"],
-            }
-          ]
-        }
+          as: "topic",
+          attributes: ["name", "parent_id"],
+          include: [{ model: CatalogueNode, as: "subject", attributes: ["name"] }],
+        },
       ],
       order: [["scheduled_at", "ASC"]],
     });
-    
-    if (!session) {
-      console.warn("⚠️ No upcoming session found for this teacher");
-      return res.status(404).json({ error: true, message: "No upcoming session found" });
-    }
 
-    // let topic = await CatalogueNode.findOne({where: {node_id: session.topic_id}})
+    if (!session)
+      return res.status(404).json({ error: true, message: "No upcoming session found" });
 
     return res.status(200).json({
       success: true,
       session: {
         session_id: session.session_id,
-        studentName: session.student_id
-          ? `${session.student.firstName}`
+        studentName: session.student
+          ? `${session.student.firstName} ${session.student.lastName || ""}`
           : "Unknown",
-        topicName: session.catalogueNode?.name || "Unknown",
-        subject: session.catalogueNode?.parentNode?.name || "Unknown",
-        scheduled_at: session.createdAt,
-      }
+        topicName: session.topic?.name || "Unknown",
+        subject: session.topic?.subject?.name || "Unknown",
+        scheduled_at: session.scheduled_at,
+      },
     });
-
   } catch (err) {
     console.error("❌ Error in getFirstUpcomingTeacherSession:", err);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
 
-
 export const getAllUpcomingTeacherSessions = async (req, res) => {
   try {
-    const { id } = req.user;
-
+    const { id } = req.user; // teacher id from JWT
     if (!id) {
       return res.status(400).json({ error: true, message: "Teacher ID is required" });
     }
 
+    const now = new Date();
+
     const sessions = await Session.findAll({
-      where: { teacher_id: id },
+      where: {
+        teacher_id: id,
+        status: { [Op.in]: ["upcoming", "booked"] },
+        scheduled_at: { [Op.gte]: now }, // ✅ ensure only future sessions
+      },
       include: [
         {
           model: User,
           as: "student",
-          attributes: ["firstName", "lastName"]
+          attributes: ["firstName", "lastName"],
         },
         {
           model: CatalogueNode,
@@ -179,27 +173,29 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
             {
               model: CatalogueNode,
               as: "subject",
-              attributes: ["name"]
-            }
-          ]
-        }
+              attributes: ["name"],
+            },
+          ],
+        },
       ],
-      order: [["createdAt", "ASC"]],
+      order: [["scheduled_at", "ASC"]],
     });
 
+    if (!sessions.length) {
+      return res.status(200).json({ success: true, sessions: [] });
+    }
 
-    const formatted = sessions.map(session => ({
-      session_id: session.id,
-      studentName: session.student
-        ? `${session.student.firstName} ${session.student.lastName}`
-        : "Unknown",
-      topicName: session.topic?.name || "Unknown",
-      subject: session.topic?.subject?.name || "No Subject",
-      scheduled_at: session.createdAt,
+    const formatted = sessions.map((s) => ({
+      session_id: s.session_id,
+      studentName: s.student
+        ? `${s.student.firstName} ${s.student.lastName}`.trim()
+        : "Unassigned",
+      topicName: s.topic?.name || "Unknown",
+      subject: s.topic?.subject?.name || "Unknown",
+      scheduled_at: s.scheduled_at,
     }));
 
     return res.status(200).json({ success: true, sessions: formatted });
-
   } catch (err) {
     console.error("❌ Error in getAllUpcomingTeacherSessions:", err);
     return res.status(500).json({ error: true, message: "Internal server error" });

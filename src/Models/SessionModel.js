@@ -1,8 +1,17 @@
 // src/Models/SessionModel.js
+// -----------------------------------------------------------------------------
+// TOTLE Session Model (Final Fixed Version)
+// -----------------------------------------------------------------------------
+
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
 import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
 import { Teachertopicstats } from "./TeachertopicstatsModel.js";
+import { User } from "./UserModels/UserModel.js";
+
+/* -----------------------------------------------------------------------------
+   Model Definition
+ ----------------------------------------------------------------------------- */
 
 export const Session = sequelize1.define(
   "Session",
@@ -13,52 +22,58 @@ export const Session = sequelize1.define(
       primaryKey: true,
       comment: "Primary key for sessions",
     },
+
     teacher_id: {
       type: DataTypes.UUID,
       allowNull: false,
       comment: "Reference to the teacher conducting the session",
     },
+
     student_id: {
       type: DataTypes.UUID,
       allowNull: true,
       comment: "Reference to the learner attending the session (nullable until booked)",
     },
+
     topic_id: {
       type: DataTypes.UUID,
       allowNull: false,
       comment: "Reference to the CatalogueNode (topic) this session is for",
     },
+
     scheduled_at: {
       type: DataTypes.DATE,
       allowNull: false,
       comment: "Scheduled start time of the session",
     },
+
     completed_at: {
       type: DataTypes.DATE,
       allowNull: true,
-      comment: "Timestamp when the session was completed (actual end, not planned)",
+      comment: "Timestamp when the session was completed (actual end time)",
     },
+
     duration_minutes: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      validate: {
-        min: 1,             // free-hand, but must be positive
-        isInt: true,
-      },
+      validate: { min: 1, isInt: true },
       comment: "Planned or actual session duration in minutes",
     },
+
     session_tier: {
       type: DataTypes.ENUM("free", "paid"),
       allowNull: false,
       defaultValue: "free",
       comment: "Tier of the session (free/paid)",
     },
+
     session_level: {
       type: DataTypes.ENUM("Bridger", "Expert", "Master", "Legend"),
       allowNull: false,
       defaultValue: "Bridger",
       comment: "Level of the session",
     },
+
     status: {
       type: DataTypes.ENUM("available", "booked", "upcoming", "completed", "cancelled"),
       allowNull: false,
@@ -66,7 +81,7 @@ export const Session = sequelize1.define(
       comment: "Lifecycle status of the session",
     },
 
-    // ---- Virtual: expected/planned end time (computed) ----
+    // ---- Virtual computed end time ----
     planned_end_at: {
       type: DataTypes.VIRTUAL,
       get() {
@@ -75,21 +90,17 @@ export const Session = sequelize1.define(
         if (!start || !mins) return null;
         return new Date(new Date(start).getTime() + mins * 60000);
       },
-      comment: "Computed end time: scheduled_at + duration_minutes (not persisted)",
+      comment: "Computed end time = scheduled_at + duration_minutes (not persisted)",
     },
   },
   {
     schema: "user",
     tableName: "sessions",
-    timestamps: true, // createdAt / updatedAt
-    comment: "Stores all teacher–learner sessions with scheduling, tier, and status metadata",
-
-    // ---- Indexes used by buffer checks and listings ----
+    timestamps: true,
+    comment:
+      "Stores all teacher–learner sessions with scheduling, tier, and status metadata",
     indexes: [
-      {
-        name: "sessions_teacher_start_idx",
-        fields: ["teacher_id", "scheduled_at"],
-      },
+      { name: "sessions_teacher_start_idx", fields: ["teacher_id", "scheduled_at"] },
       {
         name: "sessions_teacher_level_start_idx",
         fields: ["teacher_id", "session_level", "scheduled_at"],
@@ -98,25 +109,61 @@ export const Session = sequelize1.define(
   }
 );
 
-/* ---------------- Associations ---------------- */
+/* -----------------------------------------------------------------------------
+   Associations
+ ----------------------------------------------------------------------------- */
 
-// Session → Topic
+// Session → Topic (each session belongs to one CatalogueNode topic)
 Session.belongsTo(CatalogueNode, {
   foreignKey: "topic_id",
   as: "topic",
 });
 
-// Session → TeacherTopicStats (by teacher_id; filtered by node_id in queries)
+// Session → TeacherTopicStats (for level/tier linkage)
 Session.belongsTo(Teachertopicstats, {
-  foreignKey: "teacher_id",   // column on Session
-  targetKey: "teacherId",     // attribute on Teachertopicstats (mapped to DB teacher_id)
+  foreignKey: "teacher_id", // column on Session
+  targetKey: "teacherId", // attribute on Teachertopicstats
   as: "teacherTopicStats",
 });
 
-/* ------------- Hooks ------------- */
+// Session → Teacher (User)
+Session.belongsTo(User, {
+  foreignKey: "teacher_id",
+  as: "teacher",
+});
+
+// Session → Student (User)
+Session.belongsTo(User, {
+  foreignKey: "student_id",
+  as: "student",
+});
+
+/* ---------------- Inverse Associations (critical for proper JOINs) ---------------- */
+
+// User → Sessions taught
+User.hasMany(Session, {
+  foreignKey: "teacher_id",
+  as: "sessionsTaught",
+});
+
+// User → Sessions attended
+User.hasMany(Session, {
+  foreignKey: "student_id",
+  as: "sessionsAttended",
+});
+
+// CatalogueNode → Sessions
+CatalogueNode.hasMany(Session, {
+  foreignKey: "topic_id",
+  as: "sessions",
+});
+
+/* -----------------------------------------------------------------------------
+   Hooks
+ ----------------------------------------------------------------------------- */
 /**
  * Auto-fill session_tier & session_level from teacher’s topic stats at creation.
- * NOTE: Use model attribute names (teacherId), not raw column names.
+ * This ensures consistency between a teacher’s tier/level and session attributes.
  */
 Session.beforeCreate(async (session) => {
   try {
