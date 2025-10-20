@@ -144,7 +144,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
           : "Unknown",
         topicName: session.catalogueNode?.name || "Unknown",
         subject: session.catalogueNode?.parentNode?.name || "Unknown",
-        scheduled_at: session.createdAt,
+        scheduled_at: session.scheduled_at,
       }
     });
 

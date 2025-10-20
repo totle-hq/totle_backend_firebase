@@ -89,7 +89,7 @@ export const bookFreeSession = async (req, res) => {
     });
 
     console.log(`📊 Found ${availableSessions.length} available sessions`);
-    if (availableSessions.length < 2) {
+    if (availableSessions.length < 1) {
       console.warn("⚠️ Not enough available sessions for booking");
       return res.status(404).json({
         error: true,
