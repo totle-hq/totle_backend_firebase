@@ -361,8 +361,8 @@ const startServer = async () => {
 
     // Socket.IO with strict CORS (must mirror HTTP CORS)
     const io = new Server(server, {
-      path: "/socket.io",
-      transports: ["websocket", "polling"], // client sends EIO=4 polling fallback
+      // path: "/socket.io",
+      // transports: ["websocket", "polling"], // client sends EIO=4 polling fallback
       cors: {
         origin: (origin, cb) => {
           if (!origin) return cb(null, true); // server-to-server/no-origin
@@ -413,8 +413,12 @@ const startServer = async () => {
       console.log("🔄 Redis subscriber active for cps:observatory:update");
     }
 
-    // Make IO globally available to controllers/services
-    app.set("io", io);
+  // Forward signal (offer, answer, candidate)
+  // socket.on("signal", ({ sessionId, userId, type, data }) => {
+  //   if (!sessionId) return;
+  //   console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
+  //   socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
+  // });
 
     io.on("connection", (socket) => {
       console.log("🔌 WebSocket connected:", socket.id);
@@ -453,8 +457,8 @@ const startServer = async () => {
       console.error("UncaughtException:", err);
     });
 
-    server.listen(PORT, () => {
-      console.log(`🚀 Server running with WebSocket on port ${PORT}`);
+    server.listen(PORT,'0.0.0.0', () => {
+      console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
     });
   } catch (error) {
     console.error("❌ Error during database setup or server start:", error);

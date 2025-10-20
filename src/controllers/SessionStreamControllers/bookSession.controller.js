@@ -189,6 +189,7 @@ export const bookFreeSession = async (req, res) => {
     });
     if (!learner) return res.status(404).json({ error: true, message: "Learner not found" });
 
+<<<<<<< HEAD
     const teacherIds = await getEligibleTeacherIds(topic_id, "free");
     if (teacherIds.length === 0)
       return res.status(404).json({ error: true, message: "No free-tier teachers available yet." });
@@ -220,6 +221,14 @@ export const bookFreeSession = async (req, res) => {
       const teacher = await User.findByPk(s.teacher_id, {
         attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
         raw: true,
+=======
+    console.log(`📊 Found ${availableSessions.length} available sessions`);
+    if (availableSessions.length < 1) {
+      console.warn("⚠️ Not enough available sessions for booking");
+      return res.status(404).json({
+        error: true,
+        message: "Bridgers aren't available for this session yet",
+>>>>>>> GetStreamTesting
       });
       if (!teacher) continue;
       const mismatch = calculateMismatchPercentage(
