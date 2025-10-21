@@ -3,12 +3,13 @@ import { User } from "../Models/UserModels/UserModel.js";
 import { Language } from "../Models/LanguageModel.js";
 import UserDomainProgress from "../Models/progressModels.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
-import { BookedSession } from "../Models/BookedSession.js";
+// import { BookedSession } from "../Models/BookedSession.js";
 import { Session } from "../Models/SessionModel.js";
 import { Test } from "../Models/test.model.js";
 import { TestFlag } from "../Models/TestflagModel.js";
 import Feedback from "../Models/feedbackModels.js";
 import { SessionAttendance } from "../Models/SessionAttendance.js";
+import { CatalogueNode } from "../Models/index.js";
 
 export const getAllUserDetails = async (req, res) => {
   try {
@@ -126,9 +127,9 @@ const { count: totalUsers, rows: users } = await User.findAndCountAll({
         where: { teacherId: { [Op.in]: userIds } },
         attributes: ["teacherId", "tier", "sessionCount"],
       }),
-      BookedSession.findAll({
-        where: { learner_id: { [Op.in]: userIds } },
-        attributes: ["learner_id"],
+      Session.findAll({
+        where: { student_id: { [Op.in]: userIds } },
+        attributes: ["student_id"],
       }),
     ]);
 
@@ -362,6 +363,61 @@ export const setUserBlacklistOrActive = async (req, res) => {
     return res.status(500).json({ message: "Internal server error." });
   }
 };
+
+
+// GET /api/admin/sessions
+export const nucleusSessionDetails = async (req, res) => {
+  try {
+    const sessions = await Session.findAll({
+      include: [
+        {
+          model: CatalogueNode,
+          as: "catalogueNode", // alias used in associations.js
+          attributes: ["node_id", "name", "address_of_node"],
+        },
+        {
+          model: User,
+          as: "teacher",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+        {
+          model: User,
+          as: "student",
+          attributes: ["id", "firstName", "lastName", "email"],
+        },
+      ],
+      order: [["scheduled_at", "DESC"]],
+    });
+
+    const formatted = sessions.map((s) => ({
+      sessionId: s.session_id,
+      topicId: s.catalogueNode?.node_id || null,
+      topicName: s.catalogueNode?.name || null,
+      topicPath: s.catalogueNode?.address_of_node || null,
+
+      scheduledAt: s.scheduled_at,
+      durationMinutes: s.duration_minutes,
+      plannedEndAt: s.planned_end_at, // virtual computed field
+      sessionTier: s.session_tier,
+      sessionLevel: s.session_level,
+      status: s.status,
+
+      learnerId: s.student?.id || null,
+      learnerName: s.student ? `${s.student.firstName}` : null,
+      learnerEmail: s.student?.email || null,
+
+      teacherId: s.teacher?.id || null,
+      teacherName: s.teacher ? `${s.teacher.firstName}` : null,
+      teacherEmail: s.teacher?.email || null,
+    }));
+
+    res.status(200).json({ success: true, data: formatted });
+  } catch (err) {
+    console.error("❌ Error fetching session details:", err);
+    res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+};
+
 
 // export const deleteUser = async (req, res) => {
 //   try {

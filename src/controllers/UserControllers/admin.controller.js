@@ -24,7 +24,6 @@ import { Op, Sequelize } from 'sequelize';
 import { v4 as uuidv4 } from 'uuid';
 import { UserDepartment } from '../../Models/UserModels/UserDepartment.js';
 import { is } from 'useragent';
-import { BookedSession } from '../../Models/BookedSession.js';
 import { sequelize1 } from '../../config/sequelize.js';
 import { FeedbackSummary } from '../../Models/feedbacksummary.js';
 import Feedback from '../../Models/feedbackModels.js';
@@ -33,6 +32,7 @@ import { CatalogueNode } from '../../Models/CatalogModels/catalogueNode.model.js
 import { CpsProfile } from '../../Models/CpsProfile.model.js';
 import { runDbSync } from '../../config/syncDb.js';
 import { Test } from '../../Models/test.model.js';
+import { Session } from 'inspector/promises';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
@@ -1820,7 +1820,7 @@ export const fetchChildrenWithStats = async (req, res) => {
     const detailedChildren = await Promise.all(
       children.map(async (node) => {
         // total sessions
-        const totalSessions = await BookedSession.count({
+        const totalSessions = await Session.count({
           where: { topic_id: node.node_id },
         });
 
@@ -1848,28 +1848,28 @@ export const fetchChildrenWithStats = async (req, res) => {
         let result = { ...node, totalSessions, avgRating };
 
         // 🟡 Tier stats (for all nodes, including topics)
-        const tierStats = await BookedSession.findAll({
+        const tierStats = await Session.findAll({
           where: { topic_id: node.node_id },
           attributes: [
             [Sequelize.col("teacherStats.level"), "level"],
-            [Sequelize.fn("COUNT", Sequelize.col("BookedSession.id")), "total_sessions"],
+            [Sequelize.fn("COUNT", Sequelize.col("Session.id")), "total_sessions"],
           ],
           include: [
             {
               model: Teachertopicstats,
-              as: "teacherStats", // ✅ correct alias from BookedSession side
+              as: "teacherStats", // ✅ correct alias from Session side
               attributes: [],
               required: true,
               on: {
                 node_id: Sequelize.where(
                   Sequelize.col("teacherStats.node_id"),
                   "=",
-                  Sequelize.col("BookedSession.topic_id")
+                  Sequelize.col("Session.topic_id")
                 ),
                 teacher_id: Sequelize.where(
                   Sequelize.col("teacherStats.teacher_id"),
                   "=",
-                  Sequelize.col("BookedSession.teacher_id")
+                  Sequelize.col("Session.teacher_id")
                 ),
               },
             },
@@ -1892,11 +1892,11 @@ export const fetchChildrenWithStats = async (req, res) => {
                 attributes: ["firstName", "lastName", "profilePictureUrl"],
               },
               {
-                model: BookedSession,
-                as: "bookedSession", // ✅ correct alias from Teachertopicstats side
+                model: Session,
+                as: "Session", // ✅ correct alias from Teachertopicstats side
                 required: false,
                 attributes: [
-                  [Sequelize.fn("COUNT", Sequelize.col("bookedSession.id")), "totalSessions"],
+                  [Sequelize.fn("COUNT", Sequelize.col("Session.id")), "totalSessions"],
                 ],
                 where: { topic_id: node.node_id },
               },

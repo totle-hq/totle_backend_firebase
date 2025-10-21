@@ -1,11 +1,13 @@
 import { Op } from "sequelize";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { Session } from "../../Models/SessionModel.js";
-import { BookedSession } from "../../Models/BookedSession.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
 import { findAvailableSlot } from "../../services/sessionAvailability.service.js";
 import { assertTeacherBuffer } from "../../services/session.service.js";
+import TeacherAvailability from "../../Models/TeacherAvailability.js";
+import { format, addDays } from "date-fns";
+import { sequelize1 } from "../../config/sequelize.js";
 
 /* ============================================================================
    Utilities
@@ -174,141 +176,168 @@ export const listPaidSessions = async (req, res) => {
   }
 };
 
+// const t = await sequelize1.transaction();
+
 /** POST /api/session/book — auto-match FREE */
 export const bookFreeSession = async (req, res) => {
   try {
     const learner_id = req.user?.id;
     const { topic_id } = req.body;
 
-    if (!learner_id || !topic_id)
+    if (!learner_id || !topic_id) {
       return res.status(400).json({ error: true, message: "learner_id and topic_id are required" });
+    }
 
     const learner = await User.findByPk(learner_id, {
       attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
       raw: true,
     });
+
     if (!learner) return res.status(404).json({ error: true, message: "Learner not found" });
 
     const teacherIds = await getEligibleTeacherIds(topic_id, "free");
-    if (teacherIds.length === 0)
-      return res.status(404).json({ error: true, message: "No free-tier teachers available yet." });
+    const filteredTeacherIds = teacherIds.filter(id => id !== learner_id);
 
-    // 🔍 get all available slots for all eligible teachers
-    const candidates = await Session.findAll({
-      where: {
-        topic_id,
-        status: "available",
-        session_tier: "free",
-        teacher_id: { [Op.in]: teacherIds },
-      },
-      attributes: ["session_id", "teacher_id", "scheduled_at", "duration_minutes"],
-      order: [["scheduled_at", "ASC"]],
-      raw: true,
-    });
-    if (candidates.length === 0)
-      return res.status(404).json({ error: true, message: "No free-tier slots available yet." });
-
-    const now = new Date();
-    const minStart = new Date(now.getTime() + 30 * 60 * 1000); // ≥30 min from now
-    const validSlots = candidates.filter(c => new Date(c.scheduled_at) > minStart);
-    if (validSlots.length === 0)
-      return res.status(400).json({ error: true, message: "No future slots available." });
-
-    // 🧮 score & sort teachers
-    const scored = [];
-    for (const s of validSlots) {
-      const teacher = await User.findByPk(s.teacher_id, {
-        attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
-        raw: true,
-      });
-      if (!teacher) continue;
-      const mismatch = calculateMismatchPercentage(
-        learner.known_language_ids,
-        teacher.known_language_ids
-      );
-      const dist = getDistance(learner.location, teacher.location);
-      scored.push({ ...s, score: scoreTeacher(learner, teacher, mismatch, dist) });
+    if (filteredTeacherIds.length === 0) {
+      return res.status(404).json({ error: true, message: "No teachers available." });
     }
 
-    scored.sort((a, b) => b.score - a.score);
-    if (scored.length === 0)
-      return res.status(404).json({ error: true, message: "No suitable free slot found." });
+    const now = new Date();
+    const minStart = new Date(now.getTime() + 30 * 60000); // 30 min from now
+    const today = format(now, "yyyy-MM-dd");
 
-    let chosen = null;
-    for (const s of scored) {
-      try {
-        const availSlot = await Session.findOne({
-          where: {
-            teacher_id: s.teacher_id,
-            topic_id,
-            status: "available",
-            session_tier: "free",
-            scheduled_at: { [Op.gt]: now },
+    // 1️⃣ Get today's and tomorrow's availability
+    const allAvailabilities = await TeacherAvailability.findAll({
+      where: {
+        teacher_id: { [Op.in]: filteredTeacherIds },
+        [Op.or]: [
+          { is_recurring: true },
+          {
+            is_recurring: false,
+            available_date: {
+              [Op.in]: [today, format(addDays(now, 1), "yyyy-MM-dd")],
+            },
           },
-          order: [["scheduled_at", "ASC"]],
+        ],
+      },
+      raw: true,
+    });
+
+    const slots = [];
+
+    for (const avail of allAvailabilities) {
+      const daysToCheck = avail.is_recurring
+        ? [0, 1, 2, 3, 4, 5, 6]
+        : [0]; // one-time availability
+
+      for (const offset of daysToCheck) {
+        const dateToCheck = avail.is_recurring
+          ? addDays(now, offset)
+          : new Date(avail.available_date);
+
+        const dayName = format(dateToCheck, "EEEE");
+        if (avail.is_recurring && avail.day_of_week !== dayName) continue;
+
+        const dateStr = format(dateToCheck, "yyyy-MM-dd");
+        const start = new Date(`${dateStr}T${avail.start_time}+05:30`);
+        let end = new Date(`${dateStr}T${avail.end_time}+05:30`);
+        if (end <= start) end.setDate(end.getDate() + 1);
+
+        if (start < minStart) continue;
+
+        const duration = (end - start) / 60000;
+        if (duration < 90) continue;
+
+        slots.push({
+          teacher_id: avail.teacher_id,
+          scheduled_at: start,
+          completed_at: end,
+          duration_minutes: Math.round(duration),
         });
-        if (!availSlot) continue;
-
-        const proposedStart = new Date(availSlot.scheduled_at);
-        const proposedEnd = new Date(proposedStart.getTime() + 90 * 60000);
-
-        await assertTeacherBuffer({
-          teacherId: s.teacher_id,
-          startAt: proposedStart,
-          durationMinutes: 90,
-          level: "Bridger",
-          excludeSessionId: availSlot.session_id,
-        });
-
-        chosen = { teacher_id: s.teacher_id, proposedStart, proposedEnd, baseId: availSlot.session_id };
-        break; // stop at first passing teacher
-      } catch (e) {
-        // skip teacher if buffer fails
-        continue;
       }
     }
 
-    if (!chosen)
-      return res.status(404).json({ error: true, message: "No valid upcoming slot available." });
-const nextSlot = await Session.findOne({
-  where: { session_id: chosen.baseId },
-});
+    if (slots.length === 0) {
+      return res.status(400).json({ error: true, message: "No valid slots found." });
+    }
 
-await Session.update(
-  {
-    student_id: learner_id,
-    teacher_id: nextSlot.teacher_id,
-    status: "upcoming",
-    session_tier: "free",
-  },
-  { where: { session_id: nextSlot.session_id } }
-);
+    const validSlots = [];
 
+    for (const slot of slots) {
+      const { teacher_id, scheduled_at, completed_at } = slot;
 
+      // Check buffer: No overlapping session ±30min
+      const bufferStart = new Date(scheduled_at.getTime() - 30 * 60000);
+      const bufferEnd = new Date(completed_at.getTime() + 30 * 60000);
 
-    const topic = await CatalogueNode.findByPk(topic_id, { attributes: ["name"], raw: true });
-    const bookedPayload = {
-      learner_id,
-      teacher_id: nextSlot.teacher_id,
+      const overlap = await Session.findOne({
+        where: {
+          teacher_id,
+          status: { [Op.in]: ["booked", "upcoming"] },
+          [Op.or]: [
+            {
+              scheduled_at: { [Op.between]: [bufferStart, bufferEnd] },
+            },
+            {
+              completed_at: { [Op.between]: [bufferStart, bufferEnd] },
+            },
+            {
+              scheduled_at: { [Op.lte]: bufferStart },
+              completed_at: { [Op.gte]: bufferEnd },
+            },
+          ],
+        },
+      });
+
+      if (!overlap) {
+        validSlots.push(slot);
+      }
+    }
+
+    if (validSlots.length === 0) {
+      return res.status(400).json({ error: true, message: "No valid slots after buffer filtering." });
+    }
+
+    // Score by language match + distance
+    const scored = [];
+    for (const slot of validSlots) {
+      const teacher = await User.findByPk(slot.teacher_id, {
+        attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
+        raw: true,
+      });
+
+      const mismatch = calculateMismatchPercentage(learner.known_language_ids, teacher.known_language_ids);
+      const dist = getDistance(learner.location, teacher.location);
+
+      scored.push({
+        ...slot,
+        score: scoreTeacher(learner, teacher, mismatch, dist),
+      });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    const selected = scored[0];
+
+    // 🔨 Create the session now
+    const session = await Session.create({
       topic_id,
-      topic: topic?.name || "Unknown",
-      session_id: nextSlot.session_id,
-    };
-    if (BookedSession.rawAttributes.status) bookedPayload.status = "initiated";
-    await BookedSession.create(bookedPayload);
+      teacher_id: selected.teacher_id,
+      student_id: learner_id,
+      scheduled_at: selected.scheduled_at,
+      completed_at: selected.completed_at,
+      duration_minutes: selected.duration_minutes,
+      session_tier: "free",
+      status: "upcoming",
+    });
 
-  await Session.update(
-  {
-    student_id: learner_id,
-    teacher_id: nextSlot.teacher_id,
-    status: "upcoming",
-    session_tier: "free",
-  },
-  { where: { session_id: nextSlot.session_id } }
-);
+    await updateAvailabilityAfterBooking(session);
+    // await t.commit();
+    const topic = await CatalogueNode.findByPk(topic_id, {
+      attributes: ["name"],
+      raw: true,
+    });
 
-
-    const teacher = await User.findByPk(nextSlot.teacher_id, {
+    const teacher = await User.findByPk(selected.teacher_id, {
       attributes: ["firstName", "lastName"],
       raw: true,
     });
@@ -317,16 +346,116 @@ await Session.update(
       success: true,
       message: "Free-tier session booked successfully",
       data: {
-        sessionId: nextSlot.session_id,
+        sessionId: session.session_id,
         teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
         topicName: topic?.name || "Unknown",
-        scheduledAt: new Date(nextSlot.scheduled_at).toLocaleString("en-IN"),
+        scheduledAt: selected.scheduled_at.toLocaleString("en-IN"),
       },
     });
   } catch (err) {
     console.error("❌ bookFreeSession:", err);
+    // await t.rollback();
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
+};
+
+export const updateAvailabilityAfterBooking = async (session) => {
+  const { teacher_id, scheduled_at, completed_at } = session;
+
+  const dayOfWeek = format(scheduled_at, "EEEE");
+  const dateKey = format(scheduled_at, "yyyy-MM-dd");
+
+  // 1️⃣ Find matching availability
+  const availability = await TeacherAvailability.findOne({
+    where: {
+      teacher_id,
+      is_active: true,
+      [Op.or]: [
+        { is_recurring: true, day_of_week: dayOfWeek },
+        { is_recurring: false, available_date: dateKey },
+      ],
+    },
+    order: [["is_recurring", "ASC"]], // Non-recurring takes priority
+  });
+
+
+  if (!availability) {
+    console.warn("⚠️ No availability found for teacher to update.");
+    return;
+  }
+
+  const [availStartH, availStartM] = availability.start_time.split(":").map(Number);
+  const [availEndH, availEndM] = availability.end_time.split(":").map(Number);
+
+  const availStartMin = availStartH * 60 + availStartM;
+  const availEndMin = availEndH * 60 + availEndM;
+
+  const slotStartMin = Math.floor((scheduled_at.getHours() * 60) + scheduled_at.getMinutes());
+  const slotEndMin = Math.floor((completed_at.getHours() * 60) + completed_at.getMinutes());
+
+
+  const toTimeStr = (min) =>
+    `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}:00`;
+
+  // 🟢 Scenario 1: Fully consumed
+  if (slotStartMin <= availStartMin && slotEndMin >= availEndMin) {
+    await TeacherAvailability.update(
+      { is_active: false },
+      { where: { availability_id: availability.availability_id } }
+    );
+    console.log("🧹 Soft-deleted availability (fully consumed)");
+    return;
+  }
+
+  // 🟢 Scenario 2: Booking at start
+  if (slotStartMin === availStartMin && slotEndMin < availEndMin) {
+    const newStart = toTimeStr(slotEndMin);
+    await TeacherAvailability.update(
+      { start_time: newStart },
+      { where: { availability_id: availability.availability_id } }
+    );
+    console.log("✂️ Trimmed start of availability to:", newStart);
+    return;
+  }
+
+  // 🟢 Scenario 3: Booking at end
+  if (slotStartMin > availStartMin && slotEndMin === availEndMin) {
+    const newEnd = toTimeStr(slotStartMin);
+    await TeacherAvailability.update(
+      { end_time: newEnd },
+      { where: { availability_id: availability.availability_id } }
+    );
+    console.log("✂️ Trimmed end of availability to:", newEnd);
+    return;
+  }
+
+  // 🟢 Scenario 4: Booking in the middle
+  if (slotStartMin > availStartMin && slotEndMin < availEndMin) {
+    const newEnd = toTimeStr(slotStartMin);
+    const newStart = toTimeStr(slotEndMin);
+
+    // First, update current availability (trim end)
+    await TeacherAvailability.update(
+      { end_time: newEnd },
+      { where: { availability_id: availability.availability_id } }
+    );
+
+    // Then, create new availability for remaining time
+    await TeacherAvailability.create({
+      teacher_id,
+      day_of_week: availability.day_of_week,
+      start_time: newStart,
+      end_time: availability.end_time,
+      is_recurring: availability.is_recurring,
+      available_date: availability.available_date || null,
+      is_active: true,
+    });
+
+    console.log("🔀 Split availability into two:", newEnd, "and", newStart);
+    return;
+  }
+
+  console.warn("❌ Booking doesn't match any known trimming pattern. Skipping update.");
 };
 
 
@@ -367,10 +496,10 @@ const bookedPayload = {
   topic: topic?.name || "Unknown",
   session_id: s.session_id,
 };
-if (BookedSession.rawAttributes.status) {
+if (Session.rawAttributes.status) {
   bookedPayload.status = "initiated";
 }
-await BookedSession.create(bookedPayload);
+await Session.create(bookedPayload);
 
 
 await Session.update(

@@ -6,7 +6,6 @@ import { CpsProfile } from "../Models/CpsProfile.model.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { Test } from "../Models/test.model.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
-import { BookedSession } from "../Models/BookedSession.js";
 
 const router = express.Router();
 

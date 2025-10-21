@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { Op } from "sequelize";
 import { User } from "../Models/UserModels/UserModel.js";
 import { Session } from "../Models/SessionModel.js";
-import { BookedSession } from "../Models/BookedSession.js";
+// import { BookedSession } from "../Models/BookedSession.js";
 import { Payment } from "../Models/PaymentModels.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { Language } from "../Models/LanguageModel.js";
@@ -587,8 +587,8 @@ export const confirmBooking = async (req, res) => {
 
     // ✅ Create BookedSession record (matching your model structure)
     try {
-      await BookedSession.create({
-        learner_id: user_id,
+      await Session.create({
+        student_id: user_id,
         teacher_id: session.teacher_id,
         topic_id: session.topic_id,
         topic: topicName,

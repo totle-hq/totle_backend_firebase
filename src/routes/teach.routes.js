@@ -11,7 +11,7 @@ import authMiddleware from "../middlewares/authMiddleware.js";
 import {
   // Availability core
   getAvailabilityChart,
-  offerSlot,
+  setTeacherAvailability,
   updateAvailabilitySlot,
   deleteAvailabilitySlot,
 
@@ -56,7 +56,7 @@ router.get("/upcomming-sessions", authMiddleware, getUpcomingBookedSessions);
 /* ---------------------------- Availability UI ---------------------------- */
 // NOTE: Spelling preserved for backward compatibility: "availibity-chart"
 router.get("/availibity-chart", authMiddleware, getAvailabilityChart);
-router.post("/offer-slot", authMiddleware, offerSlot);
+router.post("/offer-slot", authMiddleware, setTeacherAvailability);
 router.put("/:id", authMiddleware, updateAvailabilitySlot);
 router.delete("/:id", authMiddleware, deleteAvailabilitySlot);
 

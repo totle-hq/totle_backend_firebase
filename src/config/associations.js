@@ -18,7 +18,7 @@ import { TestFlag } from "../Models/TestflagModel.js";
 import { Test } from "../Models/test.model.js";
 import { SupportQueriesModel } from "../Models/SupportModels/SupportQueriesModel.js";
 import { Session } from "../Models/SessionModel.js";
-import { BookedSession } from "../Models/BookedSession.js";
+// import { BookedSession } from "../Models/BookedSession.js";
 import Feedback from "../Models/feedbackModels.js";
 import { Role } from "../Models/UserModels/Roles.Model.js";
 import { Payment } from "../Models/PaymentModels.js";
@@ -27,6 +27,7 @@ import { FeedbackSummary } from "../Models/feedbacksummary.js";
 // CPS / Rubrics
 import { CpsProfile } from "../Models/CpsProfile.model.js";
 import { TestItemRubric } from "../Models/TestItemRubric.model.js";
+import  TeacherAvailability  from "../Models/TeacherAvailability.js";
 
 const defineRelationships = () => {
   /* =========================
@@ -166,6 +167,22 @@ const defineRelationships = () => {
     Survey.belongsTo(Admin, { foreignKey: "adminId", as: "admin" });
   }
 
+    // User ↔ TeacherAvailability
+  if (!User.associations?.availabilities) {
+    User.hasMany(TeacherAvailability, {
+      foreignKey: "teacher_id",
+      as: "availabilities",
+      allowNull: true,
+    });
+  }
+
+  if (!TeacherAvailability.associations?.teacher) {
+    TeacherAvailability.belongsTo(User, {
+      foreignKey: "teacher_id",
+      as: "teacher",
+    });
+  }
+
   /* =========================
    * Departments / Roles
    * ========================= */
@@ -266,18 +283,18 @@ const defineRelationships = () => {
     CatalogueNode.hasMany(Session, { foreignKey: "topic_id", as: "sessions", onDelete: "CASCADE" });
   }
 
-  if (!BookedSession.associations?.student) {
-    BookedSession.belongsTo(User, { foreignKey: "learner_id", as: "student", onDelete: "CASCADE" });
-  }
-  if (!BookedSession.associations?.teacher) {
-    BookedSession.belongsTo(User, { foreignKey: "teacher_id", as: "teacher", onDelete: "CASCADE" });
-  }
-  if (!BookedSession.associations?.bookedTopic) {
-    BookedSession.belongsTo(CatalogueNode, { foreignKey: "topic_id", as: "bookedTopic", onDelete: "CASCADE" });
-  }
-  if (!CatalogueNode.associations?.bookedSessions) {
-    CatalogueNode.hasMany(BookedSession, { foreignKey: "topic_id", as: "bookedSessions", onDelete: "CASCADE" });
-  }
+  // if (!BookedSession.associations?.student) {
+  //   BookedSession.belongsTo(User, { foreignKey: "learner_id", as: "student", onDelete: "CASCADE" });
+  // }
+  // if (!BookedSession.associations?.teacher) {
+  //   BookedSession.belongsTo(User, { foreignKey: "teacher_id", as: "teacher", onDelete: "CASCADE" });
+  // }
+  // if (!BookedSession.associations?.bookedTopic) {
+  //   BookedSession.belongsTo(CatalogueNode, { foreignKey: "topic_id", as: "bookedTopic", onDelete: "CASCADE" });
+  // }
+  // if (!CatalogueNode.associations?.bookedSessions) {
+  //   CatalogueNode.hasMany(BookedSession, { foreignKey: "topic_id", as: "bookedSessions", onDelete: "CASCADE" });
+  // }
 
   if (!Session.associations?.feedbacks) {
     Session.hasMany(Feedback, { foreignKey: "session_id", as: "feedbacks", onDelete: "CASCADE", onUpdate: "CASCADE" });
@@ -326,23 +343,24 @@ const defineRelationships = () => {
   if (!TestItemRubric.associations?.test) {
     TestItemRubric.belongsTo(Test, { foreignKey: "test_id", as: "test", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
+  
 
-  if (!BookedSession.associations?.teacherStats) {
-    BookedSession.hasOne(Teachertopicstats, {
-      foreignKey: "teacher_id",
-      sourceKey: "teacher_id",
-      as: "teacherStats",
-      constraints: false
-    });
-  }
-  if (!Teachertopicstats.associations?.bookedSession) {
-    Teachertopicstats.belongsTo(BookedSession, {
-      foreignKey: "teacher_id",
-      targetKey: "teacher_id",
-      as: "bookedSession",
-      constraints: false
-    });
-  }
+  // if (!BookedSession.associations?.teacherStats) {
+  //   BookedSession.hasOne(Teachertopicstats, {
+  //     foreignKey: "teacher_id",
+  //     sourceKey: "teacher_id",
+  //     as: "teacherStats",
+  //     constraints: false
+  //   });
+  // }
+  // if (!Teachertopicstats.associations?.bookedSession) {
+  //   Teachertopicstats.belongsTo(BookedSession, {
+  //     foreignKey: "teacher_id",
+  //     targetKey: "teacher_id",
+  //     as: "bookedSession",
+  //     constraints: false
+  //   });
+  // }
   if (!Teachertopicstats.associations?.feedbacks) {
     Teachertopicstats.hasMany(Feedback, {
       foreignKey: "bridger_id",

@@ -1,7 +1,7 @@
 import { Session } from "../../Models/SessionModel.js";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
-import { BookedSession } from "../../Models/BookedSession.js";
+// import { BookedSession } from "../../Models/BookedSession.js";
 import { Op } from "sequelize";
 
 // controllers/session.controller.js

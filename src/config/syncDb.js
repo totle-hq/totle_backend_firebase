@@ -9,7 +9,7 @@ import { Sequelize, QueryTypes } from 'sequelize';
 import dotenv from 'dotenv';
 
 import { Test } from '../Models/test.model.js';
-import { BookedSession } from '../Models/BookedSession.js';
+// import { BookedSession } from '../Models/BookedSession.js';
 import { SupportQueriesMasterSeeder } from '../seeders/SupportQueriesSeeder.js';
 import { ProgressionThresholds } from '../Models/progressionThresholds.model.js';
 import '../Models/CatalogModels/catalogueNode.model.js';
@@ -218,10 +218,10 @@ initCpsModels();
 
     const { CatalogueNode } = await import('../Models/CatalogModels/catalogueNode.model.js');
     await safeSync(CatalogueNode, { name: 'CatalogueNode' });
-
+    await safeSync(TeacherAvailability, { name: 'TeacherAvailability' });
+    console.log('✅ TeacherAvailability table synced successfully!');
     await Department.sync({ alter: true });
 
-    await safeSync(BookedSession, { name: 'BookedSession' });
 
   // ✅ Sync CPS profiles under cps schema (permanent deep fix, schema-level isolation)
 console.log("🧠 Preparing CPS schema and enums before syncing CpsProfile...");
@@ -300,6 +300,7 @@ export const runDbSync = async (isSyncNeeded = false) => {
 
 import path from "path";
 import url from "url";
+import TeacherAvailability from "../Models/TeacherAvailability.js";
 
 const thisFile = url.fileURLToPath(import.meta.url);
 const entryFile = path.resolve(process.argv[1] || "");
