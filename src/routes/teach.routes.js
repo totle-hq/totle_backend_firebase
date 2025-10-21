@@ -31,6 +31,8 @@ import {
 
   // Moderation
   reportSession,
+    getAllTeacherAvailabilities,
+  updateTeacherAvailabilityAdmin,
 } from "../controllers/teach.contorller.js";
 
 // ✅ Get this from its own controller (do NOT import from teach.contorller.js)
@@ -62,5 +64,16 @@ router.delete("/:id", authMiddleware, deleteAvailabilitySlot);
 router.post("/validate-eligibility", authMiddleware, validateEligibility);
 router.get("/feedback/teacher/summary", authMiddleware, getFeedbackSummary);
 router.post("/report-session", authMiddleware, reportSession);
+router.get(
+  "/admin/availability/all",
+  authMiddleware,
+  getAllTeacherAvailabilities
+);
 
+// Overwrite / edit specific teacher slot by session_id
+router.put(
+  "/admin/availability/:id",
+  authMiddleware,
+  updateTeacherAvailabilityAdmin
+);
 export default router;

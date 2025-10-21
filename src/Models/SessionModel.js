@@ -119,6 +119,13 @@ Session.belongsTo(CatalogueNode, {
   as: "topic",
 });
 
+// 🔁 Compatibility alias for legacy controllers
+Session.belongsTo(CatalogueNode, {
+  foreignKey: "topic_id",
+  as: "Topic",
+});
+
+
 // Session → TeacherTopicStats (for level/tier linkage)
 Session.belongsTo(Teachertopicstats, {
   foreignKey: "teacher_id", // column on Session

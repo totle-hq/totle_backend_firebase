@@ -700,3 +700,145 @@ export const getMyTopicsWithStats = async (req, res) => {
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
+export const getAllTeacherAvailabilities = async (req, res) => {
+  try {
+        console.log("🔍 AUTH USER:", req.user);
+
+    // temporary trace
+    if (!req.user) {
+      return res.status(401).json({ error: "Missing user from token" });
+    }
+
+    const { role, department } = req.user;
+    console.log("🔐 ROLE CHECK:", role, department);
+    const sessions = await Session.findAll({
+      where: { status: 'available' },
+      include: [
+        { model: User, as: 'teacher', attributes: ['id','firstName','lastName','location'] },
+        { model: CatalogueNode, as: 'Topic', attributes: ['node_id','name'] }
+      ],
+      order: [['scheduled_at','ASC']],
+    });
+
+    const grouped = {};
+    for (const s of sessions) {
+      const teacherId = s.teacher?.id;
+      if (!grouped[teacherId]) grouped[teacherId] = {
+        teacherId,
+        teacherName: `${s.teacher?.firstName || ''} ${s.teacher?.lastName || ''}`.trim(),
+        timezone: s.teacher?.location?.timezone || 'Asia/Kolkata',
+        slots: [],
+      };
+      grouped[teacherId].slots.push({
+        sessionId: s.session_id,
+        scheduled_at: s.scheduled_at,
+        completed_at: s.completed_at,
+        topics: [{ id: s.Topic?.node_id, name: s.Topic?.name }],
+      });
+    }
+
+    res.status(200).json(Object.values(grouped));
+  } catch (err) {
+    console.error('getAllTeacherAvailabilities error:', err);
+    res.status(500).json({ error: 'SERVER_ERROR' });
+  }
+};
+
+/* -------------------------- Admin — Update Teacher Availability -------------------------- */
+// Allows Founder / Superadmin / Helix (Operations) to overwrite any teacher’s slot directly.
+// Works like updateAvailabilitySlot but bypasses teacher_id restriction.
+
+export const updateTeacherAvailabilityAdmin = async (req, res) => {
+  try {
+    const sessionId = req.params.id;
+    let { date, timeRange, topic_ids } = req.body;
+
+    if (!date || !timeRange || !timeRange.includes("-")) {
+      return res.status(400).json({ error: "Missing or invalid date/timeRange" });
+    }
+
+    const reference = await Session.findByPk(sessionId);
+    if (!reference || reference.status !== "available") {
+      return res.status(404).json({ error: "Slot not found or unavailable" });
+    }
+
+    const [startTimeStr, endTimeStr] = timeRange.split("-");
+    const startIST = `${date}T${startTimeStr}:00+05:30`;
+    const endIST = `${date}T${endTimeStr}:00+05:30`;
+
+    const newScheduledAt = new Date(startIST);
+    const newCompletedAt = new Date(endIST);
+    if (newCompletedAt <= newScheduledAt) newCompletedAt.setDate(newCompletedAt.getDate() + 1);
+
+    const duration_minutes = Math.round((newCompletedAt - newScheduledAt) / 60000);
+    if (duration_minutes < 90) {
+      return res.status(400).json({ error: "Minimum slot length is 90 minutes." });
+    }
+
+    // Fetch grouped sessions for this window
+    const existingSessions = await Session.findAll({
+      where: {
+        teacher_id: reference.teacher_id,
+        status: "available",
+        scheduled_at: reference.scheduled_at,
+        completed_at: reference.completed_at,
+      },
+    });
+
+    if (!Array.isArray(topic_ids)) {
+      topic_ids = [...new Set(existingSessions.map((s) => s.topic_id))];
+    }
+
+    const existingTopicIds = existingSessions.map((s) => s.topic_id);
+    const toAdd = topic_ids.filter((id) => !existingTopicIds.includes(id));
+    const toKeep = topic_ids.filter((id) => existingTopicIds.includes(id));
+    const toRemove = existingTopicIds.filter((id) => !topic_ids.includes(id));
+
+    // Update kept sessions
+    for (const s of existingSessions) {
+      if (toKeep.includes(s.topic_id)) {
+        s.scheduled_at = newScheduledAt;
+        s.completed_at = newCompletedAt;
+        s.duration_minutes = duration_minutes;
+        await s.save();
+      }
+    }
+
+    // Delete removed topics
+    if (toRemove.length) {
+      await Session.destroy({
+        where: {
+          teacher_id: reference.teacher_id,
+          status: "available",
+          topic_id: toRemove,
+          scheduled_at: reference.scheduled_at,
+          completed_at: reference.completed_at,
+        },
+      });
+    }
+
+    // Add new topics
+    if (toAdd.length) {
+      const newRows = toAdd.map((topic_id) => ({
+        teacher_id: reference.teacher_id,
+        topic_id,
+        scheduled_at: newScheduledAt,
+        completed_at: newCompletedAt,
+        status: "available",
+        duration_minutes,
+      }));
+      await Session.bulkCreate(newRows);
+    }
+
+    return res.status(200).json({
+      message: "Admin overwrite successful",
+      added: toAdd,
+      removed: toRemove,
+      updated: toKeep,
+    });
+  } catch (err) {
+    console.error("updateTeacherAvailabilityAdmin error:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
