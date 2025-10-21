@@ -703,47 +703,69 @@ export const getMyTopicsWithStats = async (req, res) => {
 
 export const getAllTeacherAvailabilities = async (req, res) => {
   try {
-        console.log("🔍 AUTH USER:", req.user);
-
-    // temporary trace
+    console.log("🔍 AUTH USER:", req.user);
     if (!req.user) {
       return res.status(401).json({ error: "Missing user from token" });
     }
 
-    const { role, department } = req.user;
-    console.log("🔐 ROLE CHECK:", role, department);
+    const now = new Date();
+
     const sessions = await Session.findAll({
-      where: { status: 'available' },
+      where: { status: "available" },
       include: [
-        { model: User, as: 'teacher', attributes: ['id','firstName','lastName','location'] },
-        { model: CatalogueNode, as: 'Topic', attributes: ['node_id','name'] }
+        {
+          model: User,
+          as: "teacher",
+          attributes: ["id", "firstName", "lastName", "location"],
+        },
+        {
+          model: CatalogueNode,
+          as: "Topic",
+          attributes: ["node_id", "name"],
+        },
       ],
-      order: [['scheduled_at','ASC']],
+      order: [["scheduled_at", "ASC"]],
     });
 
     const grouped = {};
     for (const s of sessions) {
       const teacherId = s.teacher?.id;
-      if (!grouped[teacherId]) grouped[teacherId] = {
-        teacherId,
-        teacherName: `${s.teacher?.firstName || ''} ${s.teacher?.lastName || ''}`.trim(),
-        timezone: s.teacher?.location?.timezone || 'Asia/Kolkata',
-        slots: [],
-      };
-      grouped[teacherId].slots.push({
+      if (!grouped[teacherId]) {
+        grouped[teacherId] = {
+          teacherId,
+          teacherName: `${s.teacher?.firstName || ""} ${
+            s.teacher?.lastName || ""
+          }`.trim(),
+          timezone: s.teacher?.location?.timezone || "Asia/Kolkata",
+          slots: {
+            upcoming: [],
+            past: [],
+          },
+        };
+      }
+
+      const slotObj = {
         sessionId: s.session_id,
         scheduled_at: s.scheduled_at,
         completed_at: s.completed_at,
         topics: [{ id: s.Topic?.node_id, name: s.Topic?.name }],
-      });
+      };
+
+      const completedTime = new Date(s.completed_at || s.scheduled_at);
+      if (completedTime >= now) {
+        grouped[teacherId].slots.upcoming.push(slotObj);
+      } else {
+        grouped[teacherId].slots.past.push(slotObj);
+      }
     }
 
-    res.status(200).json(Object.values(grouped));
+    return res.status(200).json(Object.values(grouped));
   } catch (err) {
-    console.error('getAllTeacherAvailabilities error:', err);
-    res.status(500).json({ error: 'SERVER_ERROR' });
+    console.error("getAllTeacherAvailabilities error:", err);
+    return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
 
 /* -------------------------- Admin — Update Teacher Availability -------------------------- */
 // Allows Founder / Superadmin / Helix (Operations) to overwrite any teacher’s slot directly.
