@@ -4,6 +4,7 @@ import { Role } from "../../Models/UserModels/Roles.Model.js";
 import { UserDepartment } from "../../Models/UserModels/UserDepartment.js";
 import { autoSeedRolesAndDepartments, seedDepartments, seedRoles } from "../../seeders/roleDeptSeeder.js";
 import bcrypt from "bcrypt";
+import { sendOtp, verifyOtp } from "../../utils/otpService.js";
 
 
 export const AddDepartments = async (req, res) => {
