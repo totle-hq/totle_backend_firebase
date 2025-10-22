@@ -32,7 +32,7 @@ import { CatalogueNode } from '../../Models/CatalogModels/catalogueNode.model.js
 import { CpsProfile } from '../../Models/CpsProfile.model.js';
 import { runDbSync } from '../../config/syncDb.js';
 import { Test } from '../../Models/test.model.js';
-import { Session } from 'inspector/promises';
+import { Session } from '../../Models/SessionModel.js';
 // import { role } from '@stream-io/video-react-sdk';
 
 // Ensure uploads folder exists
