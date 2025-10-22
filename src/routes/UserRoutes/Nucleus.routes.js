@@ -11,7 +11,7 @@ router.get("/getAllProfiles/:departmentId/roles", getAllUsersForRoles);
 router.get('/accounts', getAccountsByDepartmentCode); // ?departmentCode=TECH
 router.post('/accounts', verifyAdminToken, createAccountInDepartment);
 router.patch('/accounts/password', verifyAdminToken,changeAccountPassword);
-router.post('/send-prod-otp', verifyAdminToken, sendOtpForProduction);
-router.post('/verify-prod-otp', verifyAdminToken, verifyOtpForProduction);
+router.post('/send-prod-otp', sendOtpForProduction);
+router.post('/verify-prod-otp', verifyOtpForProduction);
 
 export default router;
