@@ -279,31 +279,31 @@ export const otpVerification = async (req, res) => {
 
     // Step 3: Hash password if provided
     const hashedPassword = password ? await hashPassword(password) : null;
-// Age calculation
-const dobDate = new Date(dob);
-const today = new Date();
-const age =
-  today.getFullYear() - dobDate.getFullYear() -
-  (today < new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate()) ? 1 : 0);
+    // Age calculation
+    const dobDate = new Date(dob);
+    const today = new Date();
+    const age =
+      today.getFullYear() - dobDate.getFullYear() -
+      (today < new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate()) ? 1 : 0);
 
-// Tag minors
-const isMinor = age < 13;
+    // Tag minors
+    const isMinor = age < 13;
 
 
-const [user, created] = await User.upsert({
-  email: email || null,
-  password: email ? hashedPassword : null,
-  isVerified: true,
-  firstName: firstName || "",
-  dob,
-  gender: gender?.toLowerCase() || null,
-  status: "active",
-  isMinor,
-  minorConsentAccepted: !isMinor || !!req.body.minorConsentAccepted,
-  updatedAt: new Date()
-}, { returning: true });
+    const [user, created] = await User.upsert({
+      email: email || null,
+      password: email ? hashedPassword : null,
+      isVerified: true,
+      firstName: firstName || "",
+      dob,
+      gender: gender?.toLowerCase() || null,
+      status: "active",
+      isMinor,
+      minorConsentAccepted: !isMinor || !!req.body.minorConsentAccepted,
+      updatedAt: new Date()
+    }, { returning: true });
 
-await ensureCpsProfile(user.id); // ✅ make sure cps_profiles has a row for this user
+    await ensureCpsProfile(user.id); // ✅ make sure cps_profiles has a row for this user
 
 
     // Step 5: Save user metrics

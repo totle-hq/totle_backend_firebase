@@ -250,3 +250,38 @@ export const changeAccountPassword = async (req, res) => {
     return res.status(500).json({ message: 'Internal Server Error' });
   }
 };
+
+
+export const sendOtpForProduction = async (req, res) => {
+    try {
+        const { email } = req.body;
+        const otpResponse = await sendOtp(email);
+        if (otpResponse.error) {
+          return res
+            .status(400)
+            .json({ error: true, message: otpResponse.message });
+        }
+        return res.status(200).json({ error: false, message: otpResponse.message });
+    }
+    catch (error) {
+        console.error("Error in sendOtpForProduction:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    } 
+};
+
+export const verifyOtpForProduction = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        const verifyResponse = await verifyOtp(email, otp);
+        if (verifyResponse.error) {
+          return res
+            .status(400)
+            .json({ error: true, message: verifyResponse.message });
+        }
+        return res.status(200).json({ error: false, message: verifyResponse.message });
+    }
+    catch (error) {
+        console.error("Error in verifyOtpForProduction:", error);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+};
