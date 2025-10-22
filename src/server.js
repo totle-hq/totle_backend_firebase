@@ -145,94 +145,152 @@ app.options("*", cors(corsOptions)); // Preflight for all routes
 /* -------------------- Security & middlewares -------------------- */
 app.use(
   helmet({
-    // API serves cross-origin; disable CORP so assets/JSON aren't blocked
     crossOriginResourcePolicy: false,
-    // Avoid COEP/COOP breakage unless you explicitly need them
     crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false, // 🚫 disable default CSP here
   })
 );
 
-app.use(
-  helmet.contentSecurityPolicy({
-    useDefaults: false, // ✅ stop Helmet from merging defaults
-    directives: {
-      defaultSrc: ["'self'"],
 
-      /* ---------- Scripts ---------- */
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        "https://www.googletagmanager.com",
-        "https://checkout.razorpay.com",
-        "https://connect.facebook.net",
-        "https://www.facebook.com",
-        "https://meet.jit.si",
-        "https://aframe.io",
-        "https://unpkg.com",
-      ],
-      scriptSrcElem: [
-        "'self'",
-        "'unsafe-inline'",
-        "'unsafe-eval'",
-        "https://www.googletagmanager.com",
-        "https://checkout.razorpay.com",
-        "https://connect.facebook.net",
-        "https://www.facebook.com",
-        "https://meet.jit.si",
-        "https://aframe.io",
-        "https://unpkg.com",
-      ],
+if (process.env.NODE_ENV === "development") {
+  app.use(
+    helmet({
+      contentSecurityPolicy: false,
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: false,
+    })
+  );
+  console.warn("⚠️  Helmet CSP is disabled for local development");
+} else {
+  app.use(
+    helmet.contentSecurityPolicy({
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
 
-      /* ---------- Connections (XHR / fetch / WS) ---------- */
-      connectSrc: [
-        "'self'",
-        "https://api.totle.co",
-        "wss://api.totle.co",
-        // ✅ Local development (Vite / CRA)
-        "http://localhost:3000",
-        "http://localhost:5000",
-        "http://localhost:5173",
-        "http://localhost:4173",
-        "ws://localhost:3000",
-        "ws://localhost:5000",
-        "ws://localhost:5173",
-        "ws://localhost:4173",
-        // ✅ API + WebSocket
-        "https://totle.co",
-        "https://nucleus.totle.co",
-        "https://www.totle.co",
-        "https://api.totle.co",
-        "wss://api.totle.co",
-        // ✅ External APIs
-        "https://www.google-analytics.com",
-        "https://stats.g.doubleclick.net",
-        "https://api-bdc.io",
-        "https://api.bigdatacloud.net",
-        "https://ipinfo.io",
-        "https://api.razorpay.com",
-        "https://checkout.razorpay.com",
-        "https://lumberjack.razorpay.com",
-        "https://rzp.io",
-        "https://meet.jit.si",
-        "https://aframe.io",
-        "https://connect.facebook.net",
-        "https://www.facebook.com"
-      ],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://www.googletagmanager.com",
+          "https://checkout.razorpay.com",
+          "https://connect.facebook.net",
+          "https://www.facebook.com",
+          "https://meet.jit.si",
+          "https://aframe.io",
+          "https://unpkg.com",
+        ],
 
-      /* ---------- Styles / Fonts / Images / Frames ---------- */
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "blob:", "https://*"],
-      frameSrc: [
-        "'self'",
-        "https://checkout.razorpay.com",
-        "https://meet.jit.si",
-      ],
-      objectSrc: ["'none'"],
-    },
-  })
-);
+        scriptSrcElem: [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://www.googletagmanager.com",
+          "https://checkout.razorpay.com",
+          "https://connect.facebook.net",
+          "https://www.facebook.com",
+          "https://meet.jit.si",
+          "https://aframe.io",
+          "https://unpkg.com",
+        ],
+
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https://*"],
+
+       connectSrc: [
+  "'self'",
+
+  // TOTLE internal & production
+  "https://api.totle.co",
+  "https://totle.co",
+  "https://nucleus.totle.co",
+  "https://www.totle.co",
+  "wss://api.totle.co",
+
+  // Local development
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://localhost:4173",
+  "ws://localhost:3000",
+  "ws://localhost:5000",
+  "ws://localhost:5173",
+  "ws://localhost:4173",
+
+  // ✅ Stream Video (all known endpoints)
+  "https://stream-io-api.com",
+  "https://api.stream-io-api.com",
+  "https://video.stream-io-api.com",
+  "https://edge.stream-io-api.com",
+  "https://global.stream-io-api.com",
+  "https://us-east.stream-io-api.com",
+  "https://us-west.stream-io-api.com",
+  "https://eu-west.stream-io-api.com",
+  "https://ap-northeast.stream-io-api.com",
+  "https://in.stream-io-api.com",
+  "https://hint.stream-io-video.com",  // ✅ crucial new one
+  // Stream WebRTC + Video edges (full coverage)
+"https://rtc.stream-io-video.com",
+"wss://rtc.stream-io-video.com",
+"https://edge.stream-io-video.com",
+"wss://edge.stream-io-video.com",
+"https://edge-cluster.stream-io-video.com",
+"wss://edge-cluster.stream-io-video.com",
+"https://video.stream-io-video.com",
+"wss://video.stream-io-video.com",
+"https://global.stream-io-video.com",
+"wss://global.stream-io-video.com",
+"https://hint.stream-io-video.com",
+"wss://hint.stream-io-video.com",
+"https://*.stream-io-video.com",
+"wss://*.stream-io-video.com",
+
+
+  "wss://stream-io-api.com",
+  "wss://api.stream-io-api.com",
+  "wss://video.stream-io-api.com",
+  "wss://edge.stream-io-api.com",
+  "wss://global.stream-io-api.com",
+  "wss://us-east.stream-io-api.com",
+  "wss://us-west.stream-io-api.com",
+  "wss://eu-west.stream-io-api.com",
+  "wss://ap-northeast.stream-io-api.com",
+  "wss://in.stream-io-api.com",
+  "wss://hint.stream-io-video.com",    // ✅ crucial new one
+
+  // ✅ External services
+  "https://www.google-analytics.com",
+  "https://stats.g.doubleclick.net",
+  "https://api-bdc.io",
+  "https://api.bigdatacloud.net",
+  "https://ipinfo.io",
+  "https://api.razorpay.com",
+  "https://checkout.razorpay.com",
+  "https://lumberjack.razorpay.com",
+  "https://rzp.io",
+  "https://meet.jit.si",
+  "https://aframe.io",
+  "https://connect.facebook.net",
+  "https://www.facebook.com"
+],
+
+
+        frameSrc: [
+          "'self'",
+          "https://checkout.razorpay.com",
+          "https://meet.jit.si",
+          "https://video.stream-io-api.com",
+          "https://*.stream-io-api.com",
+        ],
+
+        objectSrc: ["'none'"],
+      },
+    })
+  );
+}
+
+
 
 app.use(compression());
 app.use(morgan("dev"));

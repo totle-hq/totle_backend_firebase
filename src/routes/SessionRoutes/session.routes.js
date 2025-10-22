@@ -1,6 +1,8 @@
+// src/routes/SessionRoutes/session.routes.js
 import express from "express";
 import authMiddleware from "../../middlewares/authMiddleware.js";
 
+/* ---------------- Controllers ---------------- */
 import { bookFreeSession } from "../../controllers/SessionStreamControllers/bookSession.controller.js";
 import {
   getAllUpcomingTeacherSessions,
@@ -9,17 +11,21 @@ import {
   getStudentSessions,
 } from "../../controllers/SessionStreamControllers/getMySession.js";
 
-/* ---- FIXES ---- */
+/* ---------------- Helix Admin Controllers ---------------- */
+import { getAllSessions } from "../../controllers/SessionStreamControllers/getAllSessions.controller.js";
+import { updateSessionTiming } from "../../controllers/SessionStreamControllers/updateSessionTiming.controller.js";
+import { reassignTeacher } from "../../controllers/SessionStreamControllers/reassignTeacher.controller.js";
+
+/* ---------------- Utilities ---------------- */
 import { sequelize1 } from "../../config/sequelize.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
-import { QueryTypes } from "sequelize"; // ✅ use QueryTypes from sequelize
+import { QueryTypes } from "sequelize";
 
 const router = express.Router();
 
 /* ------------------------------------------------------------------ */
-/* Resolve domain’s paid rating gate (default 4)                       */
-/* Expects: domain.metadata.min_paid_rating (number) if configured     */
-/* topic → subject → domain                                            */
+/* Utility: Resolve domain’s paid rating gate (default 4)              */
+/* Used for filtering Paid-tier sessions by domain-level rating        */
 /* ------------------------------------------------------------------ */
 async function resolveMinPaidRating(topicId) {
   try {
@@ -50,13 +56,14 @@ async function resolveMinPaidRating(topicId) {
       4;
 
     return Math.max(0, Math.min(5, gate));
-  } catch {
+  } catch (err) {
+    console.error("⚠️ resolveMinPaidRating error:", err);
     return 4;
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* NEW: Strict Paid Sessions list                                      */
+/* Paid Sessions list                                                  */
 /* GET /api/session/list/paid?topicId=<uuid>                           */
 /* Only sessions: status='available'                                   */
 /* Only teachers: tier='paid' AND rating >= domain gate                */
@@ -64,14 +71,14 @@ async function resolveMinPaidRating(topicId) {
 router.get("/list/paid", authMiddleware, async (req, res) => {
   const topicId = String(req.query.topicId || "").trim();
   if (!topicId) {
-    return res.status(400).json({ success: false, message: "topicId is required" });
+    return res
+      .status(400)
+      .json({ success: false, message: "topicId is required" });
   }
 
   try {
     const minRating = await resolveMinPaidRating(topicId);
 
-    // NOTE: Keep selection to columns that surely exist in your DB.
-    // If you *do* have session_tier/session_level, you can add them back.
     const rows = await sequelize1.query(
       `
       SELECT
@@ -94,7 +101,7 @@ router.get("/list/paid", authMiddleware, async (req, res) => {
       `,
       {
         replacements: { topicId, minRating },
-        type: QueryTypes.SELECT, // ✅ correct usage
+        type: QueryTypes.SELECT,
       }
     );
 
@@ -110,18 +117,46 @@ router.get("/list/paid", authMiddleware, async (req, res) => {
       })),
     });
   } catch (err) {
-    // 🔎 Log the actual DB error so you can see it in server console
     console.error("❌ /api/session/list/paid error:", err?.message || err);
     if (err?.stack) console.error(err.stack);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 });
 
-/* ---------------- Existing routes ---------------- */
+/* ------------------------------------------------------------------ */
+/* Student / Teacher Session APIs                                      */
+/* ------------------------------------------------------------------ */
 router.post("/book", authMiddleware, bookFreeSession);
 router.get("/student-session", authMiddleware, getStudentSessions);
 router.get("/student/first-session", authMiddleware, getFirstUpcomingStudentSession);
 router.get("/teacher/first-session", authMiddleware, getFirstUpcomingTeacherSession);
 router.get("/teacher/upcoming-sessions", authMiddleware, getAllUpcomingTeacherSessions);
 
+/* ------------------------------------------------------------------ */
+/* Helix (Operations) Admin APIs                                       */
+/* ------------------------------------------------------------------ */
+/**
+ * GET /api/session/all
+ * → Returns all sessions across the system with joined user/topic data.
+ *    Used in Nucleus → Helix → SessionControlCenter.
+ */
+router.get("/all", authMiddleware, getAllSessions);
+
+/**
+ * POST /api/session/update-timing
+ * Body: { sessionId, newTime }
+ * → Allows Helix admins to postpone or prepone a session.
+ */
+router.post("/update-timing", authMiddleware, updateSessionTiming);
+
+/**
+ * POST /api/session/reassign-teacher
+ * Body: { sessionId, newTeacherId }
+ * → Allows Helix admins to reassign a session to another teacher.
+ */
+router.post("/reassign-teacher", authMiddleware, reassignTeacher);
+
+/* ------------------------------------------------------------------ */
 export default router;
