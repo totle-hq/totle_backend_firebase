@@ -10,6 +10,8 @@ import { fileURLToPath } from "url";
 import http from "http";
 import { Server } from "socket.io";
 import { registerChatHandlers } from "./socket/chat.socket.js";
+import timezoneMiddleware from "./middlewares/timezone.js";
+
 // --- CPS Generator infrastructure ---
 import { registerCpsGeneratorNamespace } from "./events/cpsGeneratorEvents.js";
 import { getRedis } from "./utils/redisClient.js";
@@ -116,7 +118,14 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type"],
+  allowedHeaders: [
+    "Authorization",
+    "Content-Type",
+    "Cache-Control",
+    "X-User-Timezone",   // ✅ added
+    "X-Requested-With",
+    "Accept",
+  ],
   optionsSuccessStatus: 204,
   maxAge: 86400,
 };
@@ -296,6 +305,8 @@ app.use(compression());
 app.use(morgan("dev"));
 
 app.use(express.json({ limit: "50mb" }));
+app.use(timezoneMiddleware);      // <= then mount the timezone reader
+
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Static files if you serve any uploads

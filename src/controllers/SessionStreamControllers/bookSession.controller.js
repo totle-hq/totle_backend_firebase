@@ -8,7 +8,13 @@ import { assertTeacherBuffer } from "../../services/session.service.js";
 import TeacherAvailability from "../../Models/TeacherAvailability.js";
 import { format, addDays } from "date-fns";
 import { sequelize1 } from "../../config/sequelize.js";
-
+import {
+  localToUtc,
+  dayRangeUtcFromLocalDate,
+  weekRangeUtcFromLocalStartDay,
+  formatInTz,
+  utcToZoned,
+} from "../../utils/time.js"; 
 /* ============================================================================
    Utilities
    ============================================================================ */
@@ -101,80 +107,79 @@ async function getEligibleTeacherIds(topicId, tier, minRating = 4, excludeUserId
    Discovery (listing) endpoints — hard filters on BOTH teacher stats & session row
    ============================================================================ */
 
-/** GET /api/session/list/free?topicId=... */
 export const listFreeSessions = async (req, res) => {
   try {
+    const tz = req.userTz || "UTC";
     const topicId = req.query.topicId;
     if (!topicId) return res.status(400).json({ error: true, message: "topicId is required" });
 
-const teacherIds = await getEligibleTeacherIds(req.query.topicId, "free", 4, req.user?.id);
+    const teacherIds = await getEligibleTeacherIds(req.query.topicId, "free", 4, req.user?.id);
     if (teacherIds.length === 0) return res.status(200).json({ success: true, sessions: [] });
 
     const sessions = await Session.findAll({
       where: {
         topic_id: topicId,
         status: "available",
-        session_tier: "free",              // 🔒 session row must also be FREE
+        session_tier: "free",
         teacher_id: { [Op.in]: teacherIds },
       },
-      attributes: [
-        "session_id",
-        "teacher_id",
-        "topic_id",
-        "scheduled_at",
-        "duration_minutes",
-        "session_tier",
-        "session_level",
-      ],
+      attributes: ["session_id", "teacher_id", "topic_id", "scheduled_at", "duration_minutes", "session_tier", "session_level"],
       order: [["scheduled_at", "ASC"]],
       raw: true,
     });
 
-    return res.status(200).json({ success: true, sessions });
+    const shaped = sessions.map(s => ({
+      ...s,
+      // Keep raw UTC
+      scheduled_at_utc: s.scheduled_at,
+      // Add local strings for the caller's tz
+      scheduled_at_local: formatInTz(s.scheduled_at, tz, "yyyy-MM-dd HH:mm"),
+    }));
+
+    return res.status(200).json({ success: true, tz, sessions: shaped });
   } catch (err) {
     console.error("❌ listFreeSessions:", err);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
 
-/** GET /api/session/list/paid?topicId=... */
 export const listPaidSessions = async (req, res) => {
   try {
+    const tz = req.userTz || "UTC";
     const topicId = req.query.topicId;
     if (!topicId) return res.status(400).json({ error: true, message: "topicId is required" });
 
     const minRating = await getDomainMinRating(topicId);
     const teacherIds = await getEligibleTeacherIds(topicId, "paid", minRating);
     if (teacherIds.length === 0) {
-      return res.status(200).json({ success: true, sessions: [], minRating });
+      return res.status(200).json({ success: true, tz, sessions: [], minRating });
     }
 
     const sessions = await Session.findAll({
       where: {
         topic_id: topicId,
         status: "available",
-        session_tier: "paid",              // 🔒 session row must also be PAID
+        session_tier: "paid",
         teacher_id: { [Op.in]: teacherIds },
       },
-      attributes: [
-        "session_id",
-        "teacher_id",
-        "topic_id",
-        "scheduled_at",
-        "duration_minutes",
-        "session_tier",
-        "session_level",
-      ],
+      attributes: ["session_id", "teacher_id", "topic_id", "scheduled_at", "duration_minutes", "session_tier", "session_level"],
       order: [["scheduled_at", "ASC"]],
       raw: true,
     });
 
-    return res.status(200).json({ success: true, sessions, minRating });
+    const shaped = sessions.map(s => ({
+      ...s,
+      scheduled_at_utc: s.scheduled_at,
+      scheduled_at_local: formatInTz(s.scheduled_at, tz, "yyyy-MM-dd HH:mm"),
+    }));
+
+    return res.status(200).json({ success: true, tz, sessions: shaped, minRating });
   } catch (err) {
     console.error("❌ listPaidSessions:", err);
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
 
 /** POST /api/session/book — auto-match FREE */
 
@@ -337,7 +342,7 @@ export const bookFreeSession = async (req, res) => {
         sessionId: session.session_id,
         teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
         topicName: topic?.name || "Unknown",
-        scheduledAt: selected.scheduled_at.toLocaleString("en-IN"),
+scheduledAt: formatInTz(selected.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
       },
     });
   } catch (err) {
@@ -511,7 +516,7 @@ await Session.update(
       data: {
         sessionId: s.session_id,
         topicName: topic?.name || "Unknown",
-        scheduledAt: new Date(s.scheduled_at).toLocaleString("en-IN"),
+scheduledAt: formatInTz(s.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
         minRatingGate: minRating,
       },
     });

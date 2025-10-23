@@ -655,16 +655,10 @@ export async function getTestById(req, res) {
 
 export const getQualifiedTopics = async (req, res) => {
   try {
-    console.log("get Qualified Topics called");
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res.status(401).json({ success: false, message: "Missing or invalid token format" });
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
     }
-    const token = req.headers.authorization?.split(" ")[1];
-    console.log("token", token);
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("decoded", decoded);
-    const userId = decoded.id;
 
     const topics = await Teachertopicstats.findAll({
       where: { teacherId: userId },
@@ -675,17 +669,23 @@ export const getQualifiedTopics = async (req, res) => {
           attributes: ["node_id", "name", "parent_id"],
         },
       ],
+      order: [["createdAt", "DESC"]],
     });
 
     return res.status(200).json({
       success: true,
-      data: topics,
+      data: topics || [],
     });
   } catch (err) {
     console.error("❌ Error fetching qualified topics:", err);
-    res.status(500).json({ success: false, message: "Could not fetch qualified topics" });
+    res.status(500).json({
+      success: false,
+      message: "Could not fetch qualified topics",
+      error: err.message,
+    });
   }
 };
+
 
 export const getTeachStats = async (req, res) => {
   try {

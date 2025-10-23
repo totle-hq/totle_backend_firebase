@@ -45,7 +45,7 @@ router.get("/retest-eligibility/:id", authMiddleware, checkRetestEligibility);
 router.get("/user/:userId", getUserTestHistory);
 
 /* -------------------- Teaching & Stats -------------------- */
-router.get("/qualified-topics", getQualifiedTopics);
+router.get("/qualified-topics", authMiddleware, getQualifiedTopics);
 router.get("/stats", getTeachStats);
 
 /* -------------------- Integrity / Reports -------------------- */
