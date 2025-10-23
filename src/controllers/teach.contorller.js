@@ -334,6 +334,7 @@ export const updateAvailabilitySlot = async (req, res) => {
     const availabilityId = req.params.id;
     const { date, timeRange } = req.body;
 
+    // Basic input validation
     if (!date || !timeRange || !timeRange.includes("-")) {
       return res.status(400).json({ error: "Missing or invalid date/timeRange" });
     }
@@ -344,6 +345,7 @@ export const updateAvailabilitySlot = async (req, res) => {
 
     const startDate = new Date(start);
     const endDate = new Date(end);
+
     if (endDate <= startDate) endDate.setDate(endDate.getDate() + 1);
 
     const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
@@ -359,6 +361,7 @@ export const updateAvailabilitySlot = async (req, res) => {
     const dayIndex = getDay(startDate);
     const dayOfWeek = DAY_INDEX_TO_NAME[dayIndex];
 
+    // ✅ Fetch existing availability
     const existing = await TeacherAvailability.findOne({
       where: {
         availability_id: availabilityId,
@@ -371,12 +374,44 @@ export const updateAvailabilitySlot = async (req, res) => {
       return res.status(404).json({ error: "Availability slot not found or unauthorized" });
     }
 
+    // 🧠 Conflict check: does this new time overlap with any booked/upcoming session?
+    const conflictSession = await Session.findOne({
+      where: {
+        teacher_id,
+        status: { [Op.in]: ["booked", "upcoming"] },
+        [Op.or]: [
+          {
+            scheduled_at: { [Op.lt]: endDate },
+            completed_at: { [Op.gt]: startDate },
+          },
+          {
+            scheduled_at: { [Op.between]: [startDate, endDate] },
+          },
+          {
+            completed_at: { [Op.between]: [startDate, endDate] },
+          },
+        ],
+      },
+    });
+
+    if (conflictSession) {
+      return res.status(409).json({
+        error: "Conflicts with existing session time",
+        conflictSession: {
+          scheduled_at: conflictSession.scheduled_at.toISOString(),
+          completed_at: conflictSession.completed_at.toISOString(),
+        },
+      });
+    }
+
+    // ✅ Update the availability
     await TeacherAvailability.update(
       {
         start_time: startTimeStr,
         end_time: endTimeStr,
         is_recurring: true,
         day_of_week: dayOfWeek,
+        available_date: null, // since it's recurring
       },
       {
         where: {
@@ -388,7 +423,7 @@ export const updateAvailabilitySlot = async (req, res) => {
 
     return res.status(200).json({ message: "Availability slot updated successfully" });
   } catch (err) {
-    console.error("Update availability slot error:", err);
+    console.error("❌ Update availability slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };

@@ -19,7 +19,7 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
     const session = await Session.findOne({
       where: {
         student_id: id,
-        createdAt: { [Op.gt]: now }
+        scheduled_at: { [Op.gt]: now }
       },
       include: [
         { model: User, as: "teacher", attributes: ["firstName", "lastName"] },
@@ -50,8 +50,9 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
         session_id: session.session_id,
         scheduled_at: session.createdAt,
         teacherName: `${session.teacher.firstName} ${session.teacher.lastName||""}`,
-        topicName: session.bookedTopic.name,
-        subject: session.bookedTopic.subject?.name
+        topicName: session.topic.name,
+        subject: session.topic.subject?.name,
+        teacher_level: session.session_level
       }
     });
 
@@ -188,7 +189,7 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
     const formatted = sessions.map((s) => ({
       session_id: s.session_id,
       studentName: s.student
-        ? `${s.student.firstName} ${s.student.lastName}`.trim()
+        ? `${s.student.firstName}`.trim()
         : "Unassigned",
       topicName: s.topic?.name || "Unknown",
       subject: s.topic?.subject?.name || "Unknown",
