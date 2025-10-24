@@ -915,16 +915,17 @@ export const getAllTeacherAvailabilities = async (req, res) => {
     /* ---------------------------------------------------------
        STEP 1: Fetch all Bridger-level teachers and their topics
        --------------------------------------------------------- */
-    const bridgerStats = await Teachertopicstats.findAll({
-      where: { level: "Bridger" },
-      include: [
-        {
-          model: CatalogueNode,
-          as: "Topic",
-          attributes: ["node_id", "name"],
-        },
-      ],
-    });
+const bridgerStats = await Teachertopicstats.findAll({
+  where: { level: "Bridger" },
+  include: [
+    {
+      model: CatalogueNode,
+      as: "catalogueNode", // ✅ match actual alias from association
+      attributes: ["node_id", "name"],
+    },
+  ],
+});
+
 
     const teacherTopicMap = {};
     for (const stat of bridgerStats) {
