@@ -500,12 +500,12 @@ export const getAvailabilityChart = async (req, res) => {
     createdAt: { [Op.lte]: utcEnd },
   },
   include: [
-    {
-      model: CatalogueNode,
-      as: "topics", // ✅ must match the alias in the association
-      attributes: ["node_id", "name"],
-      through: { attributes: [] }, // hides join table fields
-    },
+  {
+    model: CatalogueNode,
+    as: "catalogueNode", // ✅ unified alias — matches everywhere else
+    attributes: ["node_id", "name"],
+    through: { attributes: [] },
+  },
   ],
   order: [["available_date", "ASC"]],
 });
@@ -533,9 +533,8 @@ export const getAvailabilityChart = async (req, res) => {
         if (endLocal <= startLocal)
           endLocal = new Date(endLocal.getTime() + 86400000);
 
-        // ✅ Resolve topic data (gracefully handles null)
-        const topic_ids = slot.Topic ? [slot.Topic.node_id] : [];
-        const topic_names = slot.Topic ? [slot.Topic.name] : [];
+const topic_ids = slot.catalogueNode ? [slot.catalogueNode.node_id] : [];
+const topic_names = slot.catalogueNode ? [slot.catalogueNode.name] : [];
 
         result[dayKey].push({
           id: slot.availability_id,
@@ -656,19 +655,20 @@ export const getMyProgression = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
-    const stats = await Teachertopicstats.findAll({
-      where: { teacherId },
-      include: [
-        { model: CatalogueNode, as: "Topic", attributes: ["node_id", "name", "parent_id"] },
-        { model: User, as: "teacher", attributes: ["id", "location"] },
-      ],
-    });
+const stats = await Teachertopicstats.findAll({
+  where: { teacherId },
+  include: [
+    { model: CatalogueNode, as: "catalogueNode", attributes: ["node_id", "name", "parent_id"] },
+    { model: User, as: "teacher", attributes: ["id", "location"] },
+  ],
+});
 
-    const result = await Promise.all(
-      stats.map(async (stat) => {
-        const { level, rating, sessionCount } = stat;
-        const topicId = stat.Topic?.node_id;
-        const topicName = stat.Topic?.name || "Unknown";
+const result = await Promise.all(
+  stats.map(async (stat) => {
+    const { level, rating, sessionCount } = stat;
+    const topicId = stat.catalogueNode?.node_id;
+    const topicName = stat.catalogueNode?.name || "Unknown";
+
 
         const { subject, domain } = await findSubjectAndDomain(topicId);
         const progression = levelProgression[level];
@@ -779,16 +779,19 @@ export const getFeedbackSummary = async (req, res) => {
     const feedbackData = await Session.findAll({
       where: { teacher_id: teacherId, feedback_rating: { [Op.not]: null } },
       attributes: [
-        "topicId",
+        "topic_id",
         [fn("AVG", col("feedback_rating")), "averageRating"],
-        [fn("COUNT", col("Session.session_id")), "sessionCount"], // ✅ use PK column
+        [fn("COUNT", col("session_id")), "sessionCount"],
       ],
-      group: ["topic_id"], // adjust includes/groups if you join a Topic/CatalogueNode table
+      include: [
+        { model: CatalogueNode, as: "catalogueNode", attributes: ["name"] },
+      ],
+      group: ["topic_id", "catalogueNode.node_id", "catalogueNode.name"],
     });
 
     const result = feedbackData.map((row) => ({
-      topicId: row.topicId,
-      topicName: row.Topic?.name || "Unknown",
+      topicId: row.topic_id,
+      topicName: row.catalogueNode?.name || "Unknown",
       averageRating: parseFloat(row.get("averageRating")),
       sessionCount: parseInt(row.get("sessionCount")),
     }));
@@ -809,6 +812,7 @@ export const getFeedbackSummary = async (req, res) => {
   }
 };
 
+
 /* --------------------------- Qualified Topics APIs ------------------------- */
 
 export const getMyQualifiedTopics = async (req, res) => {
@@ -817,12 +821,12 @@ export const getMyQualifiedTopics = async (req, res) => {
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
-      include: [{ model: CatalogueNode, as: "Topic", attributes: ["node_id", "name", "parent_id"] }],
+include: [{ model: CatalogueNode, as: "catalogueNode", attributes: ["node_id", "name", "parent_id"] }],
     });
 
     const topicsMap = {};
     for (const stat of stats) {
-      const topic = stat.Topic;
+const topic = stat.catalogueNode;
       if (!topic) continue;
 
       const subjectNode = await CatalogueNode.findByPk(topic.parent_id, {
@@ -861,7 +865,7 @@ export const getMyTopicsWithStats = async (req, res) => {
       include: [
         {
           model: CatalogueNode,
-          // as: "Topic",
+          as: "catalogueNode", // ✅ must match association alias
           attributes: ["node_id", "name", "parent_id"],
         },
       ],
@@ -869,7 +873,7 @@ export const getMyTopicsWithStats = async (req, res) => {
 
     const topicsWithStats = [];
     for (const stat of stats) {
-      const topic = stat.Topic;
+      const topic = stat.catalogueNode; // ✅ changed from stat.Topic
       if (!topic) continue;
 
       const sessions = await Session.findAll({
@@ -897,6 +901,13 @@ export const getMyTopicsWithStats = async (req, res) => {
   }
 };
 
+
+/* ---------------------- Admin — Get All Teacher Availabilities ---------------------- */
+// ✅ FIXED VERSION — includes script-qualified Bridgers (from Teachertopicstats)
+
+/* ---------------------- Admin — Get All Teacher Availabilities ---------------------- */
+// ✅ FINAL VERSION — includes Bridger teachers + qualified topics (even without sessions)
+
 export const getAllTeacherAvailabilities = async (req, res) => {
   try {
     console.log("🔍 AUTH USER:", req.user);
@@ -906,6 +917,39 @@ export const getAllTeacherAvailabilities = async (req, res) => {
 
     const now = new Date();
 
+    /* ---------------------------------------------------------
+       STEP 1: Fetch all Bridger-level teachers and their topics
+       --------------------------------------------------------- */
+const bridgerStats = await Teachertopicstats.findAll({
+  where: { level: "Bridger" },
+  include: [
+    {
+      model: CatalogueNode,
+      as: "catalogueNode", // ✅ match actual alias from association
+      attributes: ["node_id", "name"],
+    },
+  ],
+});
+
+
+    const teacherTopicMap = {};
+    for (const stat of bridgerStats) {
+      const tId = stat.teacherId;
+      if (!teacherTopicMap[tId]) teacherTopicMap[tId] = [];
+if (stat.catalogueNode) {
+  teacherTopicMap[tId].push({
+    id: stat.catalogueNode.node_id,
+    name: stat.catalogueNode.name,
+  });
+}
+
+    }
+
+    const bridgerTeacherIds = Object.keys(teacherTopicMap);
+
+    /* ---------------------------------------------------------
+       STEP 2: Fetch all available sessions (actual availability)
+       --------------------------------------------------------- */
     const sessions = await Session.findAll({
       where: { status: "available" },
       include: [
@@ -923,39 +967,80 @@ export const getAllTeacherAvailabilities = async (req, res) => {
       order: [["scheduled_at", "ASC"]],
     });
 
+    /* ---------------------------------------------------------
+       STEP 3: Group sessions per teacher
+       --------------------------------------------------------- */
     const grouped = {};
     for (const s of sessions) {
       const teacherId = s.teacher?.id;
+      if (!teacherId) continue;
+
       if (!grouped[teacherId]) {
         grouped[teacherId] = {
           teacherId,
-          teacherName: `${s.teacher?.firstName || ""} ${
-            s.teacher?.lastName || ""
-          }`.trim(),
+          teacherName: `${s.teacher?.firstName || ""} ${s.teacher?.lastName || ""}`.trim(),
           timezone: s.teacher?.location?.timezone || "Asia/Kolkata",
-          slots: {
-            upcoming: [],
-            past: [],
-          },
+          slots: { upcoming: [], past: [] },
+          topics: new Map(), // dedupe
         };
       }
+
+      const topicEntry = {
+        id: s.Topic?.node_id,
+        name: s.Topic?.name,
+      };
+      if (topicEntry.id) grouped[teacherId].topics.set(topicEntry.id, topicEntry);
 
       const slotObj = {
         sessionId: s.session_id,
         scheduled_at: s.scheduled_at,
         completed_at: s.completed_at,
-        topics: [{ id: s.Topic?.node_id, name: s.Topic?.name }],
+        topics: [topicEntry],
       };
 
       const completedTime = new Date(s.completed_at || s.scheduled_at);
-      if (completedTime >= now) {
-        grouped[teacherId].slots.upcoming.push(slotObj);
-      } else {
-        grouped[teacherId].slots.past.push(slotObj);
+      if (completedTime >= now) grouped[teacherId].slots.upcoming.push(slotObj);
+      else grouped[teacherId].slots.past.push(slotObj);
+    }
+
+    /* ---------------------------------------------------------
+       STEP 4: Merge in script-qualified Bridger teachers + topics
+       --------------------------------------------------------- */
+    const bridgerTeachers = await User.findAll({
+      where: { id: bridgerTeacherIds },
+      attributes: ["id", "firstName", "lastName", "location"],
+    });
+
+    for (const t of bridgerTeachers) {
+      if (!grouped[t.id]) {
+        // teacher without sessions
+        grouped[t.id] = {
+          teacherId: t.id,
+          teacherName: `${t.firstName || ""} ${t.lastName || ""}`.trim(),
+          timezone: t.location?.timezone || "Asia/Kolkata",
+          slots: { upcoming: [], past: [] },
+          topics: new Map(),
+        };
+      }
+
+      const bridgerTopics = teacherTopicMap[t.id] || [];
+      for (const topic of bridgerTopics) {
+        grouped[t.id].topics.set(topic.id, topic);
       }
     }
 
-    return res.status(200).json(Object.values(grouped));
+    /* ---------------------------------------------------------
+       STEP 5: Finalize structure for response
+       --------------------------------------------------------- */
+    const finalList = Object.values(grouped).map((g) => ({
+      teacherId: g.teacherId,
+      teacherName: g.teacherName,
+      timezone: g.timezone,
+      topics: Array.from(g.topics.values()), // convert Map → Array
+      slots: g.slots,
+    }));
+
+    return res.status(200).json(finalList);
   } catch (err) {
     console.error("getAllTeacherAvailabilities error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });

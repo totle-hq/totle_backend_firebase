@@ -90,18 +90,22 @@ export const TeacherAvailabilityTopic = sequelize1.define(
 /* ---------------------------------------------------------------------------
    Associations
    --------------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------
+   Associations (Unified alias = "catalogueNode")
+   --------------------------------------------------------------------------- */
 TeacherAvailability.belongsToMany(CatalogueNode, {
   through: TeacherAvailabilityTopic,
   foreignKey: "availability_id",
   otherKey: "topic_id",
-  as: "topics",
+  as: "catalogueNode", // unified alias across all models
 });
 
 CatalogueNode.belongsToMany(TeacherAvailability, {
   through: TeacherAvailabilityTopic,
   foreignKey: "topic_id",
   otherKey: "availability_id",
-  as: "availabilities",
+  as: "teacherAvailability",
 });
+
 
 export default TeacherAvailability;
