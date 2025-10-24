@@ -129,6 +129,17 @@ export const CatalogueNode = sequelize1.define(
       type: DataTypes.ENUM("active", "draft", "archived"),
       defaultValue: "draft",
     },
+    qualified_teacher_ids: {
+  type: DataTypes.ARRAY(DataTypes.UUID),
+  allowNull: false,
+  defaultValue: [],
+},
+qualified_teacher_names: {
+  type: DataTypes.ARRAY(DataTypes.STRING),
+  allowNull: false,
+  defaultValue: [],
+},
+
 
     /* ---------- Existing business fields ---------- */
     session_count: { type: DataTypes.INTEGER, defaultValue: 1 },
