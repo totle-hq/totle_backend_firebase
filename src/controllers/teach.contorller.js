@@ -500,12 +500,12 @@ export const getAvailabilityChart = async (req, res) => {
     createdAt: { [Op.lte]: utcEnd },
   },
   include: [
-    {
-      model: CatalogueNode,
-      as: "topics", // ✅ must match the alias in the association
-      attributes: ["node_id", "name"],
-      through: { attributes: [] }, // hides join table fields
-    },
+  {
+    model: CatalogueNode,
+    as: "catalogueNode", // ✅ unified alias — matches everywhere else
+    attributes: ["node_id", "name"],
+    through: { attributes: [] },
+  },
   ],
   order: [["available_date", "ASC"]],
 });
@@ -533,9 +533,8 @@ export const getAvailabilityChart = async (req, res) => {
         if (endLocal <= startLocal)
           endLocal = new Date(endLocal.getTime() + 86400000);
 
-        // ✅ Resolve topic data (gracefully handles null)
-        const topic_ids = slot.Topic ? [slot.Topic.node_id] : [];
-        const topic_names = slot.Topic ? [slot.Topic.name] : [];
+const topic_ids = slot.catalogueNode ? [slot.catalogueNode.node_id] : [];
+const topic_names = slot.catalogueNode ? [slot.catalogueNode.name] : [];
 
         result[dayKey].push({
           id: slot.availability_id,
@@ -656,19 +655,20 @@ export const getMyProgression = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
-    const stats = await Teachertopicstats.findAll({
-      where: { teacherId },
-      include: [
-        { model: CatalogueNode, as: "Topic", attributes: ["node_id", "name", "parent_id"] },
-        { model: User, as: "teacher", attributes: ["id", "location"] },
-      ],
-    });
+const stats = await Teachertopicstats.findAll({
+  where: { teacherId },
+  include: [
+    { model: CatalogueNode, as: "catalogueNode", attributes: ["node_id", "name", "parent_id"] },
+    { model: User, as: "teacher", attributes: ["id", "location"] },
+  ],
+});
 
-    const result = await Promise.all(
-      stats.map(async (stat) => {
-        const { level, rating, sessionCount } = stat;
-        const topicId = stat.Topic?.node_id;
-        const topicName = stat.Topic?.name || "Unknown";
+const result = await Promise.all(
+  stats.map(async (stat) => {
+    const { level, rating, sessionCount } = stat;
+    const topicId = stat.catalogueNode?.node_id;
+    const topicName = stat.catalogueNode?.name || "Unknown";
+
 
         const { subject, domain } = await findSubjectAndDomain(topicId);
         const progression = levelProgression[level];
@@ -779,16 +779,19 @@ export const getFeedbackSummary = async (req, res) => {
     const feedbackData = await Session.findAll({
       where: { teacher_id: teacherId, feedback_rating: { [Op.not]: null } },
       attributes: [
-        "topicId",
+        "topic_id",
         [fn("AVG", col("feedback_rating")), "averageRating"],
-        [fn("COUNT", col("Session.session_id")), "sessionCount"], // ✅ use PK column
+        [fn("COUNT", col("session_id")), "sessionCount"],
       ],
-      group: ["topic_id"], // adjust includes/groups if you join a Topic/CatalogueNode table
+      include: [
+        { model: CatalogueNode, as: "catalogueNode", attributes: ["name"] },
+      ],
+      group: ["topic_id", "catalogueNode.node_id", "catalogueNode.name"],
     });
 
     const result = feedbackData.map((row) => ({
-      topicId: row.topicId,
-      topicName: row.Topic?.name || "Unknown",
+      topicId: row.topic_id,
+      topicName: row.catalogueNode?.name || "Unknown",
       averageRating: parseFloat(row.get("averageRating")),
       sessionCount: parseInt(row.get("sessionCount")),
     }));
@@ -809,6 +812,7 @@ export const getFeedbackSummary = async (req, res) => {
   }
 };
 
+
 /* --------------------------- Qualified Topics APIs ------------------------- */
 
 export const getMyQualifiedTopics = async (req, res) => {
@@ -817,12 +821,12 @@ export const getMyQualifiedTopics = async (req, res) => {
 
     const stats = await Teachertopicstats.findAll({
       where: { teacherId },
-      include: [{ model: CatalogueNode, as: "Topic", attributes: ["node_id", "name", "parent_id"] }],
+include: [{ model: CatalogueNode, as: "catalogueNode", attributes: ["node_id", "name", "parent_id"] }],
     });
 
     const topicsMap = {};
     for (const stat of stats) {
-      const topic = stat.Topic;
+const topic = stat.catalogueNode;
       if (!topic) continue;
 
       const subjectNode = await CatalogueNode.findByPk(topic.parent_id, {
@@ -861,7 +865,7 @@ export const getMyTopicsWithStats = async (req, res) => {
       include: [
         {
           model: CatalogueNode,
-          // as: "Topic",
+          as: "catalogueNode", // ✅ must match association alias
           attributes: ["node_id", "name", "parent_id"],
         },
       ],
@@ -869,7 +873,7 @@ export const getMyTopicsWithStats = async (req, res) => {
 
     const topicsWithStats = [];
     for (const stat of stats) {
-      const topic = stat.Topic;
+      const topic = stat.catalogueNode; // ✅ changed from stat.Topic
       if (!topic) continue;
 
       const sessions = await Session.findAll({
@@ -896,6 +900,7 @@ export const getMyTopicsWithStats = async (req, res) => {
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
 
 /* ---------------------- Admin — Get All Teacher Availabilities ---------------------- */
 // ✅ FIXED VERSION — includes script-qualified Bridgers (from Teachertopicstats)
@@ -931,12 +936,13 @@ const bridgerStats = await Teachertopicstats.findAll({
     for (const stat of bridgerStats) {
       const tId = stat.teacherId;
       if (!teacherTopicMap[tId]) teacherTopicMap[tId] = [];
-      if (stat.Topic) {
-        teacherTopicMap[tId].push({
-          id: stat.Topic.node_id,
-          name: stat.Topic.name,
-        });
-      }
+if (stat.catalogueNode) {
+  teacherTopicMap[tId].push({
+    id: stat.catalogueNode.node_id,
+    name: stat.catalogueNode.name,
+  });
+}
+
     }
 
     const bridgerTeacherIds = Object.keys(teacherTopicMap);
