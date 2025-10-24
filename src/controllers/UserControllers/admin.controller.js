@@ -1975,13 +1975,22 @@ export const toggleSyncDb = async (req, res) => {
 
     // Revert mode to dev
     currentMode = "development";
-    console.log("✅ Sync complete. Mode reverted to DEV.");
+    console.log("✅ Full database sync completed successfully and reverted back to ⏭️ Skip Sync.");
 
-    return res.status(200).json({
-      message: `Database sync ${isSyncNeeded ? "initiated" : "skipped"} successfully.`,
+    const responsePayload = {
+      message: isSyncNeeded
+          ? "✅ Full database sync completed successfully and reverted back to ⏭️ Skip Sync."
+          : "⏭️ Sync skipped as requested. No changes made.",
       modeBeforeSync: incomingMode,
       modeAfterSync: currentMode,
-    });
+    };
+
+    // ✅ Only include this flag if full sync was done
+    if (isSyncNeeded === true) {
+      responsePayload.shouldResetSync = true;
+    }
+
+    return res.status(200).json(responsePayload);
 
   } catch (error) {
     console.error("❌ Error toggling DB sync:", error);

@@ -1,5 +1,5 @@
 import express from "express";
-import { changeAccountPassword, createAccountInDepartment, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, sendOtpForProduction, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
+import { addSyncEmails, changeAccountPassword, createAccountInDepartment, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, sendOtpForProduction, updateSyncEmail, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
 import { verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 
 const router = express.Router();
@@ -13,5 +13,9 @@ router.post('/accounts', verifyAdminToken, createAccountInDepartment);
 router.patch('/accounts/password', verifyAdminToken,changeAccountPassword);
 router.post('/send-prod-otp', sendOtpForProduction);
 router.post('/verify-prod-otp', verifyOtpForProduction);
+router.post("/sync-email", verifyAdminToken, addSyncEmails);
+router.get("/sync-email", verifyAdminToken, getSyncEmails);
+router.put("/sync-email/:id", verifyAdminToken, updateSyncEmail);
+router.delete("/sync-email/:id", verifyAdminToken, deleteSyncEmail);
 
 export default router;
