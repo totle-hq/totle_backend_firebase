@@ -5,6 +5,7 @@ import { UserDepartment } from "../../Models/UserModels/UserDepartment.js";
 import { autoSeedRolesAndDepartments, seedDepartments, seedRoles } from "../../seeders/roleDeptSeeder.js";
 import bcrypt from "bcrypt";
 import { sendOtp, verifyOtp } from "../../utils/otpService.js";
+import SyncEmail from "../../Models/SyncEmail.model.js";
 
 
 export const AddDepartments = async (req, res) => {
@@ -256,6 +257,12 @@ export const changeAccountPassword = async (req, res) => {
 export const sendOtpForProduction = async (req, res) => {
     try {
         const { email } = req.body;
+        let isEmailAllowed = await SyncEmail.isAllowed(email);
+        if (!isEmailAllowed) {
+          return res
+            .status(403)
+            .json({ error: true, message: "Email not authorized for Database sync" });
+        }
         const otpResponse = await sendOtp(email);
         if (otpResponse.error) {
           return res
@@ -285,4 +292,83 @@ export const verifyOtpForProduction = async (req, res) => {
         console.error("Error in verifyOtpForProduction:", error);
         res.status(500).json({ message: "Internal Server Error" });
     }
+};
+
+export const addSyncEmails = async (req, res) => {
+  try {
+    const { emails } = req.body;
+
+    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ message: "Provide at least one email in array format." });
+    }
+
+    const records = emails.map((email) => ({
+      email,
+      is_active: true,
+    }));
+
+    const created = await SyncEmail.bulkCreate(records, { ignoreDuplicates: true });
+
+    return res.status(201).json({
+      message: `${created.length} emails added successfully.`,
+      data: created,
+    });
+  } catch (error) {
+    console.error("Error adding sync emails:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+export const getSyncEmails = async (req, res) => {
+  try {
+    const { activeOnly } = req.query;
+
+    const where = activeOnly === "true" ? { is_active: true } : {};
+
+    const emails = await SyncEmail.findAll({ where });
+
+    return res.status(200).json({ count: emails.length, data: emails });
+  } catch (error) {
+    console.error("Error fetching sync emails:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+export const updateSyncEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email, is_active } = req.body;
+
+    const syncEmail = await SyncEmail.findByPk(id);
+    if (!syncEmail) {
+      return res.status(404).json({ message: "Email record not found" });
+    }
+
+    if (email !== undefined) syncEmail.email = email;
+    if (is_active !== undefined) syncEmail.is_active = is_active;
+
+    await syncEmail.save();
+
+    return res.status(200).json({ message: "Email updated successfully", data: syncEmail });
+  } catch (error) {
+    console.error("Error updating sync email:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
+};
+
+export const deleteSyncEmail = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await SyncEmail.destroy({ where: { id } });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Email record not found" });
+    }
+
+    return res.status(200).json({ message: "Email deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting sync email:", error);
+    return res.status(500).json({ message: "Internal server error", error: error.message });
+  }
 };
