@@ -118,14 +118,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: [
-    "Authorization",
-    "Content-Type",
-    "Cache-Control",
-    "X-User-Timezone",   // ✅ added
-    "X-Requested-With",
-    "Accept",
-  ],
+  allowedHeaders: ["Authorization", "Content-Type"],
   optionsSuccessStatus: 204,
   maxAge: 86400,
 };
@@ -281,19 +274,7 @@ if (process.env.NODE_ENV === "development") {
   "https://meet.jit.si",
   "https://aframe.io",
   "https://connect.facebook.net",
-  "https://www.facebook.com",
-    // ✅ Additional production-safe IP / analytics / CDN endpoints
-  "https://api.ipify.org",
-  "https://ipapi.co",
-  "https://ipapi.com",
-  "https://ipapi.com/api",
-  "https://api.ipgeolocation.io",
-  "https://geolocation-db.com",
-  "https://cdn.jsdelivr.net",
-  "https://cdnjs.cloudflare.com",
-  "https://maps.googleapis.com",
-  "https://maps.gstatic.com"
-
+  "https://www.facebook.com"
 ],
 
 
