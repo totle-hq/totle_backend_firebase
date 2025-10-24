@@ -1948,27 +1948,48 @@ export const getUsersSummary = async (req, res) => {
   }
 };
 
-const SECURE_SYNC_PIN = "secure"; // 🔒 your secure code
+// toggleSyncDb.js
+
+let currentMode = "development"; // default mode at startup
+const SECURE_SYNC_PIN = "secure";
 
 export const toggleSyncDb = async (req, res) => {
   try {
-    const { pin, isSyncNeeded } = req.body;
-    // Validate PIN
-    if (pin !== SECURE_SYNC_PIN) {
+    const { pin, isSyncNeeded, mode } = req.body;
+
+    const isDevMode = Boolean(mode === "development");
+    const incomingMode = isDevMode ? "development" : "production";
+
+    // Validate PIN if in dev mode
+    if (isDevMode && pin !== SECURE_SYNC_PIN) {
       return res.status(403).json({ message: "Access denied: Invalid PIN" });
     }
 
-    // Run sync or relationship setup
+    console.log(`[${incomingMode.toUpperCase()} MODE] Sync request received. isSyncNeeded: ${isSyncNeeded}`);
+
+    // Temporarily change mode
+    currentMode = incomingMode;
+
+    // Run sync operation
     await runDbSync(isSyncNeeded);
+
+    // Revert mode to dev
+    currentMode = "development";
+    console.log("✅ Sync complete. Mode reverted to DEV.");
 
     return res.status(200).json({
       message: `Database sync ${isSyncNeeded ? "initiated" : "skipped"} successfully.`,
+      modeBeforeSync: incomingMode,
+      modeAfterSync: currentMode,
     });
+
   } catch (error) {
-    console.error("Error toggling DB sync:", error);
+    console.error("❌ Error toggling DB sync:", error);
     return res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
+
 
 
 // ✅ GET: Fetch all cooldown data for all users (test-wise)

@@ -276,7 +276,7 @@ export const verifyOtpForProduction = async (req, res) => {
         const verifyResponse = await verifyOtp(email, otp);
         if (verifyResponse.error) {
           return res
-            .status(400)
+            .status(401)
             .json({ error: true, message: verifyResponse.message });
         }
         return res.status(200).json({ error: false, message: verifyResponse.message });
