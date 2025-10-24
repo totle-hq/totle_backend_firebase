@@ -897,6 +897,9 @@ export const getMyTopicsWithStats = async (req, res) => {
   }
 };
 
+/* ---------------------- Admin — Get All Teacher Availabilities ---------------------- */
+// ✅ FIXED VERSION — includes script-qualified Bridgers (from Teachertopicstats)
+
 export const getAllTeacherAvailabilities = async (req, res) => {
   try {
     console.log("🔍 AUTH USER:", req.user);
@@ -906,6 +909,17 @@ export const getAllTeacherAvailabilities = async (req, res) => {
 
     const now = new Date();
 
+    // 🟢 STEP 1: Fetch all Bridger-level teachers from Teachertopicstats
+    const bridgerStats = await Teachertopicstats.findAll({
+      where: { level: "Bridger" },
+      attributes: ["teacherId"],
+      group: ["teacherId"],
+      raw: true,
+    });
+
+    const bridgerTeacherIds = bridgerStats.map((s) => s.teacherId);
+
+    // 🟢 STEP 2: Fetch available sessions (as before)
     const sessions = await Session.findAll({
       where: { status: "available" },
       include: [
@@ -923,20 +937,18 @@ export const getAllTeacherAvailabilities = async (req, res) => {
       order: [["scheduled_at", "ASC"]],
     });
 
+    // 🟢 STEP 3: Group sessions by teacher
     const grouped = {};
     for (const s of sessions) {
       const teacherId = s.teacher?.id;
+      if (!teacherId) continue;
+
       if (!grouped[teacherId]) {
         grouped[teacherId] = {
           teacherId,
-          teacherName: `${s.teacher?.firstName || ""} ${
-            s.teacher?.lastName || ""
-          }`.trim(),
+          teacherName: `${s.teacher?.firstName || ""} ${s.teacher?.lastName || ""}`.trim(),
           timezone: s.teacher?.location?.timezone || "Asia/Kolkata",
-          slots: {
-            upcoming: [],
-            past: [],
-          },
+          slots: { upcoming: [], past: [] },
         };
       }
 
@@ -948,20 +960,34 @@ export const getAllTeacherAvailabilities = async (req, res) => {
       };
 
       const completedTime = new Date(s.completed_at || s.scheduled_at);
-      if (completedTime >= now) {
-        grouped[teacherId].slots.upcoming.push(slotObj);
-      } else {
-        grouped[teacherId].slots.past.push(slotObj);
+      if (completedTime >= now) grouped[teacherId].slots.upcoming.push(slotObj);
+      else grouped[teacherId].slots.past.push(slotObj);
+    }
+
+    // 🟢 STEP 4: Ensure all Bridger teachers are represented (even if no sessions)
+    const bridgerTeachers = await User.findAll({
+      where: { id: bridgerTeacherIds },
+      attributes: ["id", "firstName", "lastName", "location"],
+    });
+
+    for (const t of bridgerTeachers) {
+      if (!grouped[t.id]) {
+        grouped[t.id] = {
+          teacherId: t.id,
+          teacherName: `${t.firstName || ""} ${t.lastName || ""}`.trim(),
+          timezone: t.location?.timezone || "Asia/Kolkata",
+          slots: { upcoming: [], past: [] },
+        };
       }
     }
 
+    // 🟢 STEP 5: Return unified result
     return res.status(200).json(Object.values(grouped));
   } catch (err) {
     console.error("getAllTeacherAvailabilities error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
-
 
 /* -------------------------- Admin — Update Teacher Availability -------------------------- */
 // Allows Founder / Superadmin / Helix (Operations) to overwrite any teacher’s slot directly.
