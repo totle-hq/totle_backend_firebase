@@ -345,22 +345,24 @@ const defineRelationships = () => {
   }
   
 
-  // if (!BookedSession.associations?.teacherStats) {
-  //   BookedSession.hasOne(Teachertopicstats, {
-  //     foreignKey: "teacher_id",
-  //     sourceKey: "teacher_id",
-  //     as: "teacherStats",
-  //     constraints: false
-  //   });
-  // }
-  // if (!Teachertopicstats.associations?.bookedSession) {
-  //   Teachertopicstats.belongsTo(BookedSession, {
-  //     foreignKey: "teacher_id",
-  //     targetKey: "teacher_id",
-  //     as: "bookedSession",
-  //     constraints: false
-  //   });
-  // }
+  if (!TeacherAvailability.associations?.catalogueNode) {
+    TeacherAvailability.belongsToMany(CatalogueNode, {
+      through: "user.teacher_availability_topics", // or your defined join model
+      foreignKey: "availability_id",
+      otherKey: "topic_id",
+      as: "catalogueNode",
+    });
+  }
+
+  if (!CatalogueNode.associations?.teacherAvailability) {
+    CatalogueNode.belongsToMany(TeacherAvailability, {
+      through: "user.teacher_availability_topics",
+      foreignKey: "topic_id",
+      otherKey: "availability_id",
+      as: "teacherAvailability",
+    });
+  }
+
   if (!Teachertopicstats.associations?.feedbacks) {
     Teachertopicstats.hasMany(Feedback, {
       foreignKey: "bridger_id",
