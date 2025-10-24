@@ -429,7 +429,7 @@ const startServer = async () => {
     console.log("✅ CPS model associations initialized");
 
     // 🔹 Ensure DB schema with associations known
-    await runDbSync(false);
+    await runDbSync(true);
     console.log("✅ DB sync complete");
 
     const PORT = process.env.PORT || 5000;
