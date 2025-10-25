@@ -388,6 +388,12 @@ if (fs.existsSync(path.join(buildPath, "index.html"))) {
 } else {
   console.warn("⚠️  No React build found — skipping static frontend serving");
 }
+// ✅ Serve React frontend routes (like /teach/session/:id)
+app.get("/teach/session/:id", (req, res) => {
+  const buildPath = path.join(__dirname, "build");
+  res.sendFile(path.join(buildPath, "index.html"));
+});
+
 
 // 404 for unknown API routes
 app.use((req, res) => {
