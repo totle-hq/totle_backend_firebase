@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -64,7 +63,6 @@ import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 import iqQuestionRoutes from "./routes/cps/iqQuestion.routes.js";
 import sitemapRouter from "./routes/SiteMap/sitemap.js";
 
-
 // DB sync (your existing)
 import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
 import { initCpsModels } from "./Models/Cps/index.js";
@@ -120,7 +118,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type","x-user-timezone"],
+  allowedHeaders: ["Authorization", "Content-Type", "x-user-timezone"],
   optionsSuccessStatus: 204,
   maxAge: 86400,
 };
@@ -145,8 +143,6 @@ app.use((req, res, next) => {
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Preflight for all routes
-
-/* -------------------- Security & middlewares -------------------- */
 
 /* -------------------- Security & middlewares -------------------- */
 if (process.env.NODE_ENV === "development") {
@@ -200,12 +196,15 @@ if (process.env.NODE_ENV === "development") {
         imgSrc: ["'self'", "data:", "blob:", "https://*"],
         connectSrc: [
           "'self'",
+          // Your app's domains (HTTP and WebSocket)
           "https://api.totle.co",
           "https://totle.co",
           "https://nucleus.totle.co",
           "https://www.totle.co",
           "wss://api.totle.co",
           "wss://totle.co",
+          "wss://nucleus.totle.co", // Added for potential WebSocket on nucleus subdomain
+          // Local development
           "http://localhost:3000",
           "http://localhost:5000",
           "http://localhost:5173",
@@ -214,6 +213,7 @@ if (process.env.NODE_ENV === "development") {
           "ws://localhost:5000",
           "ws://localhost:5173",
           "ws://localhost:4173",
+          // Stream.io endpoints (expanded to cover all regions and subdomains)
           "https://api.stream-io-api.com",
           "wss://api.stream-io-api.com",
           "https://video.stream-io-api.com",
@@ -234,10 +234,10 @@ if (process.env.NODE_ENV === "development") {
           "wss://in.stream-io-api.com",
           "https://stream-io-video.com",
           "wss://stream-io-video.com",
-          "https://rtc.stream-io-video.com",
-          "wss://rtc.stream-io-video.com",
           "https://edge.stream-io-video.com",
           "wss://edge.stream-io-video.com",
+          "https://global.stream-io-video.com",
+          "wss://global.stream-io-video.com",
           "https://video.stream-io-video.com",
           "wss://video.stream-io-video.com",
           "https://hint.stream-io-video.com",
@@ -254,6 +254,7 @@ if (process.env.NODE_ENV === "development") {
           "wss://*.stream-io-api.com",
           "https://*.stream-io-video.com",
           "wss://*.stream-io-video.com",
+          // Other third-party services
           "https://www.google-analytics.com",
           "https://stats.g.doubleclick.net",
           "https://api-bdc.io",
@@ -267,21 +268,10 @@ if (process.env.NODE_ENV === "development") {
           "https://aframe.io",
           "https://connect.facebook.net",
           "https://www.facebook.com",
-"https://connect.facebook.net",
-"https://www.facebook.com",
-
-// ✅ Add these Stream endpoints explicitly (missing earlier)
-"https://stream-io-api.com",
-"wss://stream-io-api.com",
-"https://edge.api.stream-io-video.com",
-"wss://edge.api.stream-io-video.com",
-"https://global.stream-io-video.com",
-"wss://global.stream-io-video.com",
-"https://*.stream-io-video.com",
-"wss://*.stream-io-video.com",
-"https://*.stream-io-api.com",
-"wss://*.stream-io-api.com",
-],
+          // Add any additional URLs identified from browser console here
+          // Example: "https://new-service.com",
+          // Example: "wss://new-websocket-endpoint.com",
+        ],
         frameSrc: [
           "'self'",
           "https://checkout.razorpay.com",
@@ -290,13 +280,18 @@ if (process.env.NODE_ENV === "development") {
           "https://*.stream-io-api.com",
         ],
         objectSrc: ["'none'"],
+        // Added for CSP violation reporting
+        reportUri: "/csp-violation-report",
       },
     })
   );
 }
 
-
-
+// CSP violation reporting endpoint
+app.post("/csp-violation-report", (req, res) => {
+  console.log("CSP Violation:", JSON.stringify(req.body, null, 2));
+  res.status(204).end();
+});
 
 app.use(compression());
 app.use(morgan("dev"));
@@ -408,7 +403,6 @@ app.get("/teach/session/:id", (req, res) => {
   res.sendFile(path.join(buildPath, "index.html"));
 });
 
-
 // 404 for unknown API routes
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found", path: req.originalUrl });
@@ -435,8 +429,6 @@ const startServer = async () => {
 
     // Socket.IO with strict CORS (must mirror HTTP CORS)
     const io = new Server(server, {
-      // path: "/socket.io",
-      // transports: ["websocket", "polling"], // client sends EIO=4 polling fallback
       cors: {
         origin: (origin, cb) => {
           if (!origin) return cb(null, true); // server-to-server/no-origin
@@ -448,7 +440,6 @@ const startServer = async () => {
         allowedHeaders: ["Authorization", "Content-Type"],
         credentials: true,
       },
-      // Helpful behind proxies/ALB
       allowEIO3: false, // you are on EIO=4; keep false to avoid legacy quirks
     });
 
@@ -487,13 +478,6 @@ const startServer = async () => {
       console.log("🔄 Redis subscriber active for cps:observatory:update");
     }
 
-  // Forward signal (offer, answer, candidate)
-  // socket.on("signal", ({ sessionId, userId, type, data }) => {
-  //   if (!sessionId) return;
-  //   console.log(`📡 Signal ${type} from ${userId ?? "unknown"} in ${sessionId}`);
-  //   socket.to(sessionId).emit("signal", { sessionId, userId, type, data });
-  // });
-
     io.on("connection", (socket) => {
       console.log("🔌 WebSocket connected:", socket.id);
 
@@ -531,7 +515,7 @@ const startServer = async () => {
       console.error("UncaughtException:", err);
     });
 
-    server.listen(PORT,'0.0.0.0', () => {
+    server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
     });
   } catch (error) {
