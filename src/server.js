@@ -62,6 +62,8 @@ import researchRoutes from "./routes/research.routes.js";
 import cpsLogsRoutes from "./routes/cpsLogs.routes.js";
 import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 import iqQuestionRoutes from "./routes/cps/iqQuestion.routes.js";
+import sitemapRouter from "./routes/SiteMap/sitemap.js";
+
 
 // DB sync (your existing)
 import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
@@ -118,7 +120,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type"],
+  allowedHeaders: ["Authorization", "Content-Type","x-user-timezone"],
   optionsSuccessStatus: 204,
   maxAge: 86400,
 };
@@ -390,6 +392,8 @@ app.use('/api/session/paid', PaidSessionRoutes);
 app.get("/", (_req, res) => {
   res.send("✅ TOTLE Backend API is running!");
 });
+
+app.use("/api/sitemap", sitemapRouter);
 
 // Basic healthz for ALB/Nginx target group checks
 app.get("/healthz", (_req, res) => res.status(200).json({ ok: true }));

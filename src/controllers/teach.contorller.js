@@ -83,7 +83,7 @@ export const reportSession = async (req, res) => {
 export const setTeacherAvailability = async (req, res) => {
   try {
     const teacher_id = req.user.id;
-    const tz = req.userTz || "UTC"; // 👈 user/browser timezone from middleware
+    const tz = req.userTz || "UTC";
     const { topic_ids, date, timeRange } = req.body;
 
     const user = await User.findByPk(teacher_id);
@@ -96,47 +96,50 @@ export const setTeacherAvailability = async (req, res) => {
     }
 
     const [startTimeStr, endTimeStr] = timeRange.split("-").map(s => s.trim());
-    // Build LOCAL datetimes in the user's tz, then convert to UTC for storage
+
     const startLocalISO = `${date}T${startTimeStr}:00.000`;
-    const endLocalISO   = `${date}T${endTimeStr}:00.000`;
+    const endLocalISO = `${date}T${endTimeStr}:00.000`;
 
-    // Do midnight-crossing check in LOCAL time
     let startLocal = new Date(startLocalISO);
-    let endLocal   = new Date(endLocalISO);
-    if (endLocal <= startLocal) endLocal = new Date(endLocal.getTime() + 24 * 60 * 60 * 1000);
+    let endLocal = new Date(endLocalISO);
+    if (endLocal <= startLocal) endLocal = new Date(endLocal.getTime() + 86400000);
 
-    // Convert local → UTC instants for DB
     const scheduled_at = localToUtc(startLocal, tz);
     const completed_at = localToUtc(endLocal, tz);
 
-    const duration_minutes = Math.round((completed_at.getTime() - scheduled_at.getTime()) / 60000);
+    const duration_minutes = Math.round((completed_at - scheduled_at) / 60000);
     if (duration_minutes < 90) {
       return res.status(400).json({ message: "Minimum slot length is 90 minutes." });
     }
 
-    // Gate: ≥ 30 min from now (compare in UTC instants)
     const minStart = new Date(Date.now() + 30 * 60 * 1000);
     if (scheduled_at < minStart) {
       return res.status(400).json({ message: "You can only offer a slot at least 30 minutes from now." });
     }
 
-    // Day-of-week computed in LOCAL tz (for your TeacherAvailability schema)
     const startLocalZoned = utcToZoned(scheduled_at, tz);
-    const dayOfWeek = format(startLocalZoned, "EEEE"); // e.g., "Monday"
+    const dayOfWeek = format(startLocalZoned, "EEEE");
     const formattedStart = `${String(startLocalZoned.getHours()).padStart(2, "0")}:${String(startLocalZoned.getMinutes()).padStart(2, "0")}:00`;
     const endLocalZoned = utcToZoned(completed_at, tz);
     const formattedEnd = `${String(endLocalZoned.getHours()).padStart(2, "0")}:${String(endLocalZoned.getMinutes()).padStart(2, "0")}:00`;
     const available_date = format(startLocalZoned, "yyyy-MM-dd");
 
-    // ❌ Check for exact duplicate slot (same local weekday + start/end)
+    // Check for duplicate (same teacher, day, time) — independent of topics
     const existing = await TeacherAvailability.findOne({
-      where: { teacher_id, day_of_week: dayOfWeek, start_time: formattedStart, end_time: formattedEnd },
+      where: {
+        teacher_id,
+        day_of_week: dayOfWeek,
+        start_time: formattedStart,
+        end_time: formattedEnd,
+        available_date,
+      },
     });
+
     if (existing) {
       return res.status(400).json({ message: "You already have this availability slot configured." });
     }
 
-    // ✅ Create availability row (you store local facets here per your schema)
+    // ✅ Create slot
     const availability = await TeacherAvailability.create({
       teacher_id,
       day_of_week: dayOfWeek,
@@ -147,12 +150,19 @@ export const setTeacherAvailability = async (req, res) => {
       is_active: true,
     });
 
-    return res.status(201).json({ message: "Availability slot created successfully", availability });
+    // ✅ Attach topics via join table
+    await availability.addCatalogueNode(topic_ids); // <- This is required for M:N
+
+    return res.status(201).json({
+      message: "Availability slot created successfully",
+      availability,
+    });
   } catch (err) {
     console.error("Offer slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
+
 
 
 
@@ -485,33 +495,33 @@ export const getAvailabilityChart = async (req, res) => {
     const teacher_id = req.user.id;
     const tz = req.userTz || "UTC";
 
-    // compute today in user's tz
+    // Compute start of local day
     const todayLocal = utcToZoned(new Date(), tz);
     const todayISO = format(todayLocal, "yyyy-MM-dd");
 
-    // full 7-day UTC window starting from local midnight today
+    // Get UTC window: start and end of this 7-day period
     const { utcStart, utcEnd } = weekRangeUtcFromLocalStartDay(todayISO, tz);
 
-    // ✅ Include topics + CatalogueNode names (works even if association missing)
-  const availabilities = await TeacherAvailability.findAll({
-  where: {
-    teacher_id,
-    is_active: true,
-    createdAt: { [Op.lte]: utcEnd },
-  },
-  include: [
-  {
-    model: CatalogueNode,
-    as: "catalogueNode", // ✅ unified alias — matches everywhere else
-    attributes: ["node_id", "name"],
-    through: { attributes: [] },
-  },
-  ],
-  order: [["available_date", "ASC"]],
-});
+    // Fetch all availabilities for the teacher during this window
+    const availabilities = await TeacherAvailability.findAll({
+      where: {
+        teacher_id,
+        is_active: true,
+        createdAt: { [Op.lte]: utcEnd },
+      },
+      include: [
+        {
+          model: CatalogueNode,
+          as: "catalogueNode", // ✅ Many-to-many
+          attributes: ["node_id", "name"],
+          through: { attributes: [] },
+        },
+      ],
+      order: [["available_date", "ASC"]],
+    });
 
+    // Build empty structure for each day
     const result = {};
-
     for (let i = 0; i < 7; i++) {
       const dayUtc = new Date(utcStart.getTime() + i * 86400000);
       const localDay = utcToZoned(dayUtc, tz);
@@ -519,6 +529,7 @@ export const getAvailabilityChart = async (req, res) => {
       result[dayKey] = [];
     }
 
+    // Map availabilities into the correct day slots
     for (const dayKey of Object.keys(result)) {
       const weekday = format(new Date(`${dayKey}T00:00:00`), "EEEE");
 
@@ -530,11 +541,12 @@ export const getAvailabilityChart = async (req, res) => {
 
         const startLocal = new Date(`${dayKey}T${slot.start_time}`);
         let endLocal = new Date(`${dayKey}T${slot.end_time}`);
-        if (endLocal <= startLocal)
-          endLocal = new Date(endLocal.getTime() + 86400000);
+        if (endLocal <= startLocal) {
+          endLocal = new Date(endLocal.getTime() + 86400000); // handles overnight slots
+        }
 
-const topic_ids = slot.catalogueNode ? [slot.catalogueNode.node_id] : [];
-const topic_names = slot.catalogueNode ? [slot.catalogueNode.name] : [];
+        const topic_ids = slot.catalogueNode?.map(t => t.node_id) || [];
+        const topic_names = slot.catalogueNode?.map(t => t.name) || [];
 
         result[dayKey].push({
           id: slot.availability_id,
@@ -550,7 +562,7 @@ const topic_names = slot.catalogueNode ? [slot.catalogueNode.name] : [];
 
     return res.status(200).json({ tz, availability: result });
   } catch (err) {
-    console.error("Error fetching availability chart:", err);
+    console.error("❌ Error fetching availability chart:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }
 };
