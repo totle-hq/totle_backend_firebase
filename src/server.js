@@ -274,7 +274,29 @@ if (process.env.NODE_ENV === "development") {
   "https://meet.jit.si",
   "https://aframe.io",
   "https://connect.facebook.net",
-  "https://www.facebook.com"
+  "https://www.facebook.com",
+  // --- Stream dynamic fallback edges (required for real-time calls) ---
+"https://stream-io-video.com",
+"wss://stream-io-video.com",
+"https://*.stream-io-api.com",
+"wss://*.stream-io-api.com",
+"https://*.stream-io-video.com",
+"wss://*.stream-io-video.com",
+"https://edge-us-east.stream-io-video.com",
+"wss://edge-us-east.stream-io-video.com",
+"https://edge-ap-southeast.stream-io-video.com",
+"wss://edge-ap-southeast.stream-io-video.com",
+"https://relay.stream-io-video.com",
+"wss://relay.stream-io-video.com",
+"https://turn.stream-io-video.com",
+"wss://turn.stream-io-video.com",
+"https://turn.stream-io-api.com",
+"wss://turn.stream-io-api.com",
+"https://relay.stream-io-api.com",
+"wss://relay.stream-io-api.com",
+"https://prod.stream-io-api.com",
+"wss://prod.stream-io-api.com",
+
 ],
 
 
