@@ -147,15 +147,8 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Preflight for all routes
 
 /* -------------------- Security & middlewares -------------------- */
-app.use(
-  helmet({
-    crossOriginResourcePolicy: false,
-    crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: false, // 🚫 disable default CSP here
-  })
-);
 
-
+/* -------------------- Security & middlewares -------------------- */
 if (process.env.NODE_ENV === "development") {
   app.use(
     helmet({
@@ -164,14 +157,20 @@ if (process.env.NODE_ENV === "development") {
       crossOriginResourcePolicy: false,
     })
   );
-  console.warn("⚠️  Helmet CSP is disabled for local development");
+  console.warn("⚠️  Helmet CSP disabled for local development");
 } else {
+  app.use(
+    helmet({
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: false,
+    })
+  );
+
   app.use(
     helmet.contentSecurityPolicy({
       useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
-
         scriptSrc: [
           "'self'",
           "'unsafe-inline'",
@@ -184,7 +183,6 @@ if (process.env.NODE_ENV === "development") {
           "https://aframe.io",
           "https://unpkg.com",
         ],
-
         scriptSrcElem: [
           "'self'",
           "'unsafe-inline'",
@@ -197,96 +195,79 @@ if (process.env.NODE_ENV === "development") {
           "https://aframe.io",
           "https://unpkg.com",
         ],
-
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "blob:", "https://*"],
-
-connectSrc: [
-  "'self'",
-
-  // --- TOTLE internal & production ---
-  "https://api.totle.co",
-  "https://totle.co",
-  "https://nucleus.totle.co",
-  "https://www.totle.co",
-  "wss://api.totle.co",
-  "wss://totle.co",
-
-  // --- Local development ---
-  "http://localhost:3000",
-  "http://localhost:5000",
-  "http://localhost:5173",
-  "http://localhost:4173",
-  "ws://localhost:3000",
-  "ws://localhost:5000",
-  "ws://localhost:5173",
-  "ws://localhost:4173",
-
-  // --- Stream.io primary + regional edges ---
-  "https://api.stream-io-api.com",
-  "wss://api.stream-io-api.com",
-  "https://video.stream-io-api.com",
-  "wss://video.stream-io-api.com",
-  "https://edge.stream-io-api.com",
-  "wss://edge.stream-io-api.com",
-  "https://global.stream-io-api.com",
-  "wss://global.stream-io-api.com",
-  "https://us-east.stream-io-api.com",
-  "wss://us-east.stream-io-api.com",
-  "https://us-west.stream-io-api.com",
-  "wss://us-west.stream-io-api.com",
-  "https://eu-west.stream-io-api.com",
-  "wss://eu-west.stream-io-api.com",
-  "https://ap-northeast.stream-io-api.com",
-  "wss://ap-northeast.stream-io-api.com",
-  "https://in.stream-io-api.com",
-  "wss://in.stream-io-api.com",
-
-  // --- Stream.io video + RTC + hint/relay/turn ---
-  "https://stream-io-video.com",
-  "wss://stream-io-video.com",
-  "https://rtc.stream-io-video.com",
-  "wss://rtc.stream-io-video.com",
-  "https://edge.stream-io-video.com",
-  "wss://edge.stream-io-video.com",
-  "https://video.stream-io-video.com",
-  "wss://video.stream-io-video.com",
-  "https://hint.stream-io-video.com",
-  "wss://hint.stream-io-video.com",
-  "https://relay.stream-io-video.com",
-  "wss://relay.stream-io-video.com",
-  "https://turn.stream-io-video.com",
-  "wss://turn.stream-io-video.com",
-  "https://turn.stream-io-api.com",
-  "wss://turn.stream-io-api.com",
-  "https://relay.stream-io-api.com",
-  "wss://relay.stream-io-api.com",
-
-  // --- Wildcards for Stream fallbacks (covers any future region) ---
-  "https://*.stream-io-api.com",
-  "wss://*.stream-io-api.com",
-  "https://*.stream-io-video.com",
-  "wss://*.stream-io-video.com",
-
-  // --- External services ---
-  "https://www.google-analytics.com",
-  "https://stats.g.doubleclick.net",
-  "https://api-bdc.io",
-  "https://api.bigdatacloud.net",
-  "https://ipinfo.io",
-  "https://api.razorpay.com",
-  "https://checkout.razorpay.com",
-  "https://lumberjack.razorpay.com",
-  "https://rzp.io",
-  "https://meet.jit.si",
-  "https://aframe.io",
-  "https://connect.facebook.net",
-  "https://www.facebook.com",
-],
-
-
-
+        connectSrc: [
+          "'self'",
+          "https://api.totle.co",
+          "https://totle.co",
+          "https://nucleus.totle.co",
+          "https://www.totle.co",
+          "wss://api.totle.co",
+          "wss://totle.co",
+          "http://localhost:3000",
+          "http://localhost:5000",
+          "http://localhost:5173",
+          "http://localhost:4173",
+          "ws://localhost:3000",
+          "ws://localhost:5000",
+          "ws://localhost:5173",
+          "ws://localhost:4173",
+          "https://api.stream-io-api.com",
+          "wss://api.stream-io-api.com",
+          "https://video.stream-io-api.com",
+          "wss://video.stream-io-api.com",
+          "https://edge.stream-io-api.com",
+          "wss://edge.stream-io-api.com",
+          "https://global.stream-io-api.com",
+          "wss://global.stream-io-api.com",
+          "https://us-east.stream-io-api.com",
+          "wss://us-east.stream-io-api.com",
+          "https://us-west.stream-io-api.com",
+          "wss://us-west.stream-io-api.com",
+          "https://eu-west.stream-io-api.com",
+          "wss://eu-west.stream-io-api.com",
+          "https://ap-northeast.stream-io-api.com",
+          "wss://ap-northeast.stream-io-api.com",
+          "https://in.stream-io-api.com",
+          "wss://in.stream-io-api.com",
+          "https://stream-io-video.com",
+          "wss://stream-io-video.com",
+          "https://rtc.stream-io-video.com",
+          "wss://rtc.stream-io-video.com",
+          "https://edge.stream-io-video.com",
+          "wss://edge.stream-io-video.com",
+          "https://video.stream-io-video.com",
+          "wss://video.stream-io-video.com",
+          "https://hint.stream-io-video.com",
+          "wss://hint.stream-io-video.com",
+          "https://relay.stream-io-video.com",
+          "wss://relay.stream-io-video.com",
+          "https://turn.stream-io-video.com",
+          "wss://turn.stream-io-video.com",
+          "https://turn.stream-io-api.com",
+          "wss://turn.stream-io-api.com",
+          "https://relay.stream-io-api.com",
+          "wss://relay.stream-io-api.com",
+          "https://*.stream-io-api.com",
+          "wss://*.stream-io-api.com",
+          "https://*.stream-io-video.com",
+          "wss://*.stream-io-video.com",
+          "https://www.google-analytics.com",
+          "https://stats.g.doubleclick.net",
+          "https://api-bdc.io",
+          "https://api.bigdatacloud.net",
+          "https://ipinfo.io",
+          "https://api.razorpay.com",
+          "https://checkout.razorpay.com",
+          "https://lumberjack.razorpay.com",
+          "https://rzp.io",
+          "https://meet.jit.si",
+          "https://aframe.io",
+          "https://connect.facebook.net",
+          "https://www.facebook.com",
+        ],
         frameSrc: [
           "'self'",
           "https://checkout.razorpay.com",
@@ -294,12 +275,12 @@ connectSrc: [
           "https://video.stream-io-api.com",
           "https://*.stream-io-api.com",
         ],
-
         objectSrc: ["'none'"],
       },
     })
   );
 }
+
 
 
 
