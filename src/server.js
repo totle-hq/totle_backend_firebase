@@ -73,6 +73,8 @@ import "./Models/index.js";
 // ----------------------------------------
 dotenv.config();
 
+console.log("SERVER START - NODE_ENV:", process.env.NODE_ENV); // Log to confirm environment
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -118,7 +120,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Authorization", "Content-Type", "x-user-timezone"],
+  allowedHeaders: ["Authorization", "Content-Type","x-user-timezone"],
   optionsSuccessStatus: 204,
   maxAge: 86400,
 };
@@ -145,6 +147,19 @@ app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // Preflight for all routes
 
 /* -------------------- Security & middlewares -------------------- */
+
+// Middleware to log the CSP header being set (for debugging)
+app.use((req, res, next) => {
+  const originalSet = res.setHeader;
+  res.setHeader = function (key, value) {
+    if (key.toLowerCase() === 'content-security-policy-report-only' || key.toLowerCase() === 'content-security-policy') {
+      console.log(`[CSP DEBUG] Setting CSP header for ${req.url}: ${key} = ${value.substring(0, 200)}...`); // Truncate for readability
+    }
+    return originalSet.call(this, key, value);
+  };
+  next();
+});
+
 if (process.env.NODE_ENV === "development") {
   app.use(
     helmet({
@@ -155,6 +170,7 @@ if (process.env.NODE_ENV === "development") {
   );
   console.warn("⚠️  Helmet CSP disabled for local development");
 } else {
+  console.log("Applying production security configurations");
   app.use(
     helmet({
       crossOriginEmbedderPolicy: false,
@@ -164,6 +180,7 @@ if (process.env.NODE_ENV === "development") {
 
   app.use(
     helmet.contentSecurityPolicy({
+      reportOnly: true, // Temporary: Log violations without blocking to debug and confirm all endpoints
       useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
@@ -196,15 +213,15 @@ if (process.env.NODE_ENV === "development") {
         imgSrc: ["'self'", "data:", "blob:", "https://*"],
         connectSrc: [
           "'self'",
-          // Your app's domains (HTTP and WebSocket)
+          // Your app's domains
           "https://api.totle.co",
           "https://totle.co",
           "https://nucleus.totle.co",
           "https://www.totle.co",
           "wss://api.totle.co",
           "wss://totle.co",
-          "wss://nucleus.totle.co", // Added for potential WebSocket on nucleus subdomain
-          // Local development
+          "wss://nucleus.totle.co",
+          // Local development (remove if not needed in production)
           "http://localhost:3000",
           "http://localhost:5000",
           "http://localhost:5173",
@@ -213,7 +230,15 @@ if (process.env.NODE_ENV === "development") {
           "ws://localhost:5000",
           "ws://localhost:5173",
           "ws://localhost:4173",
-          // Stream.io endpoints (expanded to cover all regions and subdomains)
+          // Stream.io endpoints (full list from docs, including wildcards and explicit for reliability)
+          "https://*.stream-io-api.com",
+          "wss://*.stream-io-api.com",
+          "https://*.stream-io-video.com",
+          "wss://*.stream-io-video.com",
+          "https://*.getstream.io",
+          "wss://*.getstream.io",
+          "https://pool.turn.stream-io-video.com",
+          "wss://pool.turn.stream-io-video.com",
           "https://api.stream-io-api.com",
           "wss://api.stream-io-api.com",
           "https://video.stream-io-api.com",
@@ -250,10 +275,6 @@ if (process.env.NODE_ENV === "development") {
           "wss://turn.stream-io-api.com",
           "https://relay.stream-io-api.com",
           "wss://relay.stream-io-api.com",
-          "https://*.stream-io-api.com",
-          "wss://*.stream-io-api.com",
-          "https://*.stream-io-video.com",
-          "wss://*.stream-io-video.com",
           // Other third-party services
           "https://www.google-analytics.com",
           "https://stats.g.doubleclick.net",
@@ -268,9 +289,6 @@ if (process.env.NODE_ENV === "development") {
           "https://aframe.io",
           "https://connect.facebook.net",
           "https://www.facebook.com",
-          // Add any additional URLs identified from browser console here
-          // Example: "https://new-service.com",
-          // Example: "wss://new-websocket-endpoint.com",
         ],
         frameSrc: [
           "'self'",
@@ -278,18 +296,22 @@ if (process.env.NODE_ENV === "development") {
           "https://meet.jit.si",
           "https://video.stream-io-api.com",
           "https://*.stream-io-api.com",
+          "https://*.stream-io-video.com", // Added for potential iframes
         ],
         objectSrc: ["'none'"],
-        // Added for CSP violation reporting
         reportUri: "/csp-violation-report",
       },
     })
   );
 }
 
-// CSP violation reporting endpoint
-app.post("/csp-violation-report", (req, res) => {
-  console.log("CSP Violation:", JSON.stringify(req.body, null, 2));
+// Enhanced CSP violation reporting endpoint (log blocked URL prominently)
+app.post("/csp-violation-report", express.json({ type: 'application/reports+json' }), (req, res) => {
+  const report = req.body;
+  console.log("[CSP VIOLATION] Blocked URL: ", report['csp-report']?.['blocked-uri'] || 'Unknown');
+  console.log("[CSP VIOLATION] Document URL: ", report['csp-report']?.['document-uri'] || 'Unknown');
+  console.log("[CSP VIOLATION] Violated Directive: ", report['csp-report']?.['violated-directive'] || 'Unknown');
+  console.log("[CSP VIOLATION] Full Report: ", JSON.stringify(report, null, 2));
   res.status(204).end();
 });
 
@@ -429,6 +451,8 @@ const startServer = async () => {
 
     // Socket.IO with strict CORS (must mirror HTTP CORS)
     const io = new Server(server, {
+      // path: "/socket.io",
+      // transports: ["websocket", "polling"], // client sends EIO=4 polling fallback
       cors: {
         origin: (origin, cb) => {
           if (!origin) return cb(null, true); // server-to-server/no-origin
@@ -440,6 +464,7 @@ const startServer = async () => {
         allowedHeaders: ["Authorization", "Content-Type"],
         credentials: true,
       },
+      // Helpful behind proxies/ALB
       allowEIO3: false, // you are on EIO=4; keep false to avoid legacy quirks
     });
 
@@ -515,7 +540,7 @@ const startServer = async () => {
       console.error("UncaughtException:", err);
     });
 
-    server.listen(PORT, '0.0.0.0', () => {
+    server.listen(PORT,'0.0.0.0', () => {
       console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
     });
   } catch (error) {
