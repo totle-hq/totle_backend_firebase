@@ -202,17 +202,18 @@ if (process.env.NODE_ENV === "development") {
         fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
         imgSrc: ["'self'", "data:", "blob:", "https://*"],
 
-       connectSrc: [
+connectSrc: [
   "'self'",
 
-  // TOTLE internal & production
+  // --- TOTLE internal & production ---
   "https://api.totle.co",
   "https://totle.co",
   "https://nucleus.totle.co",
   "https://www.totle.co",
   "wss://api.totle.co",
+  "wss://totle.co",
 
-  // Local development
+  // --- Local development ---
   "http://localhost:3000",
   "http://localhost:5000",
   "http://localhost:5173",
@@ -222,48 +223,53 @@ if (process.env.NODE_ENV === "development") {
   "ws://localhost:5173",
   "ws://localhost:4173",
 
-  // ✅ Stream Video (all known endpoints)
-  "https://stream-io-api.com",
+  // --- Stream.io primary + regional edges ---
   "https://api.stream-io-api.com",
-  "https://video.stream-io-api.com",
-  "https://edge.stream-io-api.com",
-  "https://global.stream-io-api.com",
-  "https://us-east.stream-io-api.com",
-  "https://us-west.stream-io-api.com",
-  "https://eu-west.stream-io-api.com",
-  "https://ap-northeast.stream-io-api.com",
-  "https://in.stream-io-api.com",
-  "https://hint.stream-io-video.com",  // ✅ crucial new one
-  // Stream WebRTC + Video edges (full coverage)
-"https://rtc.stream-io-video.com",
-"wss://rtc.stream-io-video.com",
-"https://edge.stream-io-video.com",
-"wss://edge.stream-io-video.com",
-"https://edge-cluster.stream-io-video.com",
-"wss://edge-cluster.stream-io-video.com",
-"https://video.stream-io-video.com",
-"wss://video.stream-io-video.com",
-"https://global.stream-io-video.com",
-"wss://global.stream-io-video.com",
-"https://hint.stream-io-video.com",
-"wss://hint.stream-io-video.com",
-"https://*.stream-io-video.com",
-"wss://*.stream-io-video.com",
-
-
-  "wss://stream-io-api.com",
   "wss://api.stream-io-api.com",
+  "https://video.stream-io-api.com",
   "wss://video.stream-io-api.com",
+  "https://edge.stream-io-api.com",
   "wss://edge.stream-io-api.com",
+  "https://global.stream-io-api.com",
   "wss://global.stream-io-api.com",
+  "https://us-east.stream-io-api.com",
   "wss://us-east.stream-io-api.com",
+  "https://us-west.stream-io-api.com",
   "wss://us-west.stream-io-api.com",
+  "https://eu-west.stream-io-api.com",
   "wss://eu-west.stream-io-api.com",
+  "https://ap-northeast.stream-io-api.com",
   "wss://ap-northeast.stream-io-api.com",
+  "https://in.stream-io-api.com",
   "wss://in.stream-io-api.com",
-  "wss://hint.stream-io-video.com",    // ✅ crucial new one
 
-  // ✅ External services
+  // --- Stream.io video + RTC + hint/relay/turn ---
+  "https://stream-io-video.com",
+  "wss://stream-io-video.com",
+  "https://rtc.stream-io-video.com",
+  "wss://rtc.stream-io-video.com",
+  "https://edge.stream-io-video.com",
+  "wss://edge.stream-io-video.com",
+  "https://video.stream-io-video.com",
+  "wss://video.stream-io-video.com",
+  "https://hint.stream-io-video.com",
+  "wss://hint.stream-io-video.com",
+  "https://relay.stream-io-video.com",
+  "wss://relay.stream-io-video.com",
+  "https://turn.stream-io-video.com",
+  "wss://turn.stream-io-video.com",
+  "https://turn.stream-io-api.com",
+  "wss://turn.stream-io-api.com",
+  "https://relay.stream-io-api.com",
+  "wss://relay.stream-io-api.com",
+
+  // --- Wildcards for Stream fallbacks (covers any future region) ---
+  "https://*.stream-io-api.com",
+  "wss://*.stream-io-api.com",
+  "https://*.stream-io-video.com",
+  "wss://*.stream-io-video.com",
+
+  // --- External services ---
   "https://www.google-analytics.com",
   "https://stats.g.doubleclick.net",
   "https://api-bdc.io",
@@ -277,29 +283,8 @@ if (process.env.NODE_ENV === "development") {
   "https://aframe.io",
   "https://connect.facebook.net",
   "https://www.facebook.com",
-  // --- Stream dynamic fallback edges (required for real-time calls) ---
-"https://stream-io-video.com",
-"wss://stream-io-video.com",
-"https://*.stream-io-api.com",
-"wss://*.stream-io-api.com",
-"https://*.stream-io-video.com",
-"wss://*.stream-io-video.com",
-"https://edge-us-east.stream-io-video.com",
-"wss://edge-us-east.stream-io-video.com",
-"https://edge-ap-southeast.stream-io-video.com",
-"wss://edge-ap-southeast.stream-io-video.com",
-"https://relay.stream-io-video.com",
-"wss://relay.stream-io-video.com",
-"https://turn.stream-io-video.com",
-"wss://turn.stream-io-video.com",
-"https://turn.stream-io-api.com",
-"wss://turn.stream-io-api.com",
-"https://relay.stream-io-api.com",
-"wss://relay.stream-io-api.com",
-"https://prod.stream-io-api.com",
-"wss://prod.stream-io-api.com",
-
 ],
+
 
 
         frameSrc: [
