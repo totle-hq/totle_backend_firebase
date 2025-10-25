@@ -267,7 +267,21 @@ if (process.env.NODE_ENV === "development") {
           "https://aframe.io",
           "https://connect.facebook.net",
           "https://www.facebook.com",
-        ],
+"https://connect.facebook.net",
+"https://www.facebook.com",
+
+// ✅ Add these Stream endpoints explicitly (missing earlier)
+"https://stream-io-api.com",
+"wss://stream-io-api.com",
+"https://edge.api.stream-io-video.com",
+"wss://edge.api.stream-io-video.com",
+"https://global.stream-io-video.com",
+"wss://global.stream-io-video.com",
+"https://*.stream-io-video.com",
+"wss://*.stream-io-video.com",
+"https://*.stream-io-api.com",
+"wss://*.stream-io-api.com",
+],
         frameSrc: [
           "'self'",
           "https://checkout.razorpay.com",
