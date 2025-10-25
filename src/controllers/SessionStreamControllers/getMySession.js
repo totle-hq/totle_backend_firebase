@@ -52,7 +52,8 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
         teacherName: `${session.teacher.firstName} ${session.teacher.lastName||""}`,
         topicName: session.topic.name,
         subject: session.topic.subject?.name,
-        teacher_level: session.session_level
+        teacher_level: session.session_level,
+        duration: session.duration_minutes
       }
     });
 
