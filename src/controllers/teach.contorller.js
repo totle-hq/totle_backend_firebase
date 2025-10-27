@@ -19,6 +19,7 @@ import { assertTeacherBuffer, calculateMismatchPercentage, getDistance, getEligi
 import TeacherAvailability from "../Models/TeacherAvailability.js";
 import { format, addDays, getDay, startOfDay } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
+import {Test} from '../Models/test.model.js';
 
 // ⬇️ timezone + range helpers (date-fns-tz v3)
 import {
@@ -1155,5 +1156,73 @@ export const updateTeacherAvailabilityAdmin = async (req, res) => {
   } catch (err) {
     console.error("updateTeacherAvailabilityAdmin error:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
+  }
+};
+
+
+export const getAllTestsStatisticsOfUser = async (req, res) => {
+  const userId = req.user.id;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required' });
+  }
+
+  try {
+    // Fetch all tests by user, with joined topic name
+    const userTests = await Test.findAll({
+      where: { user_id: userId },
+      include: [
+        {
+          model: CatalogueNode,
+          as: 'topicNode',
+          attributes: ['name'],
+        },
+      ],
+      order: [['submitted_at', 'DESC']],
+    });
+
+    // Map test data with topic name
+    const testsWithStatus = userTests.map(test => ({
+      testId: test.test_id,
+      topic: test.topicNode?.name || test.topic_name || 'Unnamed Topic',
+      eligibleForBridger: test.eligible_for_bridger,
+      status: test.eligible_for_bridger ? 'passed' : 'failed',
+      submittedAt: test.submitted_at,
+      score: test.result?.score ?? null,
+      coolingPeriod: test.cooling_period,
+    }));
+
+    // Fetch teacher topic-level stats (optional)
+    const topicStats = await Teachertopicstats.findAll({
+      where: { teacherId: userId },
+      include: [
+        {
+          model: CatalogueNode,
+          as: 'catalogueNode',
+          attributes: ['name'],
+        },
+      ],
+    });
+
+    // Map topicStats to include topic name
+    const formattedTopicStats = topicStats.map(stat => ({
+      nodeId: stat.node_id,
+      topic: stat.catalogueNode?.name || 'Unnamed Topic',
+      tier: stat.tier,
+      level: stat.level,
+      sessionCount: stat.sessionCount,
+      rating: stat.rating,
+      paidAt: stat.paidAt,
+    }));
+
+    return res.json({
+      success: true,
+      tests: testsWithStatus,
+      topicStats: formattedTopicStats,
+    });
+
+  } catch (error) {
+    console.error('Error fetching test statistics:', error);
+    return res.status(500).json({ error: 'Failed to fetch test statistics' });
   }
 };
