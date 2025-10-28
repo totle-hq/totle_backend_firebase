@@ -33,6 +33,7 @@ import {
   reportSession,
     getAllTeacherAvailabilities,
   updateTeacherAvailabilityAdmin,
+  getAllTestsStatisticsOfUser,
 } from "../controllers/teach.contorller.js";
 
 // ✅ Get this from its own controller (do NOT import from teach.contorller.js)
@@ -76,4 +77,6 @@ router.put(
   authMiddleware,
   updateTeacherAvailabilityAdmin
 );
+
+router.get('/test-stats',authMiddleware, getAllTestsStatisticsOfUser);
 export default router;

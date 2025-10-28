@@ -394,6 +394,27 @@ const defineRelationships = () => {
       onDelete: "CASCADE",
     });
   }
+  // Test ↔ CatalogueNode (topic_uuid → node_id)
+  if (!Test.associations?.topicNode) {
+    Test.belongsTo(CatalogueNode, {
+      foreignKey: 'topic_uuid',
+      targetKey: 'node_id',
+      as: 'topicNode',
+      onDelete: 'SET NULL',
+      onUpdate: 'CASCADE',
+    });
+  }
+
+  if (!CatalogueNode.associations?.tests) {
+    CatalogueNode.hasMany(Test, {
+      foreignKey: 'topic_uuid',
+      sourceKey: 'node_id',
+      as: 'tests',
+      onDelete: 'SET NULL',
+      onUpdate: 'CASCADE',
+    });
+  }
+
 };
 
 export default defineRelationships;

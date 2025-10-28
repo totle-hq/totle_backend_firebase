@@ -372,3 +372,70 @@ export const deleteSyncEmail = async (req, res) => {
     return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
+
+
+export const toggleStatusForInterns = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const account = await UserDepartment.findByPk(id);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const newStatus = account.status === 'active' ? 'disabled' : 'active';
+
+    await account.update({ status: newStatus });
+
+    return res.json({ success: true, status: newStatus });
+  } catch (error) {
+    console.error('Toggle enable error:', error);
+    return res.status(500).json({ error: 'Failed to toggle enable' });
+  }
+};
+
+export const deleteInternRoleAccount =async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const account = await UserDepartment.findByPk(id);
+
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    await account.destroy();
+
+    return res.json({ success: true, message: 'Account deleted' });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    return res.status(500).json({ error: 'Failed to delete account' });
+  }
+};
+
+const SALT_ROUNDS = 10;
+export const updateUserDepartmentRolePassword= async (req, res) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+  }
+
+  try {
+    const account = await UserDepartment.findByPk(id);
+    if (!account) {
+      return res.status(404).json({ error: 'Account not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await account.update({ password: hashedPassword });
+
+    return res.json({ success: true, message: 'Password updated' });
+  } catch (error) {
+    console.error('Password update error:', error);
+    return res.status(500).json({ error: 'Failed to update password' });
+  }
+};

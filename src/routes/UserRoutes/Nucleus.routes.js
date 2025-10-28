@@ -1,5 +1,5 @@
 import express from "express";
-import { addSyncEmails, changeAccountPassword, createAccountInDepartment, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, sendOtpForProduction, updateSyncEmail, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
+import { addSyncEmails, changeAccountPassword, createAccountInDepartment, deleteInternRoleAccount, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, sendOtpForProduction, toggleStatusForInterns, updateSyncEmail, updateUserDepartmentRolePassword, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
 import { verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 
 const router = express.Router();
@@ -10,6 +10,9 @@ router.get("/getAllProfiles/:departmentId/roles", getAllUsersForRoles);
 
 router.get('/accounts', getAccountsByDepartmentCode); // ?departmentCode=TECH
 router.post('/accounts', verifyAdminToken, createAccountInDepartment);
+router.patch('/accounts/:id', verifyAdminToken, toggleStatusForInterns);
+router.delete('/accounts/:id', verifyAdminToken, deleteInternRoleAccount);
+router.patch('/accounts/:id/password',verifyAdminToken, updateUserDepartmentRolePassword);
 router.patch('/accounts/password', verifyAdminToken,changeAccountPassword);
 router.post('/send-prod-otp', sendOtpForProduction);
 router.post('/verify-prod-otp', verifyOtpForProduction);
