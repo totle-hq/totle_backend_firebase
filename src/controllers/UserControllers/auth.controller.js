@@ -287,7 +287,7 @@ export const otpVerification = async (req, res) => {
       (today < new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate()) ? 1 : 0);
 
     // Tag minors
-    const isMinor = age < 13;
+    const isMinor = age < 18;
 
 
     const [user, created] = await User.upsert({
