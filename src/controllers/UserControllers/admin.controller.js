@@ -1404,7 +1404,7 @@ export const getAllDepartments = async (req, res) => {
   try {
     const { role } = req.user;
     // console.log(role)
-    if (role !== 'Founder') {
+    if (role !== 'Founder' && role !== "Superadmin") {
       return res.status(403).json({ message: "Access denied: Invalid founder email" });
     }
 
