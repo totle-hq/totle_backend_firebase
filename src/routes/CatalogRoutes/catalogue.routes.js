@@ -16,6 +16,8 @@ import {
   ingestTopicTelemetry,
   updateDomain,
   recomputeDomainTopics,
+  insertNodeBetween,
+  deleteAndAdjustNode,
 } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
@@ -52,5 +54,7 @@ router.post("/topics/:id/recompute", recomputeTopic);
 /* -------------------- Generator + Telemetry -------------------- */
 router.get("/generator-input/:topicId", getGeneratorInput);
 router.post("/telemetry/topics/:id/ingest", ingestTopicTelemetry);
+router.post('/insert-between', insertNodeBetween);
+router.delete('/delete-and-adjust/:nodeId', deleteAndAdjustNode);
 
 export default router;

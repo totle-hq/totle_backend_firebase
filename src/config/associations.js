@@ -221,10 +221,10 @@ const defineRelationships = () => {
    * CatalogueNode self refs
    * ========================= */
   if (!CatalogueNode.associations?.parentNode) {
-    CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "parentNode", onDelete: "CASCADE" });
+    CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "parentNode", onDelete: "SET NULL", onUpdate: "CASCADE" });
   }
   if (!CatalogueNode.associations?.subject) {
-    CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "subject", onDelete: "CASCADE" });
+    CatalogueNode.belongsTo(CatalogueNode, { foreignKey: "parent_id", as: "subject", onDelete: "SET NULL", onUpdate: "CASCADE" });
   }
 
   /* =========================

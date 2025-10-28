@@ -662,3 +662,114 @@ export const getBreadcrumb = async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 };
+
+export const insertNodeBetween = async (req, res) => {
+  const { parentId, childId, newNode } = req.body;
+
+  if (!parentId || !childId || !newNode?.name) {
+    return res.status(400).json({ error: 'parentId, childId and newNode.name are required' });
+  }
+
+  try {
+    const parentNode = await CatalogueNode.findByPk(parentId);
+    const childNode = await CatalogueNode.findByPk(childId);
+
+    if (!parentNode || !childNode) {
+      return res.status(404).json({ error: 'Parent or Child node not found' });
+    }
+
+    if (childNode.parent_id !== parentId) {
+      return res.status(400).json({ error: 'The given child is not currently a child of the given parent' });
+    }
+
+    // Step 1: Insert new node between parent and child
+    const insertedNode = await CatalogueNode.create({
+      ...newNode,
+      parent_id: parentId,
+      node_level: childNode.node_level, // optional
+      status: 'draft',
+    });
+
+    // Step 2: Update child to be under new node
+    await childNode.update({ parent_id: insertedNode.node_id });
+
+    // Step 3: Update addresses
+    const fullInsertedNode = await CatalogueNode.findByPk(insertedNode.node_id);
+    await updateAddressRecursively(fullInsertedNode);
+    await updateAddressRecursively(childNode); // Child's address changed too
+
+    // Step 4: Invalidate cache
+    await cacheDel(`catalogue:children:${parentId}*`);
+    await cacheDel(`catalogue:children:${insertedNode.node_id}*`);
+    await cacheDel(`catalogue:domains*`);
+
+    // Step 5: Domain propagation if needed
+    const domainNode = await findUniformDomainParent(fullInsertedNode);
+    if (domainNode?.metadata?.uniform && domainNode?.prices) {
+      await distributePricesRecursively(domainNode.node_id, domainNode.prices);
+    }
+
+    // Step 6: CPS recomputation if new node is a topic
+    if (fullInsertedNode.is_topic && fullInsertedNode.archetype) {
+      await recomputeTopicComputedFields(fullInsertedNode);
+    }
+
+    return res.json({
+      success: true,
+      insertedNode: fullInsertedNode,
+      updatedChild: {
+        id: childNode.node_id,
+        newParent: insertedNode.node_id,
+      },
+    });
+
+  } catch (err) {
+    console.error('Error inserting node between:', err);
+    return res.status(500).json({ error: err.message || 'Internal Server Error' });
+  }
+};
+
+export const deleteAndAdjustNode = async (req, res) => {
+  const nodeId = req.params.nodeId;
+
+  if (!nodeId) {
+    return res.status(400).json({ error: 'nodeId is required' });
+  }
+
+  try {
+    const nodeToDelete = await CatalogueNode.findByPk(nodeId);
+
+    if (!nodeToDelete) {
+      return res.status(404).json({ error: 'Node not found' });
+    }
+
+    const parentId = nodeToDelete.parent_id;
+
+    // Step 1: Reassign all children to the parent of the deleted node
+    const children = await CatalogueNode.findAll({ where: { parent_id: nodeId } });
+
+    for (const child of children) {
+      await child.update({ parent_id: parentId });
+      await updateAddressRecursively(child); // new path
+    }
+
+    // Step 2: Delete the node
+    await nodeToDelete.destroy();
+
+    // Step 3: Clear caches
+    await cacheDel(`catalogue:children:${nodeId}*`);
+    if (parentId) {
+      await cacheDel(`catalogue:children:${parentId}*`);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Node deleted and tree adjusted successfully',
+      affectedChildren: children.map(c => c.node_id),
+    });
+
+  } catch (err) {
+    console.error('Error deleting node and adjusting tree:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
