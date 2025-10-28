@@ -153,7 +153,6 @@ app.use((req, res, next) => {
   const originalSet = res.setHeader;
   res.setHeader = function (key, value) {
     if (key.toLowerCase() === 'content-security-policy-report-only' || key.toLowerCase() === 'content-security-policy') {
-      console.log(`[CSP DEBUG] Setting CSP header for ${req.url}: ${key} = ${value.substring(0, 200)}...`); // Truncate for readability
     }
     return originalSet.call(this, key, value);
   };
