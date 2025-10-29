@@ -49,7 +49,7 @@ export const getSessionStreamDetails = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const fullName = `${userRecord.firstName} ${userRecord.lastName}`;
+    const fullName = `${userRecord.firstName}`;
     console.log(`[StreamController] 👤 User found: ${fullName} (${userRecord.email})`);
 
     /* ---------------------- Get session ---------------------- */

@@ -46,7 +46,7 @@ router.patch("/domains/:id", updateDomain);          // edit CPS domain priors/m
 router.post("/domains/:id/recompute", recomputeDomainTopics); // recompute all topics in domain
 
 /* -------------------- CPS-aware: topics -------------------- */
-router.get("/topics/:id", getTopicById);             // rich topic read
+router.get("/topic/:id", getTopicById);             // rich topic read
 router.post("/topics", createTopic);                 // create with typed fields + archetype
 router.patch("/topics/:id", updateTopic);            // update typed fields; recompute
 router.post("/topics/:id/recompute", recomputeTopic);
