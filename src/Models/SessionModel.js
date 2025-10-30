@@ -197,4 +197,14 @@ Session.beforeCreate(async (session) => {
   }
 });
 
+Session.prototype.getTopicStats = async function () {
+  return await Teachertopicstats.findOne({
+    where: {
+      teacherId: this.teacher_id,
+      node_id: this.topic_id,
+    },
+  });
+};
+
+
 export default Session;

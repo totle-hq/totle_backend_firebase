@@ -1226,3 +1226,44 @@ export const getAllTestsStatisticsOfUser = async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch test statistics' });
   }
 };
+
+export const toggleFreeOrPaidTierOfTeacher = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+    const { tier, topicId } = req.body;
+
+    // ✅ 1. Validate tier
+    if (!['free', 'paid'].includes(tier)) {
+      return res.status(400).json({ error: 'Invalid tier. Must be "free" or "paid".' });
+    }
+
+    // ✅ 2. Check if entry exists for this teacher+topic
+    const [record, created] = await Teachertopicstats.findOrCreate({
+      where: {
+        teacherId,
+        node_id: topicId,
+      },
+      defaults: {
+        tier, // will auto-set `paidAt` if tier === 'paid'
+      },
+    });
+
+    // ✅ 3. If it exists and tier is changing, update it
+    if (!created && record.tier !== tier) {
+      record.tier = tier;
+      await record.save(); // `beforeUpdate` hook will set `paidAt`
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Tier set to "${tier}"`,
+      created,
+      updated: !created,
+      data: record,
+    });
+
+  } catch (error) {
+    console.error('Error toggling tier:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
