@@ -1,6 +1,13 @@
 // src/controllers/ProjectControllers/projectTask.controller.js
 import { ProjectTask } from "../../Models/ProjectModels/ProjectTask.model.js";
 import { ProjectBoard } from "../../Models/ProjectModels/ProjectBoard.model.js";
+import { v2 as cloudinary } from 'cloudinary';
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 /**
  * GET /api/projects/:boardId/tasks
@@ -79,6 +86,17 @@ export const updateTask = async (req, res) => {
  * DELETE /api/projects/tasks/:taskId
  * Delete a task
  */
+
+
+// 🧩 Helper function: extract Cloudinary public_id from image URL
+const extractPublicId = (url) => {
+  const parts = url.split('/');
+  const file = parts.pop()?.split('.')[0]; // remove extension
+  const folder = parts.slice(parts.indexOf('upload') + 1).join('/');
+  return folder ? `${folder}/${file}` : file;
+};
+
+// 🧹 Delete Task and associated Cloudinary images
 export const deleteTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -86,8 +104,15 @@ export const deleteTask = async (req, res) => {
     const task = await ProjectTask.findByPk(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    const imageUrls = task.imageUrls || [];
+
+    if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+      const publicIds = imageUrls.map(extractPublicId);
+      await cloudinary.api.delete_resources(publicIds);
+    }
+
     await task.destroy();
-    res.json({ message: "Task deleted successfully" });
+    res.json({ message: "Task and associated images deleted successfully" });
   } catch (err) {
     console.error("❌ Error deleting task:", err);
     res.status(500).json({ message: "Failed to delete task" });

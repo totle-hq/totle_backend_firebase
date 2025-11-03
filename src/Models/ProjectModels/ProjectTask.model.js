@@ -24,6 +24,11 @@ export const ProjectTask = sequelize1.define(
       type: DataTypes.UUID,
       allowNull: false,
     },
+    imageUrls: {
+      type: DataTypes.JSONB, // store as array of image URL strings
+      defaultValue: [],
+    },
+
   },
   {
     tableName: "project_tasks",
