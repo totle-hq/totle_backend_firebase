@@ -24,9 +24,35 @@ export const ProjectTask = sequelize1.define(
       type: DataTypes.UUID,
       allowNull: false,
     },
+    priority: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+    },
+    status: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'to-do',
+      validate: {
+        isIn: [['to-do', 'inProgress', 'done', 'review','backlog']],
+      },
+    },
+    // ✅ New Field: Critical Level
+    criticalLevel: {
+      type: DataTypes.ENUM('low', 'medium', 'high', 'critical'),
+      allowNull: false,
+      defaultValue: 'low',
+    },
+
+    // ✅ New Field: Cloudinary Image URLs
     imageUrls: {
-      type: DataTypes.JSONB, // store as array of image URL strings
-      defaultValue: [],
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: true,
+    },
+
+    assignedTo: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
 
   },

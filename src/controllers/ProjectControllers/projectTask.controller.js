@@ -2,6 +2,8 @@
 import { ProjectTask } from "../../Models/ProjectModels/ProjectTask.model.js";
 import { ProjectBoard } from "../../Models/ProjectModels/ProjectBoard.model.js";
 import { v2 as cloudinary } from 'cloudinary';
+import multer from "multer"; // You’ll need to use this for `req.files` if handling file uploads.
+const upload = multer({ dest: 'uploads/' }); // Temporary storage for Cloudinary
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -34,7 +36,7 @@ export const getTasks = async (req, res) => {
 export const createTask = async (req, res) => {
   try {
     const { boardId } = req.params;
-    const { title, description, assignee, status } = req.body;
+    const { title, description, criticalLevel,  assignedTo, assignee, status } = req.body;
 
     const board = await ProjectBoard.findByPk(boardId);
     if (!board) return res.status(404).json({ message: "Board not found" });
@@ -42,11 +44,27 @@ export const createTask = async (req, res) => {
     if (!title || !assignee)
       return res.status(400).json({ message: "Title and assignee are required" });
 
+    let uploadedImageUrls = [];
+    if (req.files?.length > 0) {
+      for (const file of req.files) {
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: `projectTasks/${boardId}`
+        });
+        uploadedImageUrls.push(result.secure_url);
+      }
+    }
+
+    // ✅ Accept URLs from frontend too
+    const additionalUrls = req.body.imageUrls ? [].concat(req.body.imageUrls) : [];
+
     const task = await ProjectTask.create({
       title,
       description,
       assignee,
+      assignedTo,
       status: status || "Backlog",
+      criticalLevel: criticalLevel || "low",
+      imageUrls: [...uploadedImageUrls, ...additionalUrls],
       boardId,
     });
 
@@ -64,7 +82,7 @@ export const createTask = async (req, res) => {
 export const updateTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { title, description, assignee, status } = req.body;
+    const { title, description, assignee, assignedTo, status, criticalLevel, imageUrls } = req.body;
 
     const task = await ProjectTask.findByPk(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
@@ -73,6 +91,9 @@ export const updateTask = async (req, res) => {
     task.description = description ?? task.description;
     task.assignee = assignee ?? task.assignee;
     task.status = status ?? task.status;
+    task.criticalLevel = criticalLevel ?? task.criticalLevel;
+    task.imageUrls = imageUrls ?? task.imageUrls;
+    task.assignedTo = assignedTo ?? task.assignedTo;
     await task.save();
 
     res.json(task);
@@ -116,5 +137,32 @@ export const deleteTask = async (req, res) => {
   } catch (err) {
     console.error("❌ Error deleting task:", err);
     res.status(500).json({ message: "Failed to delete task" });
+  }
+};
+
+
+export const deleteFromCloudinary = async (req, res) => {
+  const { imageId } = req.params;
+  const publicId = `task-images/${imageId}`;
+  console.log("Deleting Cloudinary image:", publicId);
+
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: "image",
+    });
+
+    console.log("Cloudinary destroy result:", result);
+
+    if (result.result === 'ok') {
+      return res.status(200).json({ success: true });
+    } else if (result.result === 'not found') {
+      return res.status(404).json({ success: false, message: 'Image not found' });
+    } else {
+      return res.status(400).json({ success: false, message: 'Unknown error from Cloudinary' });
+    }
+
+  } catch (err) {
+    console.error("Cloudinary deletion error:", err);
+    res.status(500).json({ error: err.message });
   }
 };
