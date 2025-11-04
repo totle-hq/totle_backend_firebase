@@ -2,8 +2,6 @@
 import { ProjectTask } from "../../Models/ProjectModels/ProjectTask.model.js";
 import { ProjectBoard } from "../../Models/ProjectModels/ProjectBoard.model.js";
 import { v2 as cloudinary } from 'cloudinary';
-import multer from "multer"; // You’ll need to use this for `req.files` if handling file uploads.
-const upload = multer({ dest: 'uploads/' }); // Temporary storage for Cloudinary
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -36,16 +34,16 @@ export const getTasks = async (req, res) => {
 export const createTask = async (req, res) => {
   try {
     const { boardId } = req.params;
-    const { title, description, criticalLevel, assignedTo, assignee, status } = req.body;
-    const imageUrls = req.body.imageUrls;
-
-    const frontendImageUrls =
-      typeof imageUrls === 'string'
-        ? JSON.parse(imageUrls)
-        : Array.isArray(imageUrls)
-        ? imageUrls
-        : [];
-
+    const {
+      title,
+      description,
+      criticalLevel = "low",
+      assignedTo,
+      assignee,
+      status,
+      priority: frontendPriority,
+      imageUrls,
+    } = req.body;
 
     const board = await ProjectBoard.findByPk(boardId);
     if (!board) return res.status(404).json({ message: "Board not found" });
@@ -53,31 +51,32 @@ export const createTask = async (req, res) => {
     if (!title || !assignee)
       return res.status(400).json({ message: "Title and assignee are required" });
 
-    const uploadedImageUrls = [];
+    // Parse cloudinary image urls from frontend
+    const frontendImageUrls =
+      typeof imageUrls === 'string'
+        ? JSON.parse(imageUrls)
+        : Array.isArray(imageUrls)
+        ? imageUrls
+        : [];
 
-    if (req.files?.length > 0) {
-      for (const file of req.files) {
-        const result = await cloudinary.uploader.upload(file.path, {
-          folder: `projectTasks/${boardId}`,
-        });
-        uploadedImageUrls.push({
-          secure_url: result.secure_url,
-          public_id: result.public_id,
-        });
-      }
-    }
+    const criticalToPriority = {
+      low: 1,
+      medium: 2,
+      high: 3,
+      critical: 4,
+    };
 
-    // Normalize any imageUrls from frontend (in case user uploaded earlier)
-    // const frontendImageUrls = Array.isArray(imageUrls) ? imageUrls : [];
+    const priority = frontendPriority ?? criticalToPriority[criticalLevel] ?? 1;
 
     const task = await ProjectTask.create({
       title,
       description,
       assignee,
       assignedTo,
-      status: status || "Backlog",
-      criticalLevel: criticalLevel || "low",
-      imageUrls: [...uploadedImageUrls, ...frontendImageUrls],
+      status: status || "to-do",
+      criticalLevel,
+      priority,
+      imageUrls: frontendImageUrls,
       boardId,
     });
 
@@ -89,6 +88,7 @@ export const createTask = async (req, res) => {
 };
 
 
+
 /**
  * PUT /api/projects/tasks/:taskId
  * Update an existing task
@@ -96,18 +96,28 @@ export const createTask = async (req, res) => {
 export const updateTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { title, description, assignee, assignedTo, status, criticalLevel, imageUrls } = req.body;
+    const { title, description, assignee, assignedTo, status, criticalLevel, imageUrls, priority: frontendPriority, } = req.body;
 
     const task = await ProjectTask.findByPk(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    const criticalToPriority = {
+      low: 1,
+      medium: 2,
+      high: 3,
+      critical: 4,
+    };
+
     task.title = title ?? task.title;
     task.description = description ?? task.description;
     task.assignee = assignee ?? task.assignee;
-    task.status = status ?? task.status;
+    task.status = status.toLowerCase() ?? task.status;
     task.criticalLevel = criticalLevel ?? task.criticalLevel;
     task.imageUrls = imageUrls ?? task.imageUrls;
     task.assignedTo = assignedTo ?? task.assignedTo;
+    // 💡 Priority logic: use frontend value or fallback to criticalLevel
+    task.priority = frontendPriority ?? criticalToPriority[task.criticalLevel] ?? task.priority ?? 1;
+
     await task.save();
 
     res.json(task);
