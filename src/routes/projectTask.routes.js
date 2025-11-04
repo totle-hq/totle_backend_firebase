@@ -25,6 +25,6 @@ router.post("/:boardId/tasks", upload.array("images"), createTask);
 // /api/projects/tasks/:taskId
 router.put("/tasks/:taskId", updateTask);
 router.delete("/tasks/:taskId", deleteTask);
-router.delete("/images/task-images/:imageId(*)", deleteFromCloudinary);
+router.delete("/images/:publicId(*)", deleteFromCloudinary);
 
 export default router;

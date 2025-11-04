@@ -36,7 +36,16 @@ export const getTasks = async (req, res) => {
 export const createTask = async (req, res) => {
   try {
     const { boardId } = req.params;
-    const { title, description, criticalLevel,  assignedTo, assignee, status } = req.body;
+    const { title, description, criticalLevel, assignedTo, assignee, status } = req.body;
+    const imageUrls = req.body.imageUrls;
+
+    const frontendImageUrls =
+      typeof imageUrls === 'string'
+        ? JSON.parse(imageUrls)
+        : Array.isArray(imageUrls)
+        ? imageUrls
+        : [];
+
 
     const board = await ProjectBoard.findByPk(boardId);
     if (!board) return res.status(404).json({ message: "Board not found" });
@@ -44,18 +53,22 @@ export const createTask = async (req, res) => {
     if (!title || !assignee)
       return res.status(400).json({ message: "Title and assignee are required" });
 
-    let uploadedImageUrls = [];
+    const uploadedImageUrls = [];
+
     if (req.files?.length > 0) {
       for (const file of req.files) {
         const result = await cloudinary.uploader.upload(file.path, {
-          folder: `projectTasks/${boardId}`
+          folder: `projectTasks/${boardId}`,
         });
-        uploadedImageUrls.push(result.secure_url);
+        uploadedImageUrls.push({
+          secure_url: result.secure_url,
+          public_id: result.public_id,
+        });
       }
     }
 
-    // ✅ Accept URLs from frontend too
-    const additionalUrls = req.body.imageUrls ? [].concat(req.body.imageUrls) : [];
+    // Normalize any imageUrls from frontend (in case user uploaded earlier)
+    // const frontendImageUrls = Array.isArray(imageUrls) ? imageUrls : [];
 
     const task = await ProjectTask.create({
       title,
@@ -64,7 +77,7 @@ export const createTask = async (req, res) => {
       assignedTo,
       status: status || "Backlog",
       criticalLevel: criticalLevel || "low",
-      imageUrls: [...uploadedImageUrls, ...additionalUrls],
+      imageUrls: [...uploadedImageUrls, ...frontendImageUrls],
       boardId,
     });
 
@@ -74,6 +87,7 @@ export const createTask = async (req, res) => {
     res.status(500).json({ message: "Failed to create task" });
   }
 };
+
 
 /**
  * PUT /api/projects/tasks/:taskId
@@ -142,8 +156,7 @@ export const deleteTask = async (req, res) => {
 
 
 export const deleteFromCloudinary = async (req, res) => {
-  const { imageId } = req.params;
-  const publicId = `task-images/${imageId}`;
+  const publicId = req.params.publicId;
   console.log("Deleting Cloudinary image:", publicId);
 
   try {
