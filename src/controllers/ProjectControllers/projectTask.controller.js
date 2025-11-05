@@ -167,14 +167,11 @@ export const deleteTask = async (req, res) => {
 
 export const deleteFromCloudinary = async (req, res) => {
   const publicId = req.params.publicId;
-  console.log("Deleting Cloudinary image:", publicId);
 
   try {
     const result = await cloudinary.uploader.destroy(publicId, {
       resource_type: "image",
     });
-
-    console.log("Cloudinary destroy result:", result);
 
     if (result.result === 'ok') {
       return res.status(200).json({ success: true });
