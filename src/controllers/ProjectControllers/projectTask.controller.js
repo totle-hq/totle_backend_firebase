@@ -97,7 +97,7 @@ export const updateTask = async (req, res) => {
   try {
     const { taskId } = req.params;
     const { title, description, assignee, assignedTo, status, criticalLevel, imageUrls, priority: frontendPriority, } = req.body;
-
+    // console.log("🚀 ~ file: projectTask.controller.js:107 ~ updateTask ~ req.body:", req.body);
     const task = await ProjectTask.findByPk(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
@@ -111,7 +111,7 @@ export const updateTask = async (req, res) => {
     task.title = title ?? task.title;
     task.description = description ?? task.description;
     task.assignee = assignee ?? task.assignee;
-    task.status = status.toLowerCase() ?? task.status;
+    task.status = status ?? task.status;
     task.criticalLevel = criticalLevel ?? task.criticalLevel;
     task.imageUrls = imageUrls ?? task.imageUrls;
     task.assignedTo = assignedTo ?? task.assignedTo;
