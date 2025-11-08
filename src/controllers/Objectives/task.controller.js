@@ -4,6 +4,19 @@ import { Feature } from "../../Models/Objectives/Feature.model.js";
 import { Task } from "../../Models/Objectives/Task.model.js";
 import logger from "../../utils/logger.js";
 
+
+export const assignMissingTaskNumbers = async (tasks) => {
+  let counter = 1;
+  for (const task of tasks) {
+    if (task.taskNumber == null) {
+      task.taskNumber = counter;
+      await task.save();
+    }
+    counter = Math.max(counter, task.taskNumber + 1);
+  }
+  return counter; // next task number
+};
+
 // ✅ Create a new Task
 export const createTask = async (req, res) => {
   try {
@@ -14,18 +27,37 @@ export const createTask = async (req, res) => {
     if (!feature) {
       return res.status(404).json({ success: false, message: "Feature not found" });
     }
+
+    // ✅ Step 1: Get all tasks for this feature
+    const existingTasks = await Task.findAll({
+      where: { featureId },
+      order: [['createdAt', 'ASC']],
+    });
+
+    // ✅ Step 2: Assign missing task numbers
+    const nextTaskNumber = await assignMissingTaskNumbers(existingTasks); // Cleanly reused!
+
+    // ✅ Step 3: Determine new priority
     const highestPriorityTask = await Task.findOne({
-        where: { featureId }, 
+      where: { featureId }, 
       order: [['priority', 'DESC']],
     });
 
     const newPriority = highestPriorityTask ? highestPriorityTask.priority + 1 : 1;
 
-    const task = await Task.create({ taskName, status, featureId ,taskCode: '',priority: newPriority}); 
+    // ✅ Step 4: Create the new task
+    const newTask = await Task.create({
+      taskName,
+      status,
+      featureId,
+      taskCode: '',
+      priority: newPriority,
+      taskNumber: nextTaskNumber,
+    });
 
-    return res.status(201).json({ success: true, data: task });
+    return res.status(201).json({ success: true, data: newTask });
   } catch (error) {
-    logger.error("Error creating task:", error);
+    logger.error("❌ Error creating task:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

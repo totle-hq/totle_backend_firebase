@@ -55,6 +55,11 @@ export const ProjectTask = sequelize1.define(
       allowNull: true,
     },
 
+    taskNumber:{
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    }
+
   },
   {
     tableName: "project_tasks",
