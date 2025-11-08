@@ -48,7 +48,7 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
       success: true,
       session: {
         session_id: session.session_id,
-        scheduled_at: session.createdAt,
+        scheduled_at: session.scheduled_at,
         teacherName: `${session.teacher.firstName} ${session.teacher.lastName||""}`,
         topicName: session.topic.name,
         subject: session.topic.subject?.name,
