@@ -69,16 +69,23 @@ export const getTasksByFeature = async (req, res) => {
 
     const tasks = await Task.findAll({
       where: { featureId },
+      order: [["createdAt", "ASC"]],
+    });
+
+    await assignMissingTaskNumbers(tasks);
+
+    // Re-fetch in correct display order (priority)
+    const finalTasks = await Task.findAll({
+      where: { featureId },
       order: [["priority", "ASC"]],
     });
 
-    return res.status(200).json({ success: true, data: tasks });
+    return res.status(200).json({ success: true, data: finalTasks });
   } catch (error) {
     logger.error("Error fetching tasks:", error);
     return res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
 // ✅ Update Task
 export const updateTask = async (req, res) => {
   try {
