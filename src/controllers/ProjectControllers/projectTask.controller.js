@@ -2,6 +2,7 @@
 import { ProjectTask } from "../../Models/ProjectModels/ProjectTask.model.js";
 import { ProjectBoard } from "../../Models/ProjectModels/ProjectBoard.model.js";
 import { v2 as cloudinary } from 'cloudinary';
+import { assignMissingTaskNumbers } from "../Objectives/task.controller.js";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -20,12 +21,21 @@ export const getTasks = async (req, res) => {
       where: { boardId },
       order: [["createdAt", "ASC"]],
     });
-    res.json(tasks);
+
+    await assignMissingTaskNumbers(tasks); // ✅ assign any missing task numbers
+
+    const finalTasks = await ProjectTask.findAll({
+      where: { boardId },
+      order: [["priority", "ASC"]],
+    });
+
+    res.json(finalTasks);
   } catch (err) {
     console.error("❌ Error fetching tasks:", err);
     res.status(500).json({ message: "Failed to fetch tasks" });
   }
 };
+
 
 /**
  * POST /api/projects/:boardId/tasks
@@ -51,7 +61,7 @@ export const createTask = async (req, res) => {
     if (!title || !assignee)
       return res.status(400).json({ message: "Title and assignee are required" });
 
-    // Parse cloudinary image urls from frontend
+    // ✅ Parse Cloudinary image URLs safely
     const frontendImageUrls =
       typeof imageUrls === 'string'
         ? JSON.parse(imageUrls)
@@ -68,6 +78,15 @@ export const createTask = async (req, res) => {
 
     const priority = frontendPriority ?? criticalToPriority[criticalLevel] ?? 1;
 
+    // ✅ Fetch tasks and assign/reassign numbers
+    const existingTasks = await ProjectTask.findAll({
+      where: { boardId },
+      order: [["createdAt", "ASC"]],
+    });
+
+    const nextTaskNumber = await assignMissingTaskNumbers(existingTasks);
+
+    // ✅ Create new task
     const task = await ProjectTask.create({
       title,
       description,
@@ -78,6 +97,7 @@ export const createTask = async (req, res) => {
       priority,
       imageUrls: frontendImageUrls,
       boardId,
+      taskNumber: nextTaskNumber,
     });
 
     res.status(201).json(task);
