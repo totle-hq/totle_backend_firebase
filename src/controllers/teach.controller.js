@@ -188,12 +188,15 @@ export const bookFreeSession = async (req, res) => {
 
     const teacherIds = await getEligibleTeacherIds(topic_id, "free");
     const filteredTeacherIds = teacherIds.filter(id => id !== learner_id);
-    if (filteredTeacherIds.length === 0)
-      return res.status(404).json({ error: true, message: "No free-tier teachers available." });
-
+    if (filteredTeacherIds.length < 2) {
+      return res.status(400).json({
+        error: true,
+        message: "Awesome pick! Our mentors are getting ready — check back soon to grab your free session.",
+      });
+    }
     const now = new Date();
     const minStart = new Date(now.getTime() + 30 * 60000);
-
+    const MIN_DURATION = 90;
     const candidates = await Session.findAll({
       where: {
         topic_id,
@@ -201,6 +204,7 @@ export const bookFreeSession = async (req, res) => {
         session_tier: "free",
         teacher_id: { [Op.in]: filteredTeacherIds },
         scheduled_at: { [Op.gt]: minStart },
+        duration_minutes: { [Op.gte]: MIN_DURATION },
       },
       attributes: ["session_id", "teacher_id", "scheduled_at", "duration_minutes"],
       order: [["scheduled_at", "ASC"]],
