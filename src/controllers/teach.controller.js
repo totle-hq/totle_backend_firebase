@@ -1,4 +1,4 @@
-// src/controllers/teach.contorller.js
+// src/controllers/teach.controller.js
 // -----------------------------------------------------------------------------
 // TEACH (Availability & related)
 // - Free-hand X→Y availability with min 90 mins

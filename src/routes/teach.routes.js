@@ -7,7 +7,7 @@
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
 
-// ✅ Import ONLY the exports that actually exist in teach.contorller.js
+// ✅ Import ONLY the exports that actually exist in teach.controller.js
 import {
   // Availability core
   getAvailabilityChart,
@@ -34,9 +34,9 @@ import {
     getAllTeacherAvailabilities,
   updateTeacherAvailabilityAdmin,
   getAllTestsStatisticsOfUser,
-} from "../controllers/teach.contorller.js";
+} from "../controllers/teach.controller.js";
 
-// ✅ Get this from its own controller (do NOT import from teach.contorller.js)
+// ✅ Get this from its own controller (do NOT import from teach.controller.js)
 import { getTeachingProgression } from "../controllers/TeachControllers/progression.controller.js";
 
 const router = express.Router();
