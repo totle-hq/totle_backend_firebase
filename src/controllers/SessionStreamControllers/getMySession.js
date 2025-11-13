@@ -89,9 +89,12 @@ export const getStudentSessions = async (req, res) => {
       session_id: session.session_id,
       teacherName: `${session.teacher.firstName} ${session.teacher.lastName}`,
       topicName: session.topic.name,
-      scheduled_at: session.scheduled_at,
-    }));
+      scheduled_at: session.scheduled_at.toISOString(),
 
+    }));
+    
+    console.log("sessions:", formatted);
+    
     return res.status(200).json({ success: true, sessions: formatted });
 
   } catch (err) {

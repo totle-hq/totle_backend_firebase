@@ -181,6 +181,14 @@ export const listPaidSessions = async (req, res) => {
 };
 
 
+const parseIST = (dateStr, timeStr) => {
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const d = new Date(`${dateStr}T00:00:00Z`); // midnight UTC
+  d.setUTCHours(hour - 5, minute - 30); // adjust from IST to UTC
+  return d;
+};
+
+
 /** POST /api/session/book — auto-match FREE */
 
 
@@ -243,8 +251,9 @@ export const bookFreeSession = async (req, res) => {
 
         if (is_recurring && weekday !== day_of_week) continue;
 
-        let availStart = new Date(`${dateStr}T${start_time}`);
-        let availEnd = new Date(`${dateStr}T${end_time}`);
+        let availStart = parseIST(dateStr, start_time);
+        let availEnd = parseIST(dateStr, end_time);
+
         if (availEnd <= availStart) availEnd.setDate(availEnd.getDate() + 1);
 
         if (availEnd <= minStart) continue;
