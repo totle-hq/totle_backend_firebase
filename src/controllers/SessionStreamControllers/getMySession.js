@@ -19,8 +19,9 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
     const session = await Session.findOne({
       where: {
         student_id: id,
-        scheduled_at: { [Op.gt]: now }
+        ...upcomingOrOngoingFilter()
       },
+
       include: [
         { model: User, as: "teacher", attributes: ["firstName", "lastName"] },
         {
@@ -76,8 +77,10 @@ export const getStudentSessions = async (req, res) => {
     const sessions = await Session.findAll({
       where: {
         student_id: id,
-        status: "upcoming"
+        status: "upcoming",
+        ...upcomingOrOngoingFilter()
       },
+
       include: [
         { model: User, as: "teacher", attributes: ["firstName", "lastName"] },
         { model: CatalogueNode, as: "topic", attributes: ["name"] }
@@ -114,7 +117,8 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
       where: {
         teacher_id: id,
         status: { [Op.in]: ["upcoming", "booked"] },
-        scheduled_at: { [Op.gt]: now },
+        ...upcomingOrOngoingFilter()
+
       },
       include: [
         { model: User, as: "student", attributes: ["firstName", "lastName"] },
@@ -162,7 +166,7 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
       where: {
         teacher_id: id,
         status: { [Op.in]: ["upcoming", "booked"] },
-        scheduled_at: { [Op.gte]: now }, // ✅ ensure only future sessions
+        ...upcomingOrOngoingFilter()
       },
       include: [
         {
@@ -192,9 +196,7 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
 
     const formatted = sessions.map((s) => ({
       session_id: s.session_id,
-      studentName: s.student
-        ? `${s.student.firstName}`.trim()
-        : "Unassigned",
+      studentName: s.student ? `${s.student.firstName}`.trim() : "Unassigned",
       topicName: s.topic?.name || "Unknown",
       subject: s.topic?.subject?.name || "Unknown",
       scheduled_at: s.scheduled_at,
@@ -206,3 +208,13 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
+
+export const upcomingOrOngoingFilter = () => ({
+  [Op.or]: [
+    { scheduled_at: { [Op.gte]: new Date() } },
+    {
+      [Op.and]: literal(`scheduled_at + (duration_minutes || ' minutes')::interval >= NOW()`)
+    }
+  ]
+});
