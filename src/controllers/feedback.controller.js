@@ -8,30 +8,50 @@ import { findSubjectAndDomain } from "../utils/getsubject.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { handleAllFeedbackSummaries } from "../utils/updatefeedbacksummary.js";
+import jwt from 'jsonwebtoken';
+
 // ✅ POST Feedback
 export const postFeedBack = async (req, res) => {
   try {
     console.time("Total Feedback Request");
 
+    // 🔍 Log decoded user from token
+    console.log("🔐 Decoded req.user (from token):", req.user);
+
+    const learner_id = req.user.id;
     const {
-      learner_id, session_id, bridger_id,
+      session_id, bridger_id,
       star_rating, helpfulness_rating, clarity_rating,
       pace_feedback, engagement_yn, confidence_gain_yn,
       text_feedback, flagged_issue, flag_reason,
     } = req.body;
 
+    // 🔍 Log incoming body
+    console.log("📥 Feedback Payload:", req.body);
+
     const now = new Date();
     const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
 
-    if (!learner_id || !session_id || !bridger_id) {
+    if (!learner_id ) {
+      console.warn("❌ Missing learner_id ");
+      return res.status(400).json({ success: false, message: "Missing IDs" });
+    }
+    else if(!session_id){
+      console.warn("❌ Missing session_id ");
+      return res.status(400).json({ success: false, message: "Missing IDs" });
+    }
+    else if(!bridger_id){
+      console.warn("❌ Missing bridger_id");
       return res.status(400).json({ success: false, message: "Missing IDs" });
     }
 
     if (star_rating === undefined) {
+      console.warn("❌ Star rating missing");
       return res.status(400).json({ success: false, message: "Missing star rating" });
     }
 
     if (flagged_issue && !flag_reason) {
+      console.warn("❌ Flagged issue without reason");
       return res.status(400).json({ success: false, message: "Flag reason required" });
     }
 
@@ -40,6 +60,7 @@ export const postFeedBack = async (req, res) => {
     console.timeEnd("Get Session");
 
     if (!session) {
+      console.warn("❌ Session not found:", session_id);
       return res.status(404).json({ success: false, message: "Session not found" });
     }
 
@@ -53,6 +74,7 @@ export const postFeedBack = async (req, res) => {
     console.timeEnd("Check Recent Feedback Count");
 
     if (recentCount >= 5) {
+      console.warn("🚫 Rate limit triggered for learner:", learner_id);
       return res.status(429).json({ success: false, message: "Rate limit exceeded" });
     }
 
@@ -63,6 +85,7 @@ export const postFeedBack = async (req, res) => {
     console.timeEnd("Check Existing Feedback for Session");
 
     if (previousfeedback.length > 0) {
+      console.warn("⚠️ Duplicate feedback attempt for session:", session_id);
       return res.status(409).json({ message: "Already submitted", success: false });
     }
 
@@ -92,7 +115,8 @@ export const postFeedBack = async (req, res) => {
     });
     console.timeEnd("Update Feedback Summary");
 
-  
+    console.log("✅ Feedback created successfully for learner:", learner_id);
+    console.timeEnd("Total Feedback Request");
 
     return res.status(201).json({
       success: true,
@@ -100,8 +124,32 @@ export const postFeedBack = async (req, res) => {
       data: feedback,
     });
   } catch (error) {
-    console.error("Error creating feedback:", error.message);
+    console.error("❌ Error creating feedback:", error.message);
     return res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+
+export const verifyFeedbackToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  console.log("🔐 Received Authorization Header:", authHeader);
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log("❌ No token provided or malformed Authorization header");
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  console.log("🔍 Extracted Token:", token);
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("✅ Decoded Token:", decoded);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.log("❌ Token verification failed:", err.message);
+    return res.status(403).json({ message: 'Invalid token' });
   }
 };
 
