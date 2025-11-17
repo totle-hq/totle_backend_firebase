@@ -8,76 +8,121 @@ import { findSubjectAndDomain } from "../utils/getsubject.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { handleAllFeedbackSummaries } from "../utils/updatefeedbacksummary.js";
+import jwt from 'jsonwebtoken';
+
+export const verifyFeedbackToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  console.log("🔐 Received Authorization Header:", authHeader);
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log("❌ No token provided or malformed Authorization header");
+    return res.status(401).json({ message: 'No token provided' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  console.log("🔍 Extracted Token:", token);
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("✅ Decoded Token:", decoded);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.log("❌ Token verification failed:", err.message);
+    return res.status(403).json({ message: 'Invalid token' });
+  }
+};
+
 // ✅ POST Feedback
+
+
 export const postFeedBack = async (req, res) => {
   try {
     console.time("Total Feedback Request");
 
     const {
-      learner_id, session_id, bridger_id,
-      star_rating, helpfulness_rating, clarity_rating,
-      pace_feedback, engagement_yn, confidence_gain_yn,
-      text_feedback, flagged_issue, flag_reason,
+      session_id,
+      star_rating,
+      helpfulness_rating,
+      clarity_rating,
+      pace_feedback,
+      engagement_yn,
+      confidence_gain_yn,
+      text_feedback,
+      flagged_issue,
+      flag_reason,
     } = req.body;
 
-    const now = new Date();
-    const twoMinutesAgo = new Date(now.getTime() - 2 * 60 * 1000);
+    if (!session_id) return res.status(400).json({ success: false, message: "Missing session ID" });
+    if (star_rating === undefined) return res.status(400).json({ success: false, message: "Missing star rating" });
+    if (flagged_issue && !flag_reason) return res.status(400).json({ success: false, message: "Flag reason required" });
 
-    if (!learner_id || !session_id || !bridger_id) {
-      return res.status(400).json({ success: false, message: "Missing IDs" });
-    }
-
-    if (star_rating === undefined) {
-      return res.status(400).json({ success: false, message: "Missing star rating" });
-    }
-
-    if (flagged_issue && !flag_reason) {
-      return res.status(400).json({ success: false, message: "Flag reason required" });
-    }
-
-    console.time("Get Session");
     const session = await Session.findByPk(session_id);
-    console.timeEnd("Get Session");
+    if (!session) return res.status(404).json({ success: false, message: "Session not found" });
 
-    if (!session) {
-      return res.status(404).json({ success: false, message: "Session not found" });
+    const learner_id = session.student_id;
+    const bridger_id = session.teacher_id;
+    const topic_id = session.topic_id;
+
+    // 🔍 Get topic node
+    const topic = await CatalogueNode.findByPk(topic_id);
+    if (!topic || !topic.is_topic) return res.status(400).json({ success: false, message: "Invalid topic node" });
+
+    // 🔁 Climb to find subject and domain
+    let currentNode = topic;
+    let subject = null;
+    let domain = null;
+
+    while (currentNode?.parent_id) {
+      const parent = await CatalogueNode.findByPk(currentNode.parent_id);
+      if (!parent) break;
+
+      if (!subject && parent.is_subject) subject = parent;
+      if (!domain && parent.is_domain) domain = parent;
+
+      currentNode = parent;
+      if (subject && domain) break;
     }
 
-    console.time("Check Recent Feedback Count");
+    if (!subject || !domain) {
+      return res.status(400).json({ success: false, message: "Subject or Domain not found in node hierarchy" });
+    }
+
+    // 🔁 Rate-limit check
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     const recentCount = await Feedback.count({
       where: {
         learner_id,
         created_at: { [Op.gt]: twoMinutesAgo },
       },
     });
-    console.timeEnd("Check Recent Feedback Count");
+    if (recentCount >= 5) return res.status(429).json({ success: false, message: "Rate limit exceeded" });
 
-    if (recentCount >= 5) {
-      return res.status(429).json({ success: false, message: "Rate limit exceeded" });
-    }
+    const existing = await Feedback.findOne({ where: { session_id } });
+    if (existing) return res.status(409).json({ success: false, message: "Already submitted" });
 
-    console.time("Check Existing Feedback for Session");
-    const previousfeedback = await Feedback.findAll({
-      where: { session_id }
-    });
-    console.timeEnd("Check Existing Feedback for Session");
-
-    if (previousfeedback.length > 0) {
-      return res.status(409).json({ message: "Already submitted", success: false });
-    }
-
-    const topic_id = session.topic_id;
-
-    console.time("Create Feedback");
+    // ✅ Submit feedback
     const feedback = await Feedback.create({
-      learner_id, session_id, bridger_id, topic_id,
-      star_rating, helpfulness_rating, clarity_rating,
-      pace_feedback, engagement_yn, confidence_gain_yn,
-      text_feedback, flagged_issue, flag_reason,
+      learner_id,
+      session_id,
+      bridger_id,
+      topic_id,
+      topic_name: topic.name,
+      subject_id: subject.node_id,
+      subject_name: subject.name,
+      domain_id: domain.node_id,
+      domain_name: domain.name,
+      star_rating,
+      helpfulness_rating,
+      clarity_rating,
+      pace_feedback,
+      engagement_yn,
+      confidence_gain_yn,
+      text_feedback,
+      flagged_issue,
+      flag_reason,
     });
-    console.timeEnd("Create Feedback");
 
-    console.time("Update Feedback Summary");
     await handleAllFeedbackSummaries({
       teacher_id: bridger_id,
       topic_id,
@@ -90,9 +135,8 @@ export const postFeedBack = async (req, res) => {
         confidence_gain_yn,
       },
     });
-    console.timeEnd("Update Feedback Summary");
 
-  
+    console.timeEnd("Total Feedback Request");
 
     return res.status(201).json({
       success: true,
@@ -100,10 +144,11 @@ export const postFeedBack = async (req, res) => {
       data: feedback,
     });
   } catch (error) {
-    console.error("Error creating feedback:", error.message);
+    console.error("❌ Error creating feedback:", error.message);
     return res.status(500).json({ success: false, message: "Server error" });
   }
 };
+
 
 
 // ✅ GET Feedback Summary for Learner or Qualified Teacher

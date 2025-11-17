@@ -3,6 +3,7 @@ import { User } from "../../Models/UserModels/UserModel.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 // import { BookedSession } from "../../Models/BookedSession.js";
 import { literal, Op } from "sequelize";
+import Feedback from "../../Models/feedbackModels.js";
 
 // controllers/session.controller.js
 export const getFirstUpcomingStudentSession = async (req, res) => {
@@ -83,7 +84,8 @@ export const getStudentSessions = async (req, res) => {
 
       include: [
         { model: User, as: "teacher", attributes: ["firstName", "lastName"] },
-        { model: CatalogueNode, as: "topic", attributes: ["name"] }
+        { model: CatalogueNode, as: "topic", attributes: ["name"] },
+        { model: Feedback, as: "feedback", required: false },
       ],
       order: [["scheduled_at", "ASC"]],
     });
@@ -93,7 +95,7 @@ export const getStudentSessions = async (req, res) => {
       teacherName: `${session.teacher.firstName} ${session.teacher.lastName}`,
       topicName: session.topic.name,
       scheduled_at: session.scheduled_at.toISOString(),
-
+      feedbackSubmitted: session.feedbacks?.length > 0,
     }));
     
     console.log("sessions:", formatted);
