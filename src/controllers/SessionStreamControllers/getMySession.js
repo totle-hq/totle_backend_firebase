@@ -85,7 +85,7 @@ export const getStudentSessions = async (req, res) => {
       include: [
         { model: User, as: "teacher", attributes: ["firstName", "lastName"] },
         { model: CatalogueNode, as: "topic", attributes: ["name"] },
-        { model: Feedback, as: "feedback", required: false },
+        { model: Feedback, as: "feedbacks", required: false },
       ],
       order: [["scheduled_at", "ASC"]],
     });
