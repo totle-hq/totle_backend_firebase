@@ -23,13 +23,16 @@ import Feedback from "../Models/feedbackModels.js";
 import { Role } from "../Models/UserModels/Roles.Model.js";
 import { Payment } from "../Models/PaymentModels.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
+import { Notification } from "../Models/NotificationModel.js"; // ✅ ADDED
 
 // CPS / Rubrics
 import { CpsProfile } from "../Models/CpsProfile.model.js";
 import { TestItemRubric } from "../Models/TestItemRubric.model.js";
-import  TeacherAvailability  from "../Models/TeacherAvailability.js";
+import TeacherAvailability from "../Models/TeacherAvailability.js";
 
 const defineRelationships = () => {
+  console.log('🔄 Setting up model associations...');
+
   /* =========================
    * User core relationships
    * ========================= */
@@ -59,6 +62,29 @@ const defineRelationships = () => {
   }
   if (!MarketplaceSuggestion.associations?.user) {
     MarketplaceSuggestion.belongsTo(User, { foreignKey: "userId", as: "user" });
+  }
+
+  /* =========================
+   * Notification associations (NEW)
+   * ========================= */
+  if (!User.associations?.notifications) {
+    User.hasMany(Notification, {
+      foreignKey: "user_id",
+      as: "notifications",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE"
+    });
+    console.log('✅ User → Notification association defined');
+  }
+
+  if (!Notification.associations?.user) {
+    Notification.belongsTo(User, {
+      foreignKey: "user_id",
+      as: "user",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE"
+    });
+    console.log('✅ Notification → User association defined');
   }
 
   if (!Admin.associations?.marketplaceSuggestions) {
@@ -167,7 +193,7 @@ const defineRelationships = () => {
     Survey.belongsTo(Admin, { foreignKey: "adminId", as: "admin" });
   }
 
-    // User ↔ TeacherAvailability
+  // User ↔ TeacherAvailability
   if (!User.associations?.availabilities) {
     User.hasMany(TeacherAvailability, {
       foreignKey: "teacher_id",
@@ -343,7 +369,6 @@ const defineRelationships = () => {
   if (!TestItemRubric.associations?.test) {
     TestItemRubric.belongsTo(Test, { foreignKey: "test_id", as: "test", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
-  
 
   if (!TeacherAvailability.associations?.catalogueNode) {
     TeacherAvailability.belongsToMany(CatalogueNode, {
@@ -415,6 +440,7 @@ const defineRelationships = () => {
     });
   }
 
+  console.log('✅ All model associations defined successfully!');
 };
 
 export default defineRelationships;

@@ -15,6 +15,10 @@ import {
   formatInTz,
   utcToZoned,
 } from "../../utils/time.js"; 
+
+// ✅ ADD THIS IMPORT
+import NotificationService from "../../services/notificationService.js";
+
 /* ============================================================================
    Utilities
    ============================================================================ */
@@ -102,7 +106,6 @@ async function getEligibleTeacherIds(topicId, tier, minRating = 4, excludeUserId
   return teacherIds;
 }
 
-
 /* ============================================================================
    Discovery (listing) endpoints — hard filters on BOTH teacher stats & session row
    ============================================================================ */
@@ -150,7 +153,7 @@ export const listPaidSessions = async (req, res) => {
     if (!topicId) return res.status(400).json({ error: true, message: "topicId is required" });
 
     const minRating = await getDomainMinRating(topicId);
-    const teacherIds = await getEligibleTeacherIds(topicId, "paid", minRating);
+    const teacherIds = await getEligibleTeacherIds(topicId, "paid", minRating, req.user?.id);
     if (teacherIds.length === 0) {
       return res.status(200).json({ success: true, tz, sessions: [], minRating });
     }
@@ -180,7 +183,6 @@ export const listPaidSessions = async (req, res) => {
   }
 };
 
-
 const parseIST = (dateStr, timeStr) => {
   const [hour, minute] = timeStr.split(":").map(Number);
   const d = new Date(`${dateStr}T00:00:00Z`); // midnight UTC
@@ -188,13 +190,109 @@ const parseIST = (dateStr, timeStr) => {
   return d;
 };
 
-
-/** POST /api/session/book — auto-match FREE */
-
-
 const SESSION_DURATION_MIN = 90;
 const BUFFER_MINUTES = 30;
+const INCLUDE_BUFFER_IN_TRIM = true; // or false
 
+export const updateAvailabilityAfterBooking = async (session) => {
+  const { teacher_id, scheduled_at, completed_at } = session;
+
+  const trimStart = INCLUDE_BUFFER_IN_TRIM
+    ? new Date(scheduled_at.getTime() - BUFFER_MINUTES * 60000)
+    : scheduled_at;
+
+  const trimEnd = INCLUDE_BUFFER_IN_TRIM
+    ? new Date(completed_at.getTime() + BUFFER_MINUTES * 60000)
+    : completed_at;
+
+  const dayOfWeek = format(trimStart, "EEEE");
+  const dateKey = format(trimStart, "yyyy-MM-dd");
+
+  //1️⃣ Find matching availability
+  const availability = await TeacherAvailability.findOne({
+    where: {
+      teacher_id,
+      is_active: true,
+      [Op.or]: [
+        { is_recurring: true, day_of_week: dayOfWeek },
+        { is_recurring: false, available_date: dateKey },
+      ],
+    },
+    order: [["is_recurring", "ASC"]],
+  });
+
+  if (!availability) {
+    console.warn("⚠️ No availability found for teacher to update.");
+    return;
+  }
+
+  const [availStartH, availStartM] = availability.start_time.split(":").map(Number);
+  const [availEndH, availEndM] = availability.end_time.split(":").map(Number);
+
+  const availStartMin = availStartH * 60 + availStartM;
+  const availEndMin = availEndH * 60 + availEndM;
+
+  const slotStartMin = trimStart.getHours() * 60 + trimStart.getMinutes();
+  const slotEndMin = trimEnd.getHours() * 60 + trimEnd.getMinutes();
+
+  const toTimeStr = (min) =>
+    `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}:00`;
+
+  // 🟢 Scenario 1: Fully consumed
+  if (slotStartMin <= availStartMin && slotEndMin >= availEndMin) {
+    await TeacherAvailability.update(
+      { is_active: false },
+      { where: { availability_id: availability.availability_id } }
+    );
+    return;
+  }
+
+  // 🟢 Scenario 2: Booking at start (allowing buffer overlap)
+  if (slotStartMin <= availStartMin && slotEndMin < availEndMin) {
+    const newStart = toTimeStr(slotEndMin);
+    await TeacherAvailability.update(
+      { start_time: newStart },
+      { where: { availability_id: availability.availability_id } }
+    );
+    return;
+  }
+
+  // 🟢 Scenario 3: Booking at end
+  if (slotStartMin > availStartMin && slotEndMin === availEndMin) {
+    const newEnd = toTimeStr(slotStartMin);
+    await TeacherAvailability.update(
+      { end_time: newEnd },
+      { where: { availability_id: availability.availability_id } }
+    );
+    return;
+  }
+
+  // 🟢 Scenario 4: Booking in the middle
+  if (slotStartMin > availStartMin && slotEndMin < availEndMin) {
+    const newEnd = toTimeStr(slotStartMin);
+    const newStart = toTimeStr(slotEndMin);
+
+    await TeacherAvailability.update(
+      { end_time: newEnd },
+      { where: { availability_id: availability.availability_id } }
+    );
+
+    await TeacherAvailability.create({
+      teacher_id,
+      day_of_week: availability.day_of_week,
+      start_time: newStart,
+      end_time: availability.end_time,
+      is_recurring: availability.is_recurring,
+      available_date: availability.available_date || null,
+      is_active: true,
+    });
+    return;
+  }
+
+  console.warn("❌ Booking doesn't match any known trimming pattern. Skipping update.");
+};
+
+/** POST /api/session/book — auto-match FREE */
 export const bookFreeSession = async (req, res) => {
   console.log("\n================= 🧩 FreeBook START =================");
   const t0 = Date.now();
@@ -219,7 +317,7 @@ export const bookFreeSession = async (req, res) => {
       return res.status(404).json({ error: true, message: "Learner not found" });
     }
 
-    const teacherIds = await getEligibleTeacherIds(topic_id, "free");
+    const teacherIds = await getEligibleTeacherIds(topic_id, "free", 4, learner_id);
     const filteredTeacherIds = teacherIds.filter((id) => id !== learner_id);
 
     if (filteredTeacherIds.length === 0) {
@@ -344,6 +442,23 @@ export const bookFreeSession = async (req, res) => {
       raw: true,
     });
 
+    // ✅ ADD NOTIFICATION CREATION HERE
+    console.log('🎯 Creating notifications for session booking...');
+    try {
+      await NotificationService.createSessionBookingNotification({
+        sessionId: session.session_id,
+        learnerId: learner_id,
+        teacherId: selected.teacher_id,
+        topicName: topic?.name || "Unknown",
+        scheduledAt: selected.scheduled_at,
+        sessionType: 'free'
+      });
+      console.log('✅ Notifications created successfully!');
+    } catch (notificationError) {
+      console.error('❌ Failed to create notifications:', notificationError);
+      // Don't fail the booking if notifications fail
+    }
+
     return res.status(200).json({
       success: true,
       message: "Free-tier session booked successfully",
@@ -351,7 +466,7 @@ export const bookFreeSession = async (req, res) => {
         sessionId: session.session_id,
         teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
         topicName: topic?.name || "Unknown",
-scheduledAt: formatInTz(selected.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
+        scheduledAt: formatInTz(selected.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
       },
     });
   } catch (err) {
@@ -359,111 +474,6 @@ scheduledAt: formatInTz(selected.scheduled_at, (req.userTz || "UTC"), "dd MMM yy
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
-
-const INCLUDE_BUFFER_IN_TRIM = true; // or false
-
-export const updateAvailabilityAfterBooking = async (session) => {
-  const { teacher_id, scheduled_at, completed_at } = session;
-
-  const trimStart = INCLUDE_BUFFER_IN_TRIM
-    ? new Date(scheduled_at.getTime() - BUFFER_MINUTES * 60000)
-    : scheduled_at;
-
-  const trimEnd = INCLUDE_BUFFER_IN_TRIM
-    ? new Date(completed_at.getTime() + BUFFER_MINUTES * 60000)
-    : completed_at;
-
-  const dayOfWeek = format(trimStart, "EEEE");
-  const dateKey = format(trimStart, "yyyy-MM-dd");
-
-  // 1️⃣ Find matching availability
-  const availability = await TeacherAvailability.findOne({
-    where: {
-      teacher_id,
-      is_active: true,
-      [Op.or]: [
-        { is_recurring: true, day_of_week: dayOfWeek },
-        { is_recurring: false, available_date: dateKey },
-      ],
-    },
-    order: [["is_recurring", "ASC"]],
-  });
-
-  if (!availability) {
-    console.warn("⚠️ No availability found for teacher to update.");
-    return;
-  }
-
-
-  const [availStartH, availStartM] = availability.start_time.split(":").map(Number);
-  const [availEndH, availEndM] = availability.end_time.split(":").map(Number);
-
-  const availStartMin = availStartH * 60 + availStartM;
-  const availEndMin = availEndH * 60 + availEndM;
-
-  const slotStartMin = trimStart.getHours() * 60 + trimStart.getMinutes();
-  const slotEndMin = trimEnd.getHours() * 60 + trimEnd.getMinutes();
-
-  const toTimeStr = (min) =>
-    `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}:00`;
-
-
-  // 🟢 Scenario 1: Fully consumed
-  if (slotStartMin <= availStartMin && slotEndMin >= availEndMin) {
-    await TeacherAvailability.update(
-      { is_active: false },
-      { where: { availability_id: availability.availability_id } }
-    );
-    return;
-  }
-
-  // 🟢 Scenario 2: Booking at start (allowing buffer overlap)
-  if (slotStartMin <= availStartMin && slotEndMin < availEndMin) {
-    const newStart = toTimeStr(slotEndMin);
-    await TeacherAvailability.update(
-      { start_time: newStart },
-      { where: { availability_id: availability.availability_id } }
-    );
-    return;
-  }
-
-  // 🟢 Scenario 3: Booking at end
-  if (slotStartMin > availStartMin && slotEndMin === availEndMin) {
-    const newEnd = toTimeStr(slotStartMin);
-    await TeacherAvailability.update(
-      { end_time: newEnd },
-      { where: { availability_id: availability.availability_id } }
-    );
-    return;
-  }
-
-  // 🟢 Scenario 4: Booking in the middle
-  if (slotStartMin > availStartMin && slotEndMin < availEndMin) {
-    const newEnd = toTimeStr(slotStartMin);
-    const newStart = toTimeStr(slotEndMin);
-
-    await TeacherAvailability.update(
-      { end_time: newEnd },
-      { where: { availability_id: availability.availability_id } }
-    );
-
-    await TeacherAvailability.create({
-      teacher_id,
-      day_of_week: availability.day_of_week,
-      start_time: newStart,
-      end_time: availability.end_time,
-      is_recurring: availability.is_recurring,
-      available_date: availability.available_date || null,
-      is_active: true,
-    });
-    return;
-  }
-
-  console.warn("❌ Booking doesn't match any known trimming pattern. Skipping update.");
-};
-
-
-
 
 /** POST /api/session/book/paid  — book specific PAID session (re-validate gates) */
 export const bookPaidSession = async (req, res) => {
@@ -495,29 +505,44 @@ export const bookPaidSession = async (req, res) => {
 
     const topic = await CatalogueNode.findByPk(s.topic_id, { attributes: ["name"], raw: true });
 
-const bookedPayload = {
-  learner_id,
-  teacher_id: s.teacher_id,
-  topic_id: s.topic_id,
-  topic: topic?.name || "Unknown",
-  session_id: s.session_id,
-};
-if (Session.rawAttributes.status) {
-  bookedPayload.status = "initiated";
-}
-await Session.create(bookedPayload);
+    const bookedPayload = {
+      learner_id,
+      teacher_id: s.teacher_id,
+      topic_id: s.topic_id,
+      topic: topic?.name || "Unknown",
+      session_id: s.session_id,
+    };
+    if (Session.rawAttributes.status) {
+      bookedPayload.status = "initiated";
+    }
+    await Session.create(bookedPayload);
 
+    await Session.update(
+      {
+        student_id: learner_id,
+        teacher_id: s.teacher_id,
+        status: "upcoming",
+        session_tier: "paid",
+      },
+      { where: { session_id: s.session_id } }
+    );
 
-await Session.update(
-  {
-    student_id: learner_id,
-    teacher_id: s.teacher_id,
-    status: "upcoming",
-    session_tier: "paid",
-  },
-  { where: { session_id: s.session_id } }
-);
-
+    // ✅ ADD NOTIFICATION CREATION FOR PAID SESSION
+    console.log('🎯 Creating notifications for paid session booking...');
+    try {
+      await NotificationService.createSessionBookingNotification({
+        sessionId: s.session_id,
+        learnerId: learner_id,
+        teacherId: s.teacher_id,
+        topicName: topic?.name || "Unknown",
+        scheduledAt: s.scheduled_at,
+        sessionType: 'paid'
+      });
+      console.log('✅ Notifications created successfully!');
+    } catch (notificationError) {
+      console.error('❌ Failed to create notifications:', notificationError);
+      // Don't fail the booking if notifications fail
+    }
 
     return res.status(200).json({
       success: true,
@@ -525,7 +550,7 @@ await Session.update(
       data: {
         sessionId: s.session_id,
         topicName: topic?.name || "Unknown",
-scheduledAt: formatInTz(s.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
+        scheduledAt: formatInTz(s.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
         minRatingGate: minRating,
       },
     });
@@ -536,7 +561,7 @@ scheduledAt: formatInTz(s.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:
 };
 
 /** POST /api/session/book/custom
- *  Allows a learner to choose any 90-minute window inside a teacher’s available slot.
+ *  Allows a learner to choose any 90-minute window inside a teacher's available slot.
  */
 export const bookCustomSlot = async (req, res) => {
   try {
@@ -593,8 +618,27 @@ export const bookCustomSlot = async (req, res) => {
       session_level: slot.session_level || "Bridger",
     });
 
-    // 4️⃣ Mark parent slot as 'partially booked' if needed (optional)
-    // leave original slot intact for future use / analytics
+    // ✅ ADD NOTIFICATION CREATION FOR CUSTOM SLOT
+    console.log('🎯 Creating notifications for custom slot booking...');
+    try {
+      const topic = await CatalogueNode.findByPk(topic_id, {
+        attributes: ["name"],
+        raw: true,
+      });
+      
+      await NotificationService.createSessionBookingNotification({
+        sessionId: booked.session_id,
+        learnerId: learner_id,
+        teacherId: teacher_id,
+        topicName: topic?.name || "Unknown",
+        scheduledAt: start,
+        sessionType: 'free'
+      });
+      console.log('✅ Notifications created successfully!');
+    } catch (notificationError) {
+      console.error('❌ Failed to create notifications:', notificationError);
+      // Don't fail the booking if notifications fail
+    }
 
     return res.status(201).json({
       success: true,

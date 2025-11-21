@@ -30,6 +30,7 @@ import { Department } from '../Models/UserModels/Department.js';
 import { FeatureRoadmap } from '../Models/Strategy/FeatureRoadmap.model.js';
 import { ProjectBoard } from "../Models/ProjectModels/ProjectBoard.model.js";
 import { ProjectTask } from "../Models/ProjectModels/ProjectTask.model.js";
+import { Notification } from '../Models/NotificationModel.js'; // ✅ ADDED
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ dotenv.config();
 // Tables we must NOT alter online (have many FKs / prod data)
 const ALTER_BLACKLIST = new Set([
   'Session',                // user.sessions → many FKs (your crash)
+  'Notification',           // ✅ ADDED - notifications table with FKs
   // If you later import the model for learner feedback, add it here:
   // 'LearnerSessionFeedback',
 ]);
@@ -116,6 +118,11 @@ async function createDatabaseIfNeeded(dbName) {
   }
 }
 
+// In your syncDatabase function - around line 80-90
+await safeSync(User, { name: 'User'});
+await safeSync(Notification, { name: 'Notification' }); // ← THIS MUST BE PRESENT
+console.log('✅ Notification table synced successfully!');
+
 // Associations bootstrap (unchanged signature)
 export async function defineModelRelationships() {
   const defineRelationships = await import('../config/associations.js');
@@ -157,17 +164,17 @@ async function safeSync(model, { name, allowAlter = true } = {}) {
    Main Sync
 -------------------------------------------------- */
 export async function syncDatabase() {
-    console.log("🟡 syncDatabase() invoked"); // 👈 add this at the top
+    console.log("🟡 syncDatabase() invoked");
 
   try {
     const dbName1 = process.env.DB_NAME || 'totle';
-    console.log("🟡 creating DB if needed:", dbName1); // 👈
+    console.log("🟡 creating DB if needed:", dbName1);
 
     await createDatabaseIfNeeded(dbName1);
-    console.log("🟢 Database check done"); // 👈 add this
+    console.log("🟢 Database check done");
 
     await createSchemas(sequelize1); // ✅ now includes 'cps'
-initCpsModels();
+    initCpsModels();
 
     // associations
     const defineRelationships = await import('../config/associations.js');
@@ -181,6 +188,10 @@ initCpsModels();
     await safeSync(Admin, { name: 'Admin' });
     await safeSync(Language, { name: "Language" }); 
     await safeSync(User, { name: 'User'});
+    
+    // ✅ ADDED NOTIFICATION SYNC - Right after User sync
+    await safeSync(Notification, { name: 'Notification', allowAlter: false });
+    console.log('✅ Notification table synced successfully!');
 
     const { Blog } = await import('../Models/SurveyModels/BlogModel.js');
     await safeSync(Blog, { name: 'Blog' });
@@ -218,52 +229,54 @@ initCpsModels();
 
     const { CatalogueNode } = await import('../Models/CatalogModels/catalogueNode.model.js');
     await safeSync(CatalogueNode, { name: 'CatalogueNode' });
-    await safeSync(TeacherAvailability, { name: 'TeacherAvailability' });
+    
+    const TeacherAvailability = await import('../Models/TeacherAvailability.js');
+    await safeSync(TeacherAvailability.default, { name: 'TeacherAvailability' });
     console.log('✅ TeacherAvailability table synced successfully!');
+    
     await Department.sync({ alter: true });
 
+    // ✅ Sync CPS profiles under cps schema (permanent deep fix, schema-level isolation)
+    console.log("🧠 Preparing CPS schema and enums before syncing CpsProfile...");
 
-  // ✅ Sync CPS profiles under cps schema (permanent deep fix, schema-level isolation)
-console.log("🧠 Preparing CPS schema and enums before syncing CpsProfile...");
+    try {
+      // 1️⃣ Ensure cps schema exists (never assume public)
+      await sequelize1.query(`CREATE SCHEMA IF NOT EXISTS "cps"`);
+      console.log("✅ 'cps' schema verified or created.");
 
-try {
-  // 1️⃣ Ensure cps schema exists (never assume public)
-  await sequelize1.query(`CREATE SCHEMA IF NOT EXISTS "cps"`);
-  console.log("✅ 'cps' schema verified or created.");
+      // 2️⃣ Drop *every* duplicate enum across all schemas — root cause of 21000 error
+      await sequelize1.query(`
+        DO $$
+        DECLARE
+          rec RECORD;
+        BEGIN
+          -- Drop same-named enums across every namespace
+          FOR rec IN
+            SELECT n.nspname AS schema_name, t.typname
+            FROM pg_type t
+            JOIN pg_namespace n ON n.oid = t.typnamespace
+            WHERE t.typname = 'enum_cps_cps_profiles_context_type'
+          LOOP
+            EXECUTE format('DROP TYPE IF EXISTS "%I"."%I" CASCADE;', rec.schema_name, rec.typname);
+          END LOOP;
 
-  // 2️⃣ Drop *every* duplicate enum across all schemas — root cause of 21000 error
-  await sequelize1.query(`
-    DO $$
-    DECLARE
-      rec RECORD;
-    BEGIN
-      -- Drop same-named enums across every namespace
-      FOR rec IN
-        SELECT n.nspname AS schema_name, t.typname
-        FROM pg_type t
-        JOIN pg_namespace n ON n.oid = t.typnamespace
-        WHERE t.typname = 'enum_cps_cps_profiles_context_type'
-      LOOP
-        EXECUTE format('DROP TYPE IF EXISTS "%I"."%I" CASCADE;', rec.schema_name, rec.typname);
-      END LOOP;
+          -- Drop global (unqualified) version if it still exists
+          IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_cps_cps_profiles_context_type') THEN
+            EXECUTE 'DROP TYPE "enum_cps_cps_profiles_context_type" CASCADE;';
+          END IF;
+        END $$;
+      `);
+      console.log("🧹 All enum_cps_cps_profiles_context_type variants dropped globally.");
 
-      -- Drop global (unqualified) version if it still exists
-      IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_cps_cps_profiles_context_type') THEN
-        EXECUTE 'DROP TYPE "enum_cps_cps_profiles_context_type" CASCADE;';
-      END IF;
-    END $$;
-  `);
-  console.log("🧹 All enum_cps_cps_profiles_context_type variants dropped globally.");
+      // 3️⃣ Force recreate cps.cps_profiles cleanly
+      await sequelize1.query(`DROP TABLE IF EXISTS "cps"."cps_profiles" CASCADE;`);
+      console.log("🗑️ Dropped any stale cps_profiles table.");
 
-  // 3️⃣ Force recreate cps.cps_profiles cleanly
-  await sequelize1.query(`DROP TABLE IF EXISTS "cps"."cps_profiles" CASCADE;`);
-  console.log("🗑️ Dropped any stale cps_profiles table.");
-
-  await CpsProfile.sync({ force: true });
-  console.log("✅ Recreated cps.cps_profiles table successfully (force sync).");
-} catch (err) {
-  console.error("❌ CpsProfile sync section failed hard:", err.message);
-}
+      await CpsProfile.sync({ force: true });
+      console.log("✅ Recreated cps.cps_profiles table successfully (force sync).");
+    } catch (err) {
+      console.error("❌ CpsProfile sync section failed hard:", err.message);
+    }
 
     await safeSync(ProgressionThresholds, { name: 'ProgressionThresholds' });
     console.log('✅ ProgressionThresholds table synced successfully!');
@@ -300,7 +313,6 @@ export const runDbSync = async (isSyncNeeded = false) => {
 
 import path from "path";
 import url from "url";
-import TeacherAvailability from "../Models/TeacherAvailability.js";
 
 const thisFile = url.fileURLToPath(import.meta.url);
 const entryFile = path.resolve(process.argv[1] || "");

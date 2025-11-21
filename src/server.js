@@ -10,6 +10,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { registerChatHandlers } from "./socket/chat.socket.js";
 import timezoneMiddleware from "./middlewares/timezone.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 // --- CPS Generator infrastructure ---
 import { registerCpsGeneratorNamespace } from "./events/cpsGeneratorEvents.js";
@@ -335,6 +336,7 @@ app.use("/admin", adminRoutes);
 app.use("/api", ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/newsfeed", newsfeedRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/marketplace", marketplaceRoutes);
