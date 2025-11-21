@@ -1271,3 +1271,40 @@ export const toggleFreeOrPaidTierOfTeacher = async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
+export const allTeachersList = async (req, res) => {
+  try {
+    const sessions = await Session.findAll({
+      include: [
+        { model: CatalogueNode, as: "catalogueNode", attributes: ["node_id", "name"] },
+        { model: User, as: "teacher", attributes: ["id", "firstName", "lastName", "email"] },
+        { model: User, as: "student", attributes: ["id", "firstName", "lastName", "email"] }
+      ],
+      order: [["scheduled_at", "DESC"]],
+    });
+
+    const result = sessions.map(session => ({
+      id: session.session_id,
+      topic: session.catalogueNode?.name || "-",
+      teacher: session.teacher
+        ? `${session.teacher.firstName} ${session.teacher.lastName || ""}`.trim()
+        : "-",
+      student: session.student
+        ? `${session.student.firstName} ${session.student.lastName || ""}`.trim()
+        : "-",
+      scheduled: session.scheduled_at,
+      status: session.status,
+      actions: {
+        sessionId: session.session_id,
+        canEdit: session.status === "available" || session.status === "upcoming",
+        canDelete: session.status !== "completed"
+      }
+    }));
+
+    res.json({ data: result });
+  } catch (err) {
+    console.error("SessionTable Error:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+};
