@@ -68,16 +68,16 @@ export const updateSessionTiming = async (req, res) => {
     }
 
     const now = new Date();
-    if (parsedTime < now) {
-      console.warn(
-        `⚠️ [VALIDATION] Attempted to set past time → ${parsedTime.toISOString()} < ${now.toISOString()}`
-      );
-      console.log("================= 🧩 updateSessionTiming END =================");
-      return res.status(400).json({
-        success: false,
-        message: "Cannot set session time in the past",
-      });
-    }
+    // if (parsedTime < now) {
+    //   console.warn(
+    //     `⚠️ [VALIDATION] Attempted to set past time → ${parsedTime.toISOString()} < ${now.toISOString()}`
+    //   );
+    //   console.log("================= 🧩 updateSessionTiming END =================");
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Cannot set session time in the past",
+    //   });
+    // }
 
     /* ---------------------------------------------------------------
        STEP 4. Perform Update
