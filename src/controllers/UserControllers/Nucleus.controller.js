@@ -124,6 +124,8 @@ export const generateProfileBasedOnRole = async (req, res) => {
       return res.status(404).json({ message: "Role not found." });
     }
 
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+
     // Create the new role
     const newRole = await UserDepartment.create({
       departmentId: department.id,
@@ -133,7 +135,7 @@ export const generateProfileBasedOnRole = async (req, res) => {
       status: 'active', // Default status on creation
       name: name,
       email: email,
-      password: password,
+      password: hashedPassword,
       tags: [],
     });
 

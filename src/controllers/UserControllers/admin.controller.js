@@ -85,8 +85,9 @@ export const adminLogin = async (req, res) => {
 
     let admin = await findAdminByEmail(email);
     let isFromUserDept = false;
+    console.info("is admin",admin);
 
-    if (!admin) {
+    if (admin == undefined) {
       admin = await findRoleByName(email);
       isFromUserDept = true;
     }
@@ -108,13 +109,7 @@ export const adminLogin = async (req, res) => {
         .status(403)
         .json({ message: "Account is inactive. Contact Super Admin." });
     }
-    let isMatch=false;
-    if(isFromUserDept){
-      isMatch = (password === userPassword);
-    }
-    else{
-      isMatch = await bcrypt.compare(password, userPassword);
-    }
+    let isMatch = await bcrypt.compare(password, userPassword);
     console.log('Is match', isMatch)
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
