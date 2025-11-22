@@ -28,6 +28,7 @@ import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { CpsProfile } from "../Models/CpsProfile.model.js";
 import { TestItemRubric } from "../Models/TestItemRubric.model.js";
 import  TeacherAvailability  from "../Models/TeacherAvailability.js";
+import { BankDetails } from "../Models/UserModels/BankDetailsModel.js";
 
 const defineRelationships = () => {
   /* =========================
@@ -413,6 +414,13 @@ const defineRelationships = () => {
       onDelete: 'SET NULL',
       onUpdate: 'CASCADE',
     });
+  }
+
+  if (!User.associations?.bankDetails) {
+    User.hasOne(BankDetails, { foreignKey: "user_id", as: "bankDetails", onDelete: "CASCADE" });
+  }
+  if (!BankDetails.associations?.user) {
+    BankDetails.belongsTo(User, { foreignKey: "user_id", as: "user", onDelete: "CASCADE" });
   }
 
 };
