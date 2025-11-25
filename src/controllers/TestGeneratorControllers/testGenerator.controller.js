@@ -109,7 +109,7 @@ const param = (req, ...names) => {
 // ✅ NEW: Initiate payment for test
 export const initiateTestPayment = async (req, res) => {
   try {
-    const { topicId } = req.body;
+    const { topicId, paymentMode } = req.body;
     const userId = req.user.id;
 
     if (!topicId) {
@@ -143,6 +143,7 @@ export const initiateTestPayment = async (req, res) => {
     // ✅ FIXED: Generate short receipt (≤40 characters)
     const receipt = generateReceiptId(topicId, userId);
 
+
     // Create Razorpay order
     const order = await razorpay.orders.create({
       amount,
@@ -153,6 +154,7 @@ export const initiateTestPayment = async (req, res) => {
         topic_id: topicId,
         topic_name: topic.name,
         entity_type: "test",
+        payment_mode: paymentMode || "DEMO",
       },
     });
 
