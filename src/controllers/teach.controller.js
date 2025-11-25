@@ -1203,21 +1203,24 @@ export const getAllTestsStatisticsOfUser = async (req, res) => {
         {
           model: CatalogueNode,
           as: 'catalogueNode',
-          attributes: ['name'],
+          attributes: ['name', 'metadata'],  // ensure metadata is retrieved
         },
       ],
     });
 
-    // Map topicStats to include topic name
-    const formattedTopicStats = topicStats.map(stat => ({
-      nodeId: stat.node_id,
-      topic: stat.catalogueNode?.name || 'Unnamed Topic',
-      tier: stat.tier,
-      level: stat.level,
-      sessionCount: stat.sessionCount,
-      rating: stat.rating,
-      paidAt: stat.paidAt,
-    }));
+    const formattedTopicStats = topicStats.map(stat => {
+      const requiredRating = stat.catalogueNode?.metadata?.ratingForPaidTier ?? 4;  // default if missing
+      return {
+        nodeId: stat.node_id,
+        topic: stat.catalogueNode?.name || 'Unnamed Topic',
+        tier: stat.tier,
+        level: stat.level,
+        sessionCount: stat.sessionCount,
+        rating: stat.rating,
+        paidAt: stat.paidAt,
+        requiredRatingForPaidTier: requiredRating,
+      };
+    });
 
     return res.json({
       success: true,
@@ -1236,26 +1239,29 @@ export const toggleFreeOrPaidTierOfTeacher = async (req, res) => {
     const teacherId = req.user.id;
     const { tier, topicId } = req.body;
 
-    // ✅ 1. Validate tier
     if (!['free', 'paid'].includes(tier)) {
       return res.status(400).json({ error: 'Invalid tier. Must be "free" or "paid".' });
     }
 
-    // ✅ 2. Check if entry exists for this teacher+topic
     const [record, created] = await Teachertopicstats.findOrCreate({
-      where: {
-        teacherId,
-        node_id: topicId,
-      },
-      defaults: {
-        tier, // will auto-set `paidAt` if tier === 'paid'
-      },
+      where: { teacherId, node_id: topicId },
+      defaults: { tier },
     });
 
-    // ✅ 3. If it exists and tier is changing, update it
+    if (tier === 'paid') {
+      const topicNode = await CatalogueNode.findByPk(topicId);
+      const requiredRating = topicNode?.metadata?.ratingForPaidTier ?? 4;
+
+      if (record.rating < requiredRating) {
+        return res.status(403).json({
+          error: `Minimum rating of ${requiredRating} required for paid tier.`,
+        });
+      }
+    }
+
     if (!created && record.tier !== tier) {
       record.tier = tier;
-      await record.save(); // `beforeUpdate` hook will set `paidAt`
+      await record.save(); // will auto-set `paidAt` if necessary
     }
 
     return res.status(200).json({
@@ -1265,7 +1271,6 @@ export const toggleFreeOrPaidTierOfTeacher = async (req, res) => {
       updated: !created,
       data: record,
     });
-
   } catch (error) {
     console.error('Error toggling tier:', error);
     return res.status(500).json({ error: 'Internal server error' });

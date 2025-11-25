@@ -35,6 +35,7 @@ import {
   updateTeacherAvailabilityAdmin,
   getAllTestsStatisticsOfUser,
   allTeachersList,
+  toggleFreeOrPaidTierOfTeacher,
 } from "../controllers/teach.controller.js";
 
 // ✅ Get this from its own controller (do NOT import from teach.controller.js)
@@ -80,5 +81,6 @@ router.put(
 );
 
 router.get('/test-stats',authMiddleware, getAllTestsStatisticsOfUser);
+router.post("/toggle-tier", authMiddleware, toggleFreeOrPaidTierOfTeacher);
 router.get("/list",allTeachersList);
 export default router;
