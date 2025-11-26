@@ -7,6 +7,9 @@ import bcrypt from "bcrypt";
 import { sendOtp, verifyOtp } from "../../utils/otpService.js";
 import SyncEmail from "../../Models/SyncEmail.model.js";
 import { Test } from "../../Models/test.model.js";
+import { CatalogueNode, User } from "../../Models/index.js";
+import { Payment } from "../../Models/PaymentModels.js";
+import { Op } from "sequelize";
 
 
 export const AddDepartments = async (req, res) => {
@@ -485,36 +488,39 @@ export const getTestsWithPaymentMode = async (req, res) => {
       include: [
         {
           model: User,
-          attributes: ['name', 'email'],
-          where: {
-            name: { [Op.iLike]: `%${userSearch}%` },
-          },
+          as: "user",              // MUST MATCH ASSOCIATION ALIAS
+          attributes: ["firstName", "email"],
+          where: userSearch
+            ? { name: { [Op.iLike]: `%${userSearch}%` } }
+            : undefined,           // allow empty search
+          required: !!userSearch,  // only inner join when filtering
         },
         {
           model: CatalogueNode,
-          as: 'topicNode',
-          attributes: ['name'],
+          as: "topicNode",
+          attributes: ["name"],
         },
         {
           model: Payment,
-          attributes: ['payment_mode'],
+          as: "payment",           // USE ALIAS
+          attributes: ["payment_mode"],
         },
       ],
-      order: [['scheduled_at', 'DESC']],
+      order: [["created_at", "DESC"]],
     });
 
-    const results = tests.map(test => ({
+    const results = tests.map((test) => ({
       testId: test.test_id,
-      user: test.User?.name ?? 'Unknown',
-      topic: test.topicNode?.name ?? 'N/A',
-      scheduledAt: test.scheduled_at,
-      paymentMode: test.Payment?.payment_mode ?? 'DEMO',
+      user: test.user?.firstName ?? "Unknown",
+      topic: test.topicNode?.name ?? "N/A",
+      scheduledAt: test.createdAt,
+      paymentMode: test.payment?.payment_mode ?? "DEMO",
     }));
 
     return res.json(results);
   } catch (err) {
-    console.error('Error fetching tests with payment:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    console.error("Error fetching tests with payment:", err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
 
@@ -526,15 +532,16 @@ export const updateTestPaymentMode = async (req, res) => {
   }
 
   const test = await Test.findByPk(testId, {
-    include: [{ model: Payment }],
+    include: [{ model: Payment, as: "payment" }]
   });
 
-  if (!test || !test.Payment) {
+  if (!test || !test.payment) {
+    console.log(`Test or payment not found for testId: ${testId}`);
     return res.status(404).json({ error: 'Test or payment not found' });
   }
 
-  test.Payment.payment_mode = mode;
-  await test.Payment.save();
+  test.payment.payment_mode = mode;
+  await test.payment.save();
 
   return res.json({ success: true, message: 'Payment mode updated' });
 };

@@ -9,12 +9,14 @@ import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { Language } from "../Models/LanguageModel.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
+import { getRazorpayInstance } from "./PaymentControllers/paymentController.js";
 
 // creating the instance for razorpay 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// const razorpay = new Razorpay({
+//   key_id: process.env.RAZORPAY_KEY_ID,
+//   key_secret: process.env.RAZORPAY_KEY_SECRET,
+// });
+
 
 export const getTeachersForTopic = async (req, res) => {
   try {
@@ -243,7 +245,9 @@ export const getTeachersForTopic = async (req, res) => {
 export const BookPaidSlot = async (req, res) => {
   try {
     const user_id = req.user?.id || req.user?.user_id || req.user?.userId;
-    const { slot, teacher_id, level, topic_id } = req.body;
+    const { slot, teacher_id, level, topic_id,paymentMode: requestedMode } = req.body;
+
+    const paymentMode = ['LIVE', 'DEMO'].includes(requestedMode) ? requestedMode : 'DEMO';
     
     console.log("=== BOOKING REQUEST DEBUG ===");
     console.log("User ID:", user_id);
@@ -382,6 +386,8 @@ export const BookPaidSlot = async (req, res) => {
       });
     }
 
+    const razorpay = getRazorpayInstance(paymentMode);
+
     // Create a Razorpay order
     const timestamp = Date.now().toString().slice(-8);
     const shortUserId = user_id.slice(-8);
@@ -414,7 +420,8 @@ export const BookPaidSlot = async (req, res) => {
       order_id: order.id,
       amount: amount * 100, // Store in paise
       currency: "INR",
-      status: "created"
+      status: "created",
+      payment_mode: paymentMode,
     });
 
     console.log("Payment record created:", paymentRecord.payment_id);
@@ -436,7 +443,8 @@ export const BookPaidSlot = async (req, res) => {
       key: process.env.RAZORPAY_KEY_ID,
       session_id: availableSession.id,
       payment_id: paymentRecord.payment_id, // ✅ Return payment record ID
-      message: "Order created successfully"
+      message: "Order created successfully",
+      payment_mode: paymentMode,
     });
 
   } catch (error) {
