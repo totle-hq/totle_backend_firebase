@@ -1,5 +1,5 @@
 import express from "express";
-import { addSyncEmails, changeAccountPassword, createAccountInDepartment, deleteInternRoleAccount, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, sendOtpForProduction, toggleStatusForInterns, updateSyncEmail, updateUserDepartmentRolePassword, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
+import { addSyncEmails, changeAccountPassword, createAccountInDepartment, deleteInternRoleAccount, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, getTestsWithPaymentMode, sendOtpForProduction, toggleStatusForInterns, updateSyncEmail, updateTestPaymentMode, updateUserDepartmentRolePassword, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
 import { verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 
 const router = express.Router();
@@ -20,5 +20,7 @@ router.post("/sync-email", verifyAdminToken, addSyncEmails);
 router.get("/sync-email", verifyAdminToken, getSyncEmails);
 router.put("/sync-email/:id", verifyAdminToken, updateSyncEmail);
 router.delete("/sync-email/:id", verifyAdminToken, deleteSyncEmail);
+router.get('/tests-with-payment-mode', getTestsWithPaymentMode);
+router.post('/update-payment-mode', updateTestPaymentMode);
 
 export default router;

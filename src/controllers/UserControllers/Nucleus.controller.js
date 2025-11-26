@@ -6,6 +6,10 @@ import { autoSeedRolesAndDepartments, seedDepartments, seedRoles } from "../../s
 import bcrypt from "bcrypt";
 import { sendOtp, verifyOtp } from "../../utils/otpService.js";
 import SyncEmail from "../../Models/SyncEmail.model.js";
+import { Test } from "../../Models/test.model.js";
+import { CatalogueNode, User } from "../../Models/index.js";
+import { Payment } from "../../Models/PaymentModels.js";
+import { Op } from "sequelize";
 
 
 export const AddDepartments = async (req, res) => {
@@ -440,4 +444,104 @@ export const updateUserDepartmentRolePassword= async (req, res) => {
     console.error('Password update error:', error);
     return res.status(500).json({ error: 'Failed to update password' });
   }
+};
+
+// export const getAllTestsWithPaymentMode = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const tests = await Test.findAll({
+//       where: { user_id: userId },
+//       include: [
+//         {
+//           model: Payment,
+//           attributes: ['status', 'order_id', 'createdAt'],
+//         },
+//       ],
+//       order: [['created_at', 'DESC']],
+//     });
+
+//     const testsWithPaymentInfo = tests.map(test => {
+//       const isLive = test.Payment?.order_id?.startsWith("order_"); // Razorpay prod prefix
+//       return {
+//         testId: test.test_id,
+//         topic: test.topic_name,
+//         status: test.status,
+//         submittedAt: test.submitted_at,
+//         paymentMode: isLive ? 'LIVE' : 'DEMO',
+//       };
+//     });
+
+//     return res.status(200).json({ success: true, tests: testsWithPaymentInfo });
+//   } catch (err) {
+//     console.error("Error fetching tests:", err);
+//     res.status(500).json({ error: "Failed to fetch tests with payment info" });
+//   }
+// };
+
+
+export const getTestsWithPaymentMode = async (req, res) => {
+  try {
+    const { userSearch = '' } = req.query;
+
+    const tests = await Test.findAll({
+      include: [
+        {
+          model: User,
+          as: "user",              // MUST MATCH ASSOCIATION ALIAS
+          attributes: ["firstName", "email"],
+          where: userSearch
+            ? { name: { [Op.iLike]: `%${userSearch}%` } }
+            : undefined,           // allow empty search
+          required: !!userSearch,  // only inner join when filtering
+        },
+        {
+          model: CatalogueNode,
+          as: "topicNode",
+          attributes: ["name"],
+        },
+        {
+          model: Payment,
+          as: "payment",           // USE ALIAS
+          attributes: ["payment_mode"],
+        },
+      ],
+      order: [["created_at", "DESC"]],
+    });
+
+    const results = tests.map((test) => ({
+      testId: test.test_id,
+      user: test.user?.firstName ?? "Unknown",
+      topic: test.topicNode?.name ?? "N/A",
+      scheduledAt: test.createdAt,
+      paymentMode: test.payment?.payment_mode ?? "DEMO",
+    }));
+
+    return res.json(results);
+  } catch (err) {
+    console.error("Error fetching tests with payment:", err);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const updateTestPaymentMode = async (req, res) => {
+  const { testId, mode } = req.body;
+
+  if (!['LIVE', 'DEMO'].includes(mode)) {
+    return res.status(400).json({ error: 'Invalid payment mode' });
+  }
+
+  const test = await Test.findByPk(testId, {
+    include: [{ model: Payment, as: "payment" }]
+  });
+
+  if (!test || !test.payment) {
+    console.log(`Test or payment not found for testId: ${testId}`);
+    return res.status(404).json({ error: 'Test or payment not found' });
+  }
+
+  test.payment.payment_mode = mode;
+  await test.payment.save();
+
+  return res.json({ success: true, message: 'Payment mode updated' });
 };

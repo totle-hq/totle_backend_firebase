@@ -35,6 +35,7 @@ import { sequelize1 } from "../../config/sequelize.js";
 
 // ✅ Use your existing EWMA updater service
 import { updateCpsProfileFromTest } from "../../services/cps/cpsEma.service.js";
+import { getRazorpayInstance } from "../PaymentControllers/paymentController.js";
 
 /**
  * POST /api/tests/generate
@@ -42,10 +43,11 @@ import { updateCpsProfileFromTest } from "../../services/cps/cpsEma.service.js";
  */
 
 // Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// const razorpay = new Razorpay({
+//   key_id: process.env.RAZORPAY_KEY_ID,
+//   key_secret: process.env.RAZORPAY_KEY_SECRET,
+// });
+
 
 // Common list of Payment columns that actually exist in DB (exclude legacy session_id/snake_case)
 const PAYMENT_ATTRS = [
@@ -65,15 +67,20 @@ const PAYMENT_ATTRS = [
 ];
 
 // ✅ Find the latest successful payment that hasn't been used to create a Test
-const findUnusedSuccessfulPayment = async (userId, topicId) => {
-  // Find latest success payment for this user+topic
+const findUnusedSuccessfulPayment = async (userId, topicId, mode = null) => {
+  const whereClause = {
+    user_id: userId,
+    entity_type: "test",
+    entity_id: topicId,
+    status: "success",
+  };
+
+  if (mode) {
+    whereClause.payment_mode = mode;
+  }
+
   const payment = await Payment.findOne({
-    where: {
-      user_id: userId,
-      entity_type: "test",
-      entity_id: topicId,
-      status: "success",
-    },
+    where: whereClause,
     attributes: PAYMENT_ATTRS,
     order: [["createdAt", "DESC"]],
   });
@@ -86,6 +93,7 @@ const findUnusedSuccessfulPayment = async (userId, topicId) => {
 
   return payment;
 };
+
 
 // ✅ Backward-compat boolean check (kept for endpoints that only need a yes/no)
 const checkTestPayment = async (userId, topicId) => {
@@ -109,7 +117,7 @@ const param = (req, ...names) => {
 // ✅ NEW: Initiate payment for test
 export const initiateTestPayment = async (req, res) => {
   try {
-    const { topicId } = req.body;
+    const { topicId, paymentMode } = req.body;
     const userId = req.user.id;
 
     if (!topicId) {
@@ -136,14 +144,17 @@ export const initiateTestPayment = async (req, res) => {
         message: "Invalid topic",
       });
     }
-
-    const amount = 9900; // ₹99 in paise
+    // const amount = 9900; // ₹99 in paise
+    const amount = 100; // ₹1 in paise
     const currency = "INR";
 
     // ✅ FIXED: Generate short receipt (≤40 characters)
     const receipt = generateReceiptId(topicId, userId);
 
+
     // Create Razorpay order
+    // ✅ Use correct Razorpay instance based on mode
+    const razorpay = getRazorpayInstance(paymentMode || "DEMO");
     const order = await razorpay.orders.create({
       amount,
       currency,
@@ -153,6 +164,7 @@ export const initiateTestPayment = async (req, res) => {
         topic_id: topicId,
         topic_name: topic.name,
         entity_type: "test",
+        payment_mode: paymentMode || "DEMO",
       },
     });
 
@@ -165,13 +177,14 @@ export const initiateTestPayment = async (req, res) => {
       amount,
       currency,
       status: "created",
+      payment_mode: paymentMode || "DEMO", 
     });
 
     return res.status(200).json({
       success: true,
       message: "Payment initiated successfully",
       data: {
-        key: process.env.RAZORPAY_KEY_ID,
+        key: (paymentMode === "LIVE") ? process.env.RAZORPAY_LIVE_KEY_ID : process.env.RAZORPAY_KEY_ID,
         order_id: order.id,
         amount,
         currency,
@@ -195,20 +208,6 @@ export const verifyTestPayment = async (req, res) => {
 
     const userId = req.user.id;
 
-    // Verify signature
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
-    const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
-      .digest("hex");
-
-    if (expectedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid payment signature",
-      });
-    }
-
     // Update payment record
     const payment = await Payment.findOne({
       where: {
@@ -217,13 +216,32 @@ export const verifyTestPayment = async (req, res) => {
         entity_id: topicId,
         order_id: razorpay_order_id,
       },
-      attributes: PAYMENT_ATTRS,
+      attributes: [...PAYMENT_ATTRS, "payment_mode"],
     });
 
     if (!payment) {
       return res.status(404).json({
         success: false,
         message: "Payment record not found",
+      });
+    }
+
+    const isLive = payment.payment_mode === "LIVE";
+    const secret = isLive
+      ? process.env.RAZORPAY_LIVE_KEY_SECRET
+      : process.env.RAZORPAY_KEY_SECRET;
+
+    // ✅ Verify signature with correct secret
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(body.toString())
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payment signature",
       });
     }
 
@@ -255,9 +273,7 @@ export const checkTestPaymentStatus = async (req, res) => {
     const { topicId } = req.params;
     const userId = req.user.id;
 
-    /* ------------------------------------------------------------------ */
-    /* 1️⃣  Check if already qualified (passed Bridger test earlier)        */
-    /* ------------------------------------------------------------------ */
+    // 1️⃣ Already passed
     const passed = await Test.findOne({
       where: { user_id: userId, topic_uuid: topicId, eligible_for_bridger: true },
     });
@@ -271,15 +287,13 @@ export const checkTestPaymentStatus = async (req, res) => {
       });
     }
 
-    /* ------------------------------------------------------------------ */
-    /* 2️⃣  Check if user is in cooldown from a previous failed attempt     */
-    /* ------------------------------------------------------------------ */
+    // 2️⃣ Cooling period
     const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
     if (!eligible) {
       return res.status(200).json({
         success: true,
         data: {
-          paid: true, // treat as paid, don’t prompt again
+          paid: true,
           cooldown_active: true,
           waitTime,
           cooldown_end,
@@ -288,19 +302,36 @@ export const checkTestPaymentStatus = async (req, res) => {
       });
     }
 
-    /* ------------------------------------------------------------------ */
-    /* 3️⃣  Otherwise, return normal payment requirement                    */
-    /* ------------------------------------------------------------------ */
-    const payment = await findUnusedSuccessfulPayment(userId, topicId);
+    // 3️⃣ Get latest payment and read its mode
+    const recentPaymentTest = await Test.findOne({
+      where: {
+        user_id: userId,
+        topic_uuid: topicId,
+      },
+      include: [{
+        model: Payment,
+        as: "payment",
+        required: true,
+        where: { status: "captured" },
+      }],
+      order: [["created_at", "DESC"]],
+    });
+
+    const mode = recentPaymentTest?.payment?.payment_mode ?? 'DEMO';
+
+    const payment = await findUnusedSuccessfulPayment(userId, topicId, mode);
+
     return res.status(200).json({
       success: true,
       data: {
         paid: !!payment,
+        payment_mode: mode,
         cooldown_active: false,
         already_bridger: false,
-        amount_required: payment ? 0 : 9900,
+        amount_required: payment ? 0 : 100,
       },
     });
+
   } catch (error) {
     console.error("❌ Error checking payment status:", error);
     return res.status(500).json({
@@ -310,6 +341,7 @@ export const checkTestPaymentStatus = async (req, res) => {
     });
   }
 };
+
 
 
 export const startTest = async (req, res) => {
@@ -897,9 +929,11 @@ export const generateTest = async (req, res) => {
     if (!hasValidPayment) {
       return res.status(402).json({
         success: false,
-        message: "Payment required to take this test. Please pay ₹99 to continue.",
+        // message: "Payment required to take this test. Please pay ₹99 to continue.",
+        message: "Payment required to take this test. Please pay ₹1 to continue.",
         payment_required: true,
-        amount: 9900,
+        // amount: 9900,
+        amount: 100,
       });
     }
 

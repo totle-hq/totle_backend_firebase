@@ -67,6 +67,11 @@ export const Payment = sequelize1.define(
       allowNull: true,
     },
 
+    payment_mode: {
+      type: DataTypes.ENUM('LIVE', 'DEMO'),
+      defaultValue: 'LIVE',
+    }
+
     // IMPORTANT: do NOT define session_id here
   },
   {

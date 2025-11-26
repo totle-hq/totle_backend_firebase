@@ -7,21 +7,34 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,       // paste your Test Key ID here
-  key_secret: process.env.RAZORPAY_KEY_SECRET // paste your Test Key Secret here
-});
+// const razorpay = new Razorpay({
+//   key_id: process.env.RAZORPAY_KEY_ID,       // paste your Test Key ID here
+//   key_secret: process.env.RAZORPAY_KEY_SECRET // paste your Test Key Secret here
+// });
+
+
+// Helper function to create Razorpay instance based on mode
+export function getRazorpayInstance(paymentMode = "DEMO") {
+  const isLive = paymentMode === "LIVE";
+  return new Razorpay({
+    key_id: isLive ? process.env.RAZORPAY_LIVE_KEY_ID : process.env.RAZORPAY_KEY_ID,
+    key_secret: isLive ? process.env.RAZORPAY_LIVE_KEY_SECRET : process.env.RAZORPAY_KEY_SECRET,
+  });
+}
+
 
 // Controller to create order
 export const createOrder = async (req, res) => {
   try {
-    const { amount } = req.body; // Amount in rupees (e.g., 500)
+    const { amount, paymentMode = "DEMO" } = req.body; // Accept paymentMode from request
+
+    const razorpay = getRazorpayInstance(paymentMode); // Get correct Razorpay instance
 
     const options = {
-      amount: amount * 100,   // Razorpay expects amount in paise (multiply by 100)
+      amount: amount * 100, // Razorpay uses paise
       currency: "INR",
       receipt: shortid.generate(),
-      payment_capture: 1,     // Auto capture after payment
+      payment_capture: 1,
     };
 
     const order = await razorpay.orders.create(options);
@@ -31,6 +44,7 @@ export const createOrder = async (req, res) => {
       orderId: order.id,
       currency: order.currency,
       amount: amount,
+      paymentMode, // Return back for clarity
     });
 
   } catch (error) {
