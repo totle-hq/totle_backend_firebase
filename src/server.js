@@ -364,6 +364,8 @@ app.use("/api/nucleus", userMangaeRoutes);
 app.use("/api/attendance", attendenceRoutes);
 app.use("/api/WeekOverlay", WeekOverlayRoutes);
 
+app.use('/api/bank', paymentRoutes);
+
 app.use("/catalogue", EndeavorRoutes);
 app.use("/api/chat", chatRoutes);
 
