@@ -610,3 +610,99 @@ export const bookCustomSlot = async (req, res) => {
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+/* ============================================================================
+   GET /api/session/teacher/upcoming-sessions
+   Returns ALL upcoming sessions for CURRENT teacher
+============================================================================ */
+export const getTeacherUpcomingSessions = async (req, res) => {
+  try {
+    const teacherId = req.user?.id;
+    const userTz = req.headers["x-user-timezone"] || "UTC";
+
+    if (!teacherId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: No user found in token",
+      });
+    }
+
+    // 1️⃣ Fetch teacher’s upcoming sessions
+    const sessions = await Session.findAll({
+      where: {
+        teacher_id: teacherId,
+        status: { [Op.in]: ["upcoming", "booked"] },
+      },
+      attributes: [
+        "session_id",
+        "student_id",
+        "topic_id",
+        "scheduled_at",
+        "duration_minutes",
+      ],
+      order: [["scheduled_at", "ASC"]],
+      raw: true,
+    });
+
+    if (!sessions.length) {
+      return res.status(200).json({
+        success: true,
+        sessions: [],
+      });
+    }
+
+    // 2️⃣ Fetch related students + topics in bulk
+    const studentIds = [...new Set(sessions.map(s => s.student_id))];
+    const topicIds = [...new Set(sessions.map(s => s.topic_id))];
+
+    const students = await User.findAll({
+      where: { id: { [Op.in]: studentIds } },
+      attributes: ["id", "firstName", "lastName"],
+      raw: true,
+    });
+
+    const topics = await CatalogueNode.findAll({
+      where: { id: { [Op.in]: topicIds } },
+      attributes: ["id", "name", "metadata"],
+      raw: true,
+    });
+
+    const studentMap = Object.fromEntries(
+      students.map(s => [
+        s.id,
+        `${s.firstName ?? ""} ${s.lastName ?? ""}`.trim(),
+      ])
+    );
+
+    const topicMap = Object.fromEntries(
+      topics.map(t => [
+        t.id,
+        {
+          name: t.name,
+          subject: t.metadata?.subject_name || "General",
+        },
+      ])
+    );
+
+    // 3️⃣ Shape final response exactly for your frontend
+    const shaped = sessions.map(s => ({
+      session_id: s.session_id,
+      studentName: studentMap[s.student_id] || "Unknown Student",
+      topicName: topicMap[s.topic_id]?.name || "Untitled Topic",
+      subject: topicMap[s.topic_id]?.subject || "General",
+      scheduled_at: s.scheduled_at, // RAW UTC - frontend handles tz
+      duration_minutes: s.duration_minutes ?? 90,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      sessions: shaped,
+    });
+
+  } catch (err) {
+    console.error("❌ getTeacherUpcomingSessions ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch upcoming sessions",
+    });
+  }
+};

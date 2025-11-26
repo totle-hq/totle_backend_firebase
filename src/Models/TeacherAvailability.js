@@ -5,7 +5,7 @@ import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
 
 /* ---------------------------------------------------------------------------
    TeacherAvailability
-   --------------------------------------------------------------------------- */
+--------------------------------------------------------------------------- */
 export const TeacherAvailability = sequelize1.define(
   "TeacherAvailability",
   {
@@ -60,7 +60,7 @@ export const TeacherAvailability = sequelize1.define(
 
 /* ---------------------------------------------------------------------------
    TeacherAvailabilityTopic (Join Table)
-   --------------------------------------------------------------------------- */
+--------------------------------------------------------------------------- */
 export const TeacherAvailabilityTopic = sequelize1.define(
   "TeacherAvailabilityTopic",
   {
@@ -83,21 +83,18 @@ export const TeacherAvailabilityTopic = sequelize1.define(
   {
     schema: "user",
     tableName: "teacher_availability_topics",
-    timestamps: false,
+    timestamps: true,     // ✅ FIXED — MUST BE TRUE
   }
 );
 
 /* ---------------------------------------------------------------------------
    Associations
-   --------------------------------------------------------------------------- */
-/* ---------------------------------------------------------------------------
-   Associations (Unified alias = "catalogueNode")
-   --------------------------------------------------------------------------- */
+--------------------------------------------------------------------------- */
 TeacherAvailability.belongsToMany(CatalogueNode, {
   through: TeacherAvailabilityTopic,
   foreignKey: "availability_id",
   otherKey: "topic_id",
-  as: "catalogueNode", // unified alias across all models
+  as: "catalogueNode",
 });
 
 CatalogueNode.belongsToMany(TeacherAvailability, {
@@ -106,6 +103,5 @@ CatalogueNode.belongsToMany(TeacherAvailability, {
   otherKey: "availability_id",
   as: "teacherAvailability",
 });
-
 
 export default TeacherAvailability;

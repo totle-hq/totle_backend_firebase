@@ -37,6 +37,7 @@ import {
   allTeachersList,
   toggleFreeOrPaidTierOfTeacher,
 } from "../controllers/teach.controller.js";
+import { getTeacherUpcomingSessions } from "../controllers/SessionStreamControllers/bookSession.controller.js";
 
 // ✅ Get this from its own controller (do NOT import from teach.controller.js)
 import { getTeachingProgression } from "../controllers/TeachControllers/progression.controller.js";
@@ -83,4 +84,7 @@ router.put(
 router.get('/test-stats',authMiddleware, getAllTestsStatisticsOfUser);
 router.post("/toggle-tier", authMiddleware, toggleFreeOrPaidTierOfTeacher);
 router.get("/list",allTeachersList);
+
+router.get("/upcoming-sessions", authMiddleware, getTeacherUpcomingSessions);
+
 export default router;

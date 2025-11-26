@@ -27,7 +27,13 @@ import { col, fn, Op, Sequelize } from "sequelize";
 import { Test } from "../../Models/test.model.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { sequelize1 } from "../../config/sequelize.js"; // ✅ for raw SQL insert into cps_profiles
-
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  hashToken,
+  REFRESH_TOKEN_EXPIRES_DAYS
+} from "../../utils/tokenUtils.js";
+import { SessionToken } from "../../Models/SessionTokenModel.js";
 
 dotenv.config();
 
@@ -106,38 +112,27 @@ const googleCallback = (req, res, next) => {
   })(req, res, next);
 };
 
-const logout = async (req, res) => {
+export const logout = async (req, res) => {
   try {
-    const token = req.header("Authorization")?.replace("Bearer ", "");
-    if (!token) {
-      return res
-        .status(401)
-        .json({ error: true, message: "Unauthorized: No token provided" });
-    }
-    const decoded = await verifyToken(token);
-    // console.log("Decoded in Logout:", decoded); // ✅ Debugging
+    const refresh = req.cookies.totle_rt;
+    if (!refresh)
+      return res.status(200).json({ message: "Logged out" });
 
-    if (!decoded) {
-      return res
-        .status(401)
-        .json({ error: true, message: "Unauthorized: Invalid token" });
-    }
-    const userId = decoded.id; // ✅ Ensure `id` is an integer
-    if (!userId) {
-      return res
-        .status(400)
-        .json({ error: true, message: "Invalid token: Missing user ID" });
-    }
-    // ✅ Update `isLoggedIn` using `id`
-    await User.update({ isLoggedIn: false }, { where: { id: userId } });
-    return res.status(200).json({ error: false, message: "Logout successful" });
-  } catch (error) {
-    console.error("Error during logout: ", error);
-    return res
-      .status(500)
-      .json({ error: true, message: "Internal Server Error" });
+    const hashed = hashToken(refresh);
+
+    await SessionToken.update(
+      { revoked: true },
+      { where: { refresh_token_hash: hashed } }
+    );
+
+    res.clearCookie("totle_rt");
+
+    return res.json({ message: "Logout success" });
+  } catch (err) {
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 const verifyToken = async (token) => {
   try {
@@ -351,104 +346,82 @@ export const otpVerification = async (req, res) => {
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
-  if (!email)
-    return res
-      .status(400)
-      .json({ error: true, message: "Please enter your email" });
-  if (!password)
-    return res
-      .status(400)
-      .json({ error: true, message: "Please enter your password" });
+  if (!email || !password)
+    return res.status(400).json({ error: true, message: "Missing credentials" });
 
   try {
     const user = await User.findOne({ where: { email } });
-    const betaUser = await BetaUsers.findOne({ where: { email } });
-    // console.log("User Found:", user);
+    if (!user)
+      return res.status(400).json({ error: true, message: "User not found" });
 
-    if (!user && !betaUser) {
-      return res
-        .status(400)
-        .json({ error: true, message: "User doesn't exist, please register" });
-    }
-
-    let userToken = {
-      id: user.id,
-      email: user.email,
-      userName: user.firstName,
-    };
-    if (user && user.status === "blacklist") {
-  return res.status(403).json({
-    error: true,
-    message: "Your account has been blocked by the administrator. Please contact support.",
-  });
-}
+    if (user.status === "blacklist")
+      return res.status(403).json({
+        error: true,
+        message: "Your account has been blocked. Contact support."
+      });
 
     const match = await comparePassword(password, user.password);
-    if (!match) {
-      return res.status(401).json({ error: true, message: "Invalid Password" });
-    }
+    if (!match)
+      return res.status(401).json({ error: true, message: "Invalid password" });
 
-    await User.update({ isLoggedIn: true }, { where: { id: user.id } });
-    await ensureCpsProfile(user.id); // ✅ backfill CPS row on first login if missing
-
-    //  ip during login
-
+    // metadata logging
+    const parser = new UAParser(req.headers["user-agent"]);
+    const browser = parser.getBrowser().name;
+    const os = parser.getOS().name;
     const ip =
       req.headers["x-forwarded-for"]?.split(",")[0] ||
-      req.connection?.remoteAddress ||
-      req.socket?.remoteAddress ||
+      req.socket.remoteAddress ||
       null;
-    // await User.update(
-    //     { ipAddress: ip },
-    //     { where: { id: user.id } }  // ✅ Add this line
-    //     );
 
-    //  os, browsertype,
-
-    const parser = new UAParser(req.headers["user-agent"]);
-    const browser = `${parser.getBrowser().name} ${parser.getBrowser().version}`;
-    const os = `${parser.getOS().name} ${parser.getOS().version}`;
-
-    console.log("✅ Login Metadata:", { ip, browser, os });
-
-    // ✅ Update user login metadata
     await User.update(
-      {
-        isLoggedIn: true,
-        ipAddress: ip,
-        browser,
-        os,
-      },
+      { isLoggedIn: true, ipAddress: ip, browser, os },
       { where: { id: user.id } }
     );
 
-    const tokenResponse = await generateToken(userToken);
-    if (tokenResponse.error) {
-      return res
-        .status(500)
-        .json({ error: true, message: "Failed to generate token" });
-    }
+    // ---- TOKEN CREATION ----
+    const payload = { id: user.id, email: user.email, userName: user.firstName };
+
+    const accessToken = generateAccessToken(payload);
+    const refreshToken = generateRefreshToken();
+    const hashedRefresh = hashToken(refreshToken);
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRES_DAYS);
+
+    // Save to DB (one row per device)
+    await SessionToken.create({
+      user_id: user.id,
+      refresh_token_hash: hashedRefresh,
+      device: parser.getDevice().type || "browser",
+      browser,
+      os,
+      ip,
+      expires_at: expiresAt
+    });
+
+    // ---- SEND REFRESH TOKEN AS HTTPONLY COOKIE ----
+    res.cookie("totle_rt", refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
+      path: "/",
+    });
 
     return res.status(200).json({
       error: false,
       message: "Login successful",
-      token: tokenResponse.token,
+      accessToken,
       user: {
         id: user.id,
         firstName: user.firstName,
-        lastName: user.lastName || null,
-        email: user.email,
-        // preferredLanguage,
-        // knownLanguages,
-        // ipAddress: user.ip
-      },
-      hasSeenWelcomeScreen: false,
+        lastName: user.lastName,
+        email: user.email
+      }
     });
   } catch (error) {
-    console.error("Error during login: ", error);
-    return res
-      .status(500)
-      .json({ error: true, message: "Internal Server Error" });
+    console.error("Login Error:", error);
+    return res.status(500).json({ error: true, message: "Server error" });
   }
 };
 
@@ -1235,4 +1208,56 @@ export const ChangeUserPassword = async (req, res) => {
       .json({ error: true, message: "Internal Server Error" });
   }
 }
-export { googleAuth, googleCallback, logout, verifyToken };
+export { googleAuth, googleCallback, verifyToken };
+
+export const refreshToken = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.totle_rt;
+
+    if (!refreshToken)
+      return res.status(401).json({ error: "No refresh token" });
+
+    const hashed = hashToken(refreshToken);
+
+    const session = await SessionToken.findOne({
+      where: { refresh_token_hash: hashed, revoked: false }
+    });
+
+    if (!session)
+      return res.status(401).json({ error: "Refresh token invalid" });
+
+    if (new Date() > new Date(session.expires_at))
+      return res.status(401).json({ error: "Refresh token expired" });
+
+    const user = await User.findOne({ where: { id: session.user_id } });
+
+    // rotate token
+    const newRefresh = generateRefreshToken();
+    const newHash = hashToken(newRefresh);
+
+    await session.update({
+      refresh_token_hash: newHash,
+      expires_at: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_DAYS * 86400000)
+    });
+
+    // send new refresh cookie
+    res.cookie("totle_rt", newRefresh, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+      maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 86400000
+    });
+
+    // new access token
+    const newAccess = generateAccessToken({
+      id: user.id,
+      email: user.email,
+      userName: user.firstName
+    });
+
+    return res.json({ accessToken: newAccess });
+  } catch (err) {
+    console.error("Refresh Error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+};

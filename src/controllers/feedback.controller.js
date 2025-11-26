@@ -479,235 +479,230 @@ export const getDomainAveragesFromSummary = async (req, res) => {
 
 export const getLifetimeFeedback = async (req, res) => {
   try {
-   const teacherId = req.query.bridger_id;
+    const teacherId = req.user?.id; // ✔ always valid from token
 
-    // 1. Get all summary rows for the teacher
-   const summary = await FeedbackSummary.findAll({
-  where: {
-    teacher_id: teacherId,
-    node_type: 'topic', // ✅ Only topic-level summaries
-  },
-  raw: true,
-});
-
-    if (!summary.length) {
-      return res.status(200).json({
-        success: true,
-        message: "No feedback available yet.",
-        data: null,
+    // 🔧 FIX: convert string "null" → real null
+    if (!teacherId || teacherId === "null" || teacherId === "undefined") {
+      return res.status(400).json({
+        success: false,
+        message: "Missing or invalid teacher ID",
       });
     }
+    console.log("🔥 FEEDBACK LIFETIME INPUT:", {
+  query: req.query,
+  bridger_id: req.query.bridger_id,
+  headersAuth: req.headers.authorization,
+  userFromToken: req.user
+});
+    // -----------------------------
+    // 1. Fetch topic-level summary
+    // -----------------------------
+    const topicSummary = await FeedbackSummary.findAll({
+      where: {
+        teacher_id: teacherId,
+        node_type: "topic",
+      },
+      raw: true,
+    });
 
-    // 2. Aggregate all summary averages
+ if (!topicSummary.length) {
+  return res.status(200).json({
+    success: true,
+    message: "No feedback found yet",
+    data: {
+      star_rating: {
+        last_ten_sessions: 0,
+        lifetime: 0,
+      },
+      helpfulness_avg: 0,
+      clarity_avg: 0,
+      confidence_gain: "0%",
+      engagement: "0%",
+      pace_trend: {
+        fast: 0,
+        normal: 0,
+        slow: 0,
+      },
+      no_of_flag_warning: 0,
+      text_feedback: [],
+    }
+  });
+}
+
+
+    // -----------------------------
+    // Helper functions
+    // -----------------------------
     const avg = (key) =>
-      summary.reduce((sum, r) => sum + (parseFloat(r[key]) || 0), 0) / summary.length;
+      topicSummary.reduce((sum, r) => sum + (+r[key] || 0), 0) /
+      (topicSummary.length || 1);
 
     const percent = (key) =>
       Math.round(
-        summary.reduce((sum, r) => sum + (parseFloat(r[key]) || 0), 0) /
-          (summary.length || 1)
+        topicSummary.reduce((sum, r) => sum + (+r[key] || 0), 0) /
+          (topicSummary.length || 1)
       );
 
     const paceStats = {
-      fast: summary.reduce((sum, r) => sum + (r.pace_fast || 0), 0),
-  
-      normal: summary.reduce((sum, r) => sum + (r.pace_normal || 0), 0),
-  
-      slow: summary.reduce((sum, r) => sum + (r.pace_slow || 0), 0),
+      fast: topicSummary.reduce((s, r) => s + (r.pace_fast || 0), 0),
+      normal: topicSummary.reduce((s, r) => s + (r.pace_normal || 0), 0),
+      slow: topicSummary.reduce((s, r) => s + (r.pace_slow || 0), 0),
     };
 
-    // 3. Get all text feedbacks (non-summary, real-time fetch)
+    // -----------------------------------------------------
+    // 2. Fetch all text feedbacks (actual Feedback table)
+    // -----------------------------------------------------
     const topicStats = await Teachertopicstats.findAll({
       where: { teacherId },
       attributes: ["node_id"],
+      raw: true,
     });
 
     const topicIds = topicStats.map((t) => t.node_id);
 
     const feedbacks = await Feedback.findAll({
       where: {
-        topic_id: { [Op.in]: topicIds },
         bridger_id: teacherId,
+        topic_id: { [Op.in]: topicIds },
         text_feedback: { [Op.ne]: null },
       },
       raw: true,
     });
 
-    const flagged = feedbacks.filter(
-      (f) => f.flagged_issue && f.flag_reason?.length
+    const flaggedCount = feedbacks.filter(
+      (f) => f.flagged_issue && f.flag_reason
     ).length;
 
-    // 4. Format text feedback
+    // ----------------------------------------------------------
+    // 3. Build domain → subject → topic hierarchy for frontend
+    // ----------------------------------------------------------
+    const domainSummary = await FeedbackSummary.findAll({
+      where: { teacher_id: teacherId, node_type: "domain" },
+      raw: true,
+    });
+
+    const subjectSummary = await FeedbackSummary.findAll({
+      where: { teacher_id: teacherId, node_type: "subject" },
+      raw: true,
+    });
+
+    const topicSummaryAll = await FeedbackSummary.findAll({
+      where: { teacher_id: teacherId, node_type: "topic" },
+      raw: true,
+    });
+
     const feedbackMap = {};
-     const domainsummary = await FeedbackSummary.findAll({
-  where: {
-    teacher_id: teacherId,
-    node_type: 'domain',
- 
 
-  },
-  raw: true,
-});
-const topicsummary = await FeedbackSummary.findAll({
-  where: {
-    teacher_id: teacherId,
-    node_type: 'topic',
-  },
-  raw: true,
-});
-
-const subjectsummary=await FeedbackSummary.findAll({
-  where:{
-        teacher_id: teacherId,
-    node_type: 'subject',
-  },
-  raw:true
-})
     for (const fb of feedbacks) {
       const { domain, subject } = await findSubjectAndDomain(fb.topic_id);
+      const topicNode = await CatalogueNode.findByPk(fb.topic_id);
 
       const domainName = domain?.name || "N/A";
       const subjectName = subject?.name || "Unknown";
-       const topic=await CatalogueNode.findByPk(fb.topic_id);
-      const topicName=topic.name;
-      const topicKey = topicName || "Unknown";
+      const topicName = topicNode?.name || "Unknown";
 
-
-     if (!feedbackMap[domainName]) {
-  const domainDetails = domainsummary.find(d => d.node_id === domain.id);
-
-
-  feedbackMap[domainName] = {
-    __meta: {
-      id: domain.id,
-      avg_rating: domainDetails?.avg_star_rating || 0,
-      helpfulness: domainDetails?.avg_helpfulness_rating || 0,
-      clarity: domainDetails?.avg_clarity_rating || 0,
-      confidence: domainDetails?.confidence_gain_percent || 0,
-      engagement_yn:domainDetails?.engagement_percent ||0,
-      pace_trend:{
-        fast:domainDetails?.pace_fast||0,
-        normal:domainDetails?.pace_normal||0,
-        slow:domainDetails?.pace_slow||0,
+      // --- domain meta
+      if (!feedbackMap[domainName]) {
+        const d = domainSummary.find((x) => x.node_id === domain?.id);
+        feedbackMap[domainName] = {
+          __meta: {
+            id: domain?.id,
+            avg_rating: d?.avg_star_rating || 0,
+            helpfulness: d?.avg_helpfulness_rating || 0,
+            clarity: d?.avg_clarity_rating || 0,
+            confidence: d?.confidence_gain_percent || 0,
+            engagement: d?.engagement_percent || 0,
+            pace_trend: {
+              fast: d?.pace_fast || 0,
+              normal: d?.pace_normal || 0,
+              slow: d?.pace_slow || 0,
+            },
+          },
+        };
       }
-    }
-  };
-}
 
-        
-if (!feedbackMap[domainName][subjectName]) {
-  const subjectDetails = subjectsummary.find(s => s.node_id === subject.id);
-
-  feedbackMap[domainName][subjectName] = {
-    __meta: {
-      id: subject.id,
-      avg_rating: subjectDetails?.avg_star_rating || 0,
-      helpfulness: subjectDetails?.avg_helpfulness_rating || 0,
-      clarity: subjectDetails?.avg_clarity_rating || 0,
-      confidence: subjectDetails?.confidence_gain_percent || 0,
-      engagement_yn: subjectDetails?.engagement_percent || 0,
-      pace_trend: {
-        fast: subjectDetails?.pace_fast || 0,
-        normal: subjectDetails?.pace_normal || 0,
-        slow: subjectDetails?.pace_slow || 0,
+      // --- subject meta
+      if (!feedbackMap[domainName][subjectName]) {
+        const s = subjectSummary.find((x) => x.node_id === subject?.id);
+        feedbackMap[domainName][subjectName] = {
+          __meta: {
+            id: subject?.id,
+            avg_rating: s?.avg_star_rating || 0,
+            helpfulness: s?.avg_helpfulness_rating || 0,
+            clarity: s?.avg_clarity_rating || 0,
+            confidence: s?.confidence_gain_percent || 0,
+            engagement: s?.engagement_percent || 0,
+            pace_trend: {
+              fast: s?.pace_fast || 0,
+              normal: s?.pace_normal || 0,
+              slow: s?.pace_slow || 0,
+            },
+          },
+        };
       }
-    }
-  };
-}
 
- if (!feedbackMap[domainName][subjectName][topicKey]) {
-  const topicDetails = topicsummary.find(t => t.node_id === fb.topic_id);
-
-  feedbackMap[domainName][subjectName][topicKey] = {
-    name: topicKey,
-    date: fb.created_at.toISOString().split("T")[0],
-    feedback: [],
-    __meta: {
-      id: fb.topic_id,
-      avg_rating: topicDetails?.avg_star_rating || 0,
-      helpfulness: topicDetails?.avg_helpfulness_rating || 0,
-      clarity: topicDetails?.avg_clarity_rating || 0,
-      confidence: topicDetails?.confidence_gain_percent || 0,
-      engagement_yn: topicDetails?.engagement_percent || 0,
-      pace_trend: {
-        fast: topicDetails?.pace_fast || 0,
-        normal: topicDetails?.pace_normal || 0,
-        slow: topicDetails?.pace_slow || 0,
+      // --- topic meta
+      if (!feedbackMap[domainName][subjectName][topicName]) {
+        const t = topicSummaryAll.find((x) => x.node_id === fb.topic_id);
+        feedbackMap[domainName][subjectName][topicName] = {
+          name: topicName,
+          date: fb.created_at?.split("T")[0],
+          feedback: [],
+          __meta: {
+            id: fb.topic_id,
+            avg_rating: t?.avg_star_rating || 0,
+            helpfulness: t?.avg_helpfulness_rating || 0,
+            clarity: t?.avg_clarity_rating || 0,
+            confidence: t?.confidence_gain_percent || 0,
+            engagement: t?.engagement_percent || 0,
+            pace_trend: {
+              fast: t?.pace_fast || 0,
+              normal: t?.pace_normal || 0,
+              slow: t?.pace_slow || 0,
+            },
+          },
+        };
       }
-    }
-  };
-}
 
-let name="";
-const user=await User.findByPk(fb.learner_id);
-  const rating = fb.star_rating || 0;
-      let commentLabel = "NEUTRAL";
-      if (rating > 2.5) commentLabel = "POSITIVE";
-      else if (rating < 2.5) commentLabel = "NEGATIVE";
-name=[user.firstName,user.lastName].filter(Boolean).join(" ");
-      feedbackMap[domainName][subjectName][topicKey].feedback.push({
+      // --- learner name
+      const user = await User.findByPk(fb.learner_id);
+      const name = [user?.firstName, user?.lastName].filter(Boolean).join(" ");
+
+      // --- push feedback
+      const label =
+        fb.star_rating > 3 ? "POSITIVE" : fb.star_rating === 3 ? "NEUTRAL" : "NEGATIVE";
+
+      feedbackMap[domainName][subjectName][topicName].feedback.push({
         learner_name: name || "Anonymous",
         text: fb.text_feedback,
-        rating: fb.star_rating || 0,
-        comment: commentLabel || "",
+        rating: fb.star_rating,
+        comment: label,
       });
     }
 
-
-
-
-
-const groupedFeedbackArray = Object.entries(feedbackMap).map(
-  ([domainName, subjects]) => {
-    const meta = subjects.__meta || {};
-
-    return {
+    // convert map → array for frontend
+    const grouped = Object.entries(feedbackMap).map(([domainName, subjects]) => ({
       domain: domainName,
-      domain_avg_rating: +parseFloat(meta.avg_rating).toFixed(2),
-      domain_helpfulness_avg: +parseFloat(meta.helpfulness).toFixed(2),
-      domain_clarity_avg: +parseFloat(meta.clarity).toFixed(2),
-      domain_confidence_gain: `${Math.round(meta.confidence)}%`,
-      domain_engagement_yn:`${Math.round(meta.engagement_yn)}%`,
-      domain_pace_stats:meta.pace_trend,
-    subject: Object.entries(subjects)
-  .filter(([key]) => key !== "__meta")
-  .map(([subjectName, topics]) => {
-    const subjectMeta = topics.__meta || {};
+      ...subjects.__meta,
+      subject: Object.entries(subjects)
+        .filter(([k]) => k !== "__meta")
+        .map(([subjectName, topics]) => ({
+          name: subjectName,
+          ...topics.__meta,
+          topic: Object.entries(topics)
+            .filter(([k]) => k !== "__meta")
+            .map(([topicName, t]) => ({
+              name: t.name,
+              date: t.date,
+              feedback: t.feedback,
+              ...t.__meta,
+            })),
+        })),
+    }));
 
-    return {
-      name: subjectName,
-      subject_avg_rating: +parseFloat(subjectMeta.avg_rating).toFixed(2),
-      subject_helpfulness_avg: +parseFloat(subjectMeta.helpfulness).toFixed(2),
-      subject_clarity_avg: +parseFloat(subjectMeta.clarity).toFixed(2),
-      subject_confidence_gain: `${Math.round(subjectMeta.confidence)}%`,
-      subject_engagement_yn: `${Math.round(subjectMeta.engagement_yn)}%`,
-      subject_pace_stats: subjectMeta.pace_trend,
-      topic: Object.entries(topics)
-  .filter(([key]) => key !== "__meta")
-  .map(([topicName, topicData]) => {
-    return {
-      name: topicData.name,
-      date: topicData.date,
-      feedback: topicData.feedback,
-      topic_avg_rating: +parseFloat(topicData.__meta?.avg_rating || 0).toFixed(2),
-      topic_helpfulness_avg: +parseFloat(topicData.__meta?.helpfulness || 0).toFixed(2),
-      topic_clarity_avg: +parseFloat(topicData.__meta?.clarity || 0).toFixed(2),
-      topic_confidence_gain: `${Math.round(topicData.__meta?.confidence || 0)}%`,
-      topic_engagement_yn: `${Math.round(topicData.__meta?.engagement_yn || 0)}%`,
-      topic_pace_stats: topicData.__meta?.pace_trend || {},
-    };
-  })
-
-    };
-  }),
-
-    };
-  }
-);
-
-
-
-    // 5. Return all data
+    // -----------------------------
+    // FINAL RESPONSE
+    // -----------------------------
     return res.status(200).json({
       success: true,
       data: {
@@ -720,8 +715,8 @@ const groupedFeedbackArray = Object.entries(feedbackMap).map(
         confidence_gain: `${percent("confidence_gain_percent")}%`,
         engagement: `${percent("engagement_percent")}%`,
         pace_trend: paceStats,
-        no_of_flag_warning: flagged,
-        text_feedback: groupedFeedbackArray,
+        no_of_flag_warning: flaggedCount,
+        text_feedback: grouped,
       },
     });
   } catch (err) {
@@ -729,3 +724,4 @@ const groupedFeedbackArray = Object.entries(feedbackMap).map(
     return res.status(500).json({ success: false, message: "SERVER_ERROR" });
   }
 };
+
