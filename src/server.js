@@ -29,6 +29,7 @@ import testRoutes from "./routes/test.routes.js";
 import streamRoutes from "./routes/SessionStreamRoutes/stream.routes.js";
 import sessionRoutes from "./routes/SessionRoutes/session.routes.js";
 import paymentRoutes from "./routes/PaymentRoutes/Payment.route.js";
+import bankRoutes from "./routes/UserRoutes/bank.routes.js";
 import teachRoutes from "./routes/teach.routes.js";
 import ctaRoutes from "./routes/cta.js";
 import platformCtaRoutes from "./routes/platformCta.routes.js";
@@ -364,7 +365,7 @@ app.use("/api/nucleus", userMangaeRoutes);
 app.use("/api/attendance", attendenceRoutes);
 app.use("/api/WeekOverlay", WeekOverlayRoutes);
 
-app.use('/api/bank', paymentRoutes);
+app.use('/api/bank', bankRoutes);
 
 app.use("/catalogue", EndeavorRoutes);
 app.use("/api/chat", chatRoutes);

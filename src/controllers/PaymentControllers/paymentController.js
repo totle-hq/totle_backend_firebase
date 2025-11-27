@@ -81,7 +81,6 @@ export const getBankDetails = async (req, res) => {
 export const addOrUpdateBankDetails = async (req, res) => {
   try {
     const {
-      userId,
       accountNumber,
       ifsc,
       holderName,
@@ -89,6 +88,8 @@ export const addOrUpdateBankDetails = async (req, res) => {
       accountType,
       isVerified
     } = req.body;
+
+    const {userId} = req.user.id;
 
     const existing = await BankDetails.findOne({ where: { user_id: userId } });
 

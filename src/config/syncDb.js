@@ -181,6 +181,8 @@ initCpsModels();
     await safeSync(Admin, { name: 'Admin' });
     await safeSync(Language, { name: "Language" }); 
     await safeSync(User, { name: 'User'});
+    await safeSync(SessionToken, {name: 'SessionToken'});
+    console.log('✅ Session Token table synced successfully!');
 
     const { Blog } = await import('../Models/SurveyModels/BlogModel.js');
     await safeSync(Blog, { name: 'Blog' });
@@ -301,6 +303,7 @@ export const runDbSync = async (isSyncNeeded = false) => {
 import path from "path";
 import url from "url";
 import TeacherAvailability from "../Models/TeacherAvailability.js";
+import { SessionToken } from "../Models/SessionTokenModel.js";
 
 const thisFile = url.fileURLToPath(import.meta.url);
 const entryFile = path.resolve(process.argv[1] || "");

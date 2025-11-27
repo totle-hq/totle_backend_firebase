@@ -29,6 +29,7 @@ import { CpsProfile } from "../Models/CpsProfile.model.js";
 import { TestItemRubric } from "../Models/TestItemRubric.model.js";
 import  TeacherAvailability  from "../Models/TeacherAvailability.js";
 import { BankDetails } from "../Models/UserModels/BankDetailsModel.js";
+import { SessionToken } from "../Models/SessionTokenModel.js";
 
 const defineRelationships = () => {
   /* =========================
@@ -421,6 +422,20 @@ const defineRelationships = () => {
   }
   if (!BankDetails.associations?.user) {
     BankDetails.belongsTo(User, { foreignKey: "user_id", as: "user", onDelete: "CASCADE" });
+  }
+  if (!User.associations?.sessionTokens) {
+    User.hasMany(SessionToken, {
+      foreignKey: "user_id",
+      as: "sessionTokens",
+      onDelete: "CASCADE",
+    });
+  }
+  if (!SessionToken.associations?.user) {
+    SessionToken.belongsTo(User, {
+      foreignKey: "user_id",
+      as: "user",
+      onDelete: "CASCADE",
+    });
   }
 
 };

@@ -46,7 +46,7 @@ export const ProjectTask = sequelize1.define(
 
     // ✅ New Field: Cloudinary Image URLs
     imageUrls: {
-      type: DataTypes.ARRAY(DataTypes.STRING),
+      type: DataTypes.JSONB,
       allowNull: true,
     },
 

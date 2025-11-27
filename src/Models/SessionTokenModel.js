@@ -38,6 +38,7 @@ export const SessionToken = sequelize1.define(
   },
 
   {
+    schema: "user",
     tableName: "SessionTokens",        // ensure table name matches
     freezeTableName: true,             // disable auto-pluralization
     timestamps: true,                  // createdAt, updatedAt
