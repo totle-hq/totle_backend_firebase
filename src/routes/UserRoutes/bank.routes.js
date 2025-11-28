@@ -4,8 +4,8 @@ import authMiddleware from "../../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-router.get('/bank-details',authMiddleware, getBankDetails);
-router.post('/bank-details',authMiddleware, addOrUpdateBankDetails);
+router.get('/get/bank-details', getBankDetails);
+router.post('/add/bank-details', addOrUpdateBankDetails);
 
 router.get('/transactions/:userId', getTransactionHistory);
 router.get('/earnings/:userId', getEarningsTrend);

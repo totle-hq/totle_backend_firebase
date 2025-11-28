@@ -2,6 +2,7 @@
 
 import Razorpay from "razorpay";
 import shortid from "shortid";
+import jwt from "jsonwebtoken";
 
 import dotenv from "dotenv";
 import { v4 as uuidv4 } from 'uuid';
@@ -13,6 +14,21 @@ dotenv.config();
 //   key_id: process.env.RAZORPAY_KEY_ID,       // paste your Test Key ID here
 //   key_secret: process.env.RAZORPAY_KEY_SECRET // paste your Test Key Secret here
 // });
+
+function getUserIdFromRequest(req) {
+  const token = req.cookies?.totle_at;
+  console.log("user token ",token);
+  if (!token) return null;
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return decoded?.id;
+  } catch (err) {
+    console.error("❌ Token verification failed:", err.message);
+    return null;
+  }
+}
+
 
 
 // Helper function to create Razorpay instance based on mode
@@ -60,7 +76,7 @@ export const createOrder = async (req, res) => {
 // 🔹 GET bank details for a user
 export const getBankDetails = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const userId = getUserIdFromRequest(req);
     const bank = await BankDetails.findOne({ where: { user_id: userId } });
     if (!bank) return res.status(404).json({ message: "No bank details found" });
 
@@ -81,25 +97,25 @@ export const getBankDetails = async (req, res) => {
 export const addOrUpdateBankDetails = async (req, res) => {
   try {
     const {
-      accountNumber,
-      ifsc,
-      holderName,
-      bankName,
-      accountType,
-      isVerified
+      account_number,
+      ifsc_code,
+      account_holder,
+      bank_name,
+      account_type,
+      isVerified = false
     } = req.body;
 
-    const {userId} = req.user.id;
+    const userId = getUserIdFromRequest(req);
 
     const existing = await BankDetails.findOne({ where: { user_id: userId } });
 
     if (existing) {
       await existing.update({
-        account_number: accountNumber,
-        ifsc_code: ifsc,
-        account_holder: holderName,
-        bank_name: bankName,
-        account_type: accountType || 'savings',
+        account_number: account_number,
+        ifsc_code: ifsc_code,
+        account_holder: account_holder,
+        bank_name: bank_name,
+        account_type: account_type || 'savings',
         is_verified: isVerified,
         verified_at: isVerified ? new Date() : null
       });
@@ -110,11 +126,11 @@ export const addOrUpdateBankDetails = async (req, res) => {
     await BankDetails.create({
       id: uuidv4(),
       user_id: userId,
-      account_number: accountNumber,
-      ifsc_code: ifsc,
-      account_holder: holderName,
-      bank_name: bankName,
-      account_type: accountType || 'savings',
+      account_number: account_number,
+      ifsc_code: ifsc_code,
+      account_holder: account_holder,
+      bank_name: bank_name,
+      account_type: account_type || 'savings',
       is_verified: isVerified,
       verified_at: isVerified ? new Date() : null
     });

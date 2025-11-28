@@ -399,19 +399,29 @@ export const loginUser = async (req, res) => {
       expires_at: expiresAt
     });
 
+    const isDevlopment = process.env.NODE_ENV_DEV === "development";
+
     // ---- SEND REFRESH TOKEN AS HTTPONLY COOKIE ----
     res.cookie("totle_rt", refreshToken, {
       httpOnly: true,
-      secure: true,
-      sameSite: "strict",
+      secure: isDevlopment,
+      sameSite: isDevlopment ? "lax" : "strict",
       maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
       path: "/",
     });
 
+    res.cookie("totle_at", accessToken, {
+        httpOnly: true,
+        secure: isDevlopment,
+        sameSite: isDevlopment ? "lax" : "strict",
+        maxAge: 60 * 60 * 1000, // 1 hour
+        path: "/"
+      });
+
+
     return res.status(200).json({
       error: false,
       message: "Login successful",
-      accessToken,
       user: {
         id: user.id,
         firstName: user.firstName,

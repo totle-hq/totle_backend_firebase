@@ -70,6 +70,7 @@ import { initCpsModels } from "./Models/Cps/index.js";
 
 // ✅ Ensure all base models & associations are loaded exactly once at boot
 import "./Models/index.js";
+import cookieParser from "cookie-parser";
 
 // ----------------------------------------
 dotenv.config();
@@ -319,6 +320,7 @@ app.use(compression());
 app.use(morgan("dev"));
 
 app.use(express.json({ limit: "50mb" }));
+app.use(cookieParser());
 app.use(timezoneMiddleware);      // <= then mount the timezone reader
 
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
