@@ -31,7 +31,7 @@ router.put('/updateUser', updateUserProfile);
 router.post('/resetUser', resetUser);
 router.post('/resetPassword', resetPassword)
 router.post('/verifyOtp', otpVerification);
-router.get('/user', getUserProfile);
+router.get('/user',authMiddleware, getUserProfile);
 router.post("/profile/meta", updateProfileMeta);
 router.post("/logout", logout);
 router.get("/user-count", getUserCount);

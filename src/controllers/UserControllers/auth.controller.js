@@ -525,14 +525,7 @@ export const resetPassword = async (req, res) => {
 export const getUserProfile = async (req, res) => {
   try {
     // Extract token from Authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ error: true, message: "Unauthorized: Missing token" });
-    }
-
-    const token = authHeader.split(" ")[1];
+    const token = req.cookies?.totle_at;
     // console.log('tokenn', token)
     // console.log('token', process.env.JWT_SECRET)
 
