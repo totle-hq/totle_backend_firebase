@@ -35,7 +35,7 @@ import {
   updateTeacherAvailabilityAdmin,
   getAllTestsStatisticsOfUser,
   allTeachersList,
-  toggleFreeOrPaidTierOfTeacher,
+  toggleFreeOrPaidTierOfTeacher, getTeacherFeedbackSummary,   getTeacherEarningsSummary, getPeerRankings
 } from "../controllers/teach.controller.js";
 import { getTeacherUpcomingSessions } from "../controllers/SessionStreamControllers/bookSession.controller.js";
 
@@ -84,7 +84,12 @@ router.put(
 router.get('/test-stats',authMiddleware, getAllTestsStatisticsOfUser);
 router.post("/toggle-tier", authMiddleware, toggleFreeOrPaidTierOfTeacher);
 router.get("/list",allTeachersList);
+router.get("/feedback-summary", authMiddleware, getTeacherFeedbackSummary);
 
 router.get("/upcoming-sessions", authMiddleware, getTeacherUpcomingSessions);
+
+router.get("/earnings-summary", authMiddleware, getTeacherEarningsSummary);
+router.get("/peer-rankings", authMiddleware, getPeerRankings);
+
 
 export default router;

@@ -20,6 +20,7 @@ import TeacherAvailability from "../Models/TeacherAvailability.js";
 import { format, addDays, getDay, startOfDay } from "date-fns";
 import { formatInTimeZone } from "date-fns-tz";
 import {Test} from '../Models/test.model.js';
+import {FeedbackSummary} from "../Models/feedbacksummary.js";
 
 // ⬇️ timezone + range helpers (date-fns-tz v3)
 import {
@@ -1313,3 +1314,332 @@ export const allTeachersList = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
+export const getTeacherFeedbackSummary = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    if (!teacherId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing teacher identity",
+      });
+    }
+
+    // ------------------------------------------------------
+    // 1. Pull all topic-level summary data
+    // ------------------------------------------------------
+    const summaryRows = await FeedbackSummary.findAll({
+      where: { teacher_id: teacherId, node_type: "topic" },
+      raw: true,
+    });
+
+    if (!summaryRows.length) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          star_rating: {
+            last_ten_sessions: 0,
+            lifetime: 0,
+          },
+          helpfulness_avg: 0,
+          clarity_avg: 0,
+          confidence_gain: "0%",
+          engagement: "0%",
+          pace_trend: { fast: 0, normal: 0, slow: 0 },
+          text_feedback: [],
+        },
+      });
+    }
+
+    const avg = (key) =>
+      summaryRows.reduce((sum, r) => sum + (+r[key] || 0), 0) /
+      (summaryRows.length || 1);
+
+    const percent = (key) =>
+      Math.round(
+        summaryRows.reduce((sum, r) => sum + (+r[key] || 0), 0) /
+          (summaryRows.length || 1)
+      );
+
+    const paceStats = {
+      fast: summaryRows.reduce((s, r) => s + (r.pace_fast || 0), 0),
+      normal: summaryRows.reduce((s, r) => s + (r.pace_normal || 0), 0),
+      slow: summaryRows.reduce((s, r) => s + (r.pace_slow || 0), 0),
+    };
+
+    // ------------------------------------------------------
+    // 2. Pull teacher’s text feedback
+    // ------------------------------------------------------
+    const qualified = await Teachertopicstats.findAll({
+      where: { teacherId },
+      attributes: ["node_id"],
+      raw: true,
+    });
+
+    const topicIds = qualified.map((t) => t.node_id);
+
+    const textFeedback = await Feedback.findAll({
+      where: {
+        bridger_id: teacherId,
+        topic_id: { [Op.in]: topicIds },
+        text_feedback: { [Op.ne]: null },
+      },
+      raw: true,
+    });
+
+    // ------------------------------------------------------
+    // 3. Build domain → subject → topic → feedback hierarchy
+    // ------------------------------------------------------
+    const outputHierarchy = {};
+
+    for (const fb of textFeedback) {
+      const topicNode = await CatalogueNode.findOne({
+        where: { node_id: fb.topic_id },
+      });
+      if (!topicNode) continue;
+
+      let subject = null;
+      let domain = null;
+      let parent = topicNode;
+
+      while (parent && parent.parent_id) {
+        const next = await CatalogueNode.findOne({
+          where: { node_id: parent.parent_id },
+        });
+        if (!next) break;
+
+        if (next.is_subject) subject = next;
+        if (next.is_domain) domain = next;
+
+        parent = next;
+      }
+
+      const domainName = domain?.name || "Unknown Domain";
+      const subjectName = subject?.name || "Unknown Subject";
+      const topicName = topicNode.name;
+
+      if (!outputHierarchy[domainName]) outputHierarchy[domainName] = {};
+      if (!outputHierarchy[domainName][subjectName])
+        outputHierarchy[domainName][subjectName] = {};
+      if (!outputHierarchy[domainName][subjectName][topicName])
+        outputHierarchy[domainName][subjectName][topicName] = {
+          name: topicName,
+          date: fb.created_at?.split("T")[0],
+          feedback: [],
+        };
+
+      const user = await User.findByPk(fb.learner_id);
+      const learnerName = [user?.firstName, user?.lastName]
+        .filter(Boolean)
+        .join(" ");
+
+      const comment =
+        fb.star_rating > 3
+          ? "POSITIVE"
+          : fb.star_rating === 3
+          ? "NEUTRAL"
+          : "NEGATIVE";
+
+      outputHierarchy[domainName][subjectName][topicName].feedback.push({
+        learner_name: learnerName || "Anonymous",
+        text: fb.text_feedback,
+        rating: fb.star_rating,
+        comment,
+      });
+    }
+
+    const groupedFeedback = Object.entries(outputHierarchy).map(
+      ([domain, subjects]) => ({
+        domain,
+        subject: Object.entries(subjects).map(([subject, topics]) => ({
+          name: subject,
+          topic: Object.values(topics),
+        })),
+      })
+    );
+
+    // ------------------------------------------------------
+    // FINAL RESPONSE (TeachDashboard format)
+    // ------------------------------------------------------
+    return res.status(200).json({
+      success: true,
+      data: {
+        star_rating: {
+          last_ten_sessions: +avg("avg_star_rating").toFixed(2),
+          lifetime: +avg("avg_star_rating").toFixed(2),
+        },
+        helpfulness_avg: +avg("avg_helpfulness_rating").toFixed(2),
+        clarity_avg: +avg("avg_clarity_rating").toFixed(2),
+        confidence_gain: `${percent("confidence_gain_percent")}%`,
+        engagement: `${percent("engagement_percent")}%`,
+        pace_trend: paceStats,
+        text_feedback: groupedFeedback,
+      },
+    });
+  } catch (err) {
+    console.error("❌ Feedback Summary API ERROR:", err);
+    return res.status(500).json({ success: false, message: "SERVER_ERROR" });
+  }
+};
+
+export const getTeacherEarningsSummary = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    // -----------------------------------
+    // Fetch completed PAID sessions only
+    // -----------------------------------
+    const sessions = await Session.findAll({
+      where: {
+        teacher_id: teacherId,
+        status: "completed",
+        session_tier: "paid"
+      },
+      attributes: [
+        "session_id",
+        "topic_id",
+        "student_id",           // FIXED
+        "duration_minutes",
+        "scheduled_at",
+      ],
+      raw: true,
+    });
+
+    if (!sessions.length) {
+      return res.status(200).json({
+        success: true,
+        totalEarnings: 0,
+        uniqueLearners: 0,
+        totalHoursTaught: 0,
+        monthlyData: [],
+      });
+    }
+
+    // ------------------------------------------------------
+    // Compute payout per session based on session_level tier
+    // ------------------------------------------------------
+    const PAYOUTS = {
+      Bridger: 180,
+      Expert: 500,
+      Master: 1200,
+      Legend: 2500,
+    };
+
+    let totalEarnings = 0;
+    let totalHours = 0;
+
+    const monthlyMap = {};
+
+    for (const s of sessions) {
+      // Fetch teacher stats for this topic
+      const stats = await Teachertopicstats.findOne({
+        where: { teacherId, node_id: s.topic_id },
+        attributes: ["level"],
+        raw: true,
+      });
+
+      const level = stats?.level || "Bridger";
+      const payout = PAYOUTS[level] || PAYOUTS.Bridger;
+
+      totalEarnings += payout;
+      totalHours += (s.duration_minutes || 0) / 60;
+
+      const date = new Date(s.scheduled_at);
+      const monthKey = date.toLocaleString("en-US", {
+        month: "short",
+        year: "numeric",
+      });
+
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = {
+          month: monthKey,
+          hours: 0,
+          payout: 0,
+        };
+      }
+
+      monthlyMap[monthKey].hours += (s.duration_minutes || 0) / 60;
+      monthlyMap[monthKey].payout += payout;
+    }
+
+    const uniqueLearners = new Set(sessions.map((s) => s.student_id)).size;
+
+    return res.status(200).json({
+      success: true,
+      totalEarnings,
+      uniqueLearners,
+      totalHoursTaught: totalHours,
+      monthlyData: Object.values(monthlyMap),
+    });
+  } catch (err) {
+    console.error("❌ Earnings Summary ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "SERVER_ERROR",
+    });
+  }
+};
+
+export const getPeerRankings = async (req, res) => {
+  try {
+    const teacherId = req.user.id;
+
+    // Fetch all teacher/topic/domain level avg ratings
+    const rows = await FeedbackSummary.findAll({
+      where: { node_type: ["topic", "domain"] },
+      raw: true,
+    });
+
+    if (!rows.length) {
+      return res.status(200).json({
+        success: true,
+        topic: [],
+        domain: [],
+      });
+    }
+
+    // -----------------------------
+    // Topic rankings
+    // -----------------------------
+    const topicRows = rows.filter((r) => r.node_type === "topic");
+
+    // Sort highest rating first
+    topicRows.sort((a, b) => b.avg_star_rating - a.avg_star_rating);
+
+    const topicRankings = topicRows.map((r, i) => ({
+      rank: i + 1,
+      teacher_id: r.teacher_id,
+      name: r.teacher_id === teacherId ? "You" : `Teacher ${r.teacher_id.slice(0, 4)}`,
+      metric: Number(r.avg_star_rating.toFixed(2)),
+    }));
+
+    // -----------------------------
+    // Domain rankings
+    // -----------------------------
+    const domainRows = rows.filter((r) => r.node_type === "domain");
+
+    domainRows.sort((a, b) => b.avg_star_rating - a.avg_star_rating);
+
+    const domainRankings = domainRows.map((r, i) => ({
+      rank: i + 1,
+      teacher_id: r.teacher_id,
+      name: r.teacher_id === teacherId ? "You" : `Teacher ${r.teacher_id.slice(0, 4)}`,
+      metric: Number(r.avg_star_rating.toFixed(2)),
+    }));
+
+    return res.status(200).json({
+      success: true,
+      topic: topicRankings,
+      domain: domainRankings,
+    });
+  } catch (err) {
+    console.error("❌ Peer Rankings ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      message: "SERVER_ERROR",
+    });
+  }
+};
+
+

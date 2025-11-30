@@ -10,6 +10,7 @@ import { BankDetails } from "../../Models/UserModels/BankDetailsModel.js";
 
 dotenv.config();
 
+
 // const razorpay = new Razorpay({
 //   key_id: process.env.RAZORPAY_KEY_ID,       // paste your Test Key ID here
 //   key_secret: process.env.RAZORPAY_KEY_SECRET // paste your Test Key Secret here

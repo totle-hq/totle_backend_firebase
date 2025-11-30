@@ -1,5 +1,7 @@
-import express from "express";
 import dotenv from "dotenv";
+dotenv.config();
+
+import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
@@ -73,7 +75,6 @@ import "./Models/index.js";
 import cookieParser from "cookie-parser";
 
 // ----------------------------------------
-dotenv.config();
 
 console.log("SERVER START - NODE_ENV:", process.env.NODE_ENV); // Log to confirm environment
 

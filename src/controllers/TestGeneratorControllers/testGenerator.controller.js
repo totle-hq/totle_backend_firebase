@@ -117,7 +117,9 @@ const param = (req, ...names) => {
 // ✅ NEW: Initiate payment for test
 export const initiateTestPayment = async (req, res) => {
   try {
-    const { topicId, paymentMode } = req.body;
+let { topicId, paymentMode } = req.body;
+
+paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
     const userId = req.user.id;
 
     if (!topicId) {
@@ -154,7 +156,7 @@ export const initiateTestPayment = async (req, res) => {
 
     // Create Razorpay order
     // ✅ Use correct Razorpay instance based on mode
-    const razorpay = getRazorpayInstance(paymentMode || "DEMO");
+    const razorpay = getRazorpayInstance(paymentMode);
     const order = await razorpay.orders.create({
       amount,
       currency,
@@ -164,7 +166,7 @@ export const initiateTestPayment = async (req, res) => {
         topic_id: topicId,
         topic_name: topic.name,
         entity_type: "test",
-        payment_mode: paymentMode || "DEMO",
+  payment_mode: paymentMode === "LIVE" ? "live" : "test"
       },
     });
 
@@ -177,7 +179,7 @@ export const initiateTestPayment = async (req, res) => {
       amount,
       currency,
       status: "created",
-      payment_mode: paymentMode || "DEMO", 
+      payment_mode: paymentMode, 
     });
 
     return res.status(200).json({
