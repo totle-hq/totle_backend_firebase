@@ -1,7 +1,7 @@
 // File: src/routes/testGenerator.routes.js
 
 import express from "express";
-import { generateTest } from "../controllers/testGenerator.controller.js";
+import { generateTest } from "../controllers/TestGeneratorControllers/testGenerator.controller.js";
 
 const router = express.Router();
 
