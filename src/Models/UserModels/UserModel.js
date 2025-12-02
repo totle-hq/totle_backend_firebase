@@ -151,6 +151,15 @@ const User = sequelize1.define(
       defaultValue: false,
       comment: "True if parent/guardian consent was accepted for a minor",
     },
+    parentEmail: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      validate: {
+        isEmail: true,
+      },
+      comment: "Parent's email address if user is aged 11-18",
+    },
+
   },
   {
     schema: "user",

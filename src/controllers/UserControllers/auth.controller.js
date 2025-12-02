@@ -228,7 +228,7 @@ export const signupUserAndSendOtp = async (req, res) => {
 };
 
 export const otpVerification = async (req, res) => {
-  const { email, password, firstName, gender, dob } = req.body;
+  const { email, password, firstName, gender, dob, parentalConsent, parentEmail } = req.body;
   console.log(req.body);
 
   let otp = parseInt(req.body.otp, 10);
@@ -281,9 +281,31 @@ export const otpVerification = async (req, res) => {
       today.getFullYear() - dobDate.getFullYear() -
       (today < new Date(today.getFullYear(), dobDate.getMonth(), dobDate.getDate()) ? 1 : 0);
 
+    if (age < 11) {
+      return res.status(400).json({
+        error: true,
+        message: "Minimum age requirement is 11 years.",
+      });
+    }
+
     // Tag minors
     const isMinor = age < 18;
 
+    if (age >= 11 && age < 18) {
+      if (!parentalConsent || !parentEmail) {
+        return res.status(400).json({
+          error: true,
+          message: "Parental consent and parent email are required for users aged 11 to 18.",
+        });
+      }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(parentEmail)) {
+        return res.status(400).json({
+          error: true,
+          message: "Invalid parent email format.",
+        });
+      }
+    }
 
     const [user, created] = await User.upsert({
       email: email || null,
@@ -294,7 +316,8 @@ export const otpVerification = async (req, res) => {
       gender: gender?.toLowerCase() || null,
       status: "active",
       isMinor,
-      minorConsentAccepted: !isMinor || !!req.body.minorConsentAccepted,
+      minorConsentAccepted: !isMinor || !!req.body.parentalConsent,
+      parentEmail: isMinor ? parentEmail : null,
       updatedAt: new Date()
     }, { returning: true });
 
