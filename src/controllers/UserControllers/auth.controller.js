@@ -306,7 +306,7 @@ export const otpVerification = async (req, res) => {
         });
       }
     }
-
+    //added consent
     const [user, created] = await User.upsert({
       email: email || null,
       password: email ? hashedPassword : null,
