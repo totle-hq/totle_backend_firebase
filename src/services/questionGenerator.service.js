@@ -230,63 +230,63 @@ function buildPrompt({
       : "None specified";
 
   return `
-ROLE: You are a **senior assessment designer** specializing in teacher-qualification multiple-choice questions (MCQs) for advanced learners.
+    ROLE: You are a **senior assessment designer** specializing in teacher-qualification multiple-choice questions (MCQs) for advanced learners.
 
-OBJECTIVE: Generate **very difficult, text-only MCQs** that assess conceptual understanding, application, and analysis.  
-Each MCQ must have **exactly one correct option** that is indisputably correct, while the remaining three options must be **unique, plausible, but provably wrong**.  
-Ambiguity, overlaps, or trick phrasing are strictly forbidden.
+    OBJECTIVE: Generate **very difficult, text-only MCQs** that assess conceptual understanding, application, and analysis.  
+    Each MCQ must have **exactly one correct option** that is indisputably correct, while the remaining three options must be **unique, plausible, but provably wrong**.  
+    Ambiguity, overlaps, or trick phrasing are strictly forbidden.
 
-CONTEXT:
-- Domain: ${domain}${domainDescription ? ` — ${domainDescription}` : ""}
-- Subject: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""}
-- Topic: ${topicName}${topicDescription ? ` — ${topicDescription}` : ""}
-- Subtopics (coverage pool only; do not go outside these):
-${formattedSubtopics}
+    CONTEXT:
+    - Domain: ${domain}${domainDescription ? ` — ${domainDescription}` : ""}
+    - Subject: ${subject}${subjectDescription ? ` — ${subjectDescription}` : ""}
+    - Topic: ${topicName}${topicDescription ? ` — ${topicDescription}` : ""}
+    - Subtopics (coverage pool only; do not go outside these):
+    ${formattedSubtopics}
 
-LEARNER PROFILE:
-${formatParams(learnerProfile)}
+    LEARNER PROFILE:
+    ${formatParams(learnerProfile)}
 
-TOPIC PARAMETERS:
-${formatParams(topicParams)}
+    TOPIC PARAMETERS:
+    ${formatParams(topicParams)}
 
-STRICT QUESTION-WRITING RULES:
-1. Generate exactly ${count} MCQs, with IDs ${offset + 1}..${offset + count}.
-2. Text-only: no references to images, figures, graphs, charts, tables, maps, plots, or schematics.
-3. Each question must contain a **complete context** within its stem; it must stand alone without external reference.
-4. Provide exactly four options labeled "A", "B", "C", and "D".
-5. Only one option can be correct. The other three must each:
-   - Be unique (no repetition or semantic overlap).
-   - Be plausible distractors consistent with the topic.
-   - Contain no phrases like “All of the above”, “None of the above”, “Both A and B”, etc.
-6. The correct answer must be fully justified by the information in the stem.
-7. The difficulty level must reflect Bloom’s “Application” and “Analysis” tiers.
-8. Each batch must include at least 2 pedagogy-related or teachability-based questions.
-9. The language must be formal, academic, and unambiguous.
-10. Do not include explanations, reasoning, or commentary — **only the JSON object**.
+    STRICT QUESTION-WRITING RULES:
+    1. Generate exactly ${count} MCQs, with IDs ${offset + 1}..${offset + count}.
+    2. Text-only: no references to images, figures, graphs, charts, tables, maps, plots, or schematics.
+    3. Each question must contain a **complete context** within its stem; it must stand alone without external reference.
+    4. Provide exactly four options labeled "A", "B", "C", and "D".
+    5. Only one option can be correct. The other three must each:
+      - Be unique (no repetition or semantic overlap).
+      - Be plausible distractors consistent with the topic.
+      - Contain no phrases like “All of the above”, “None of the above”, “Both A and B”, etc.
+    6. The correct answer must be fully justified by the information in the stem.
+    7. The difficulty level must reflect Bloom’s “Application” and “Analysis” tiers.
+    8. Each batch must include at least 2 pedagogy-related or teachability-based questions.
+    9. The language must be formal, academic, and unambiguous.
+    10. Do not include explanations, reasoning, or commentary — **only the JSON object**.
 
-OUTPUT FORMAT (valid JSON only):
-{
-  "questions": [
+    OUTPUT FORMAT (valid JSON only):
     {
-      "id": ${offset + 1},
-      "text": "Stem here",
-      "options": {
-        "A": "Option text",
-        "B": "Option text",
-        "C": "Option text",
-        "D": "Option text"
-      }
+      "questions": [
+        {
+          "id": ${offset + 1},
+          "text": "Stem here",
+          "options": {
+            "A": "Option text",
+            "B": "Option text",
+            "C": "Option text",
+            "D": "Option text"
+          }
+        }
+      ],
+      "answers": [
+        { "id": ${offset + 1}, "correct_answer": "A" }
+      ]
     }
-  ],
-  "answers": [
-    { "id": ${offset + 1}, "correct_answer": "A" }
-  ]
-}
 
-Make sure:
-- The JSON is valid and strictly matches this format.
-- The options are **distinct, concise, and logically consistent**.
-- Exactly one correct option exists for each question.
-  `.trim();
+    Make sure:
+    - The JSON is valid and strictly matches this format.
+    - The options are **distinct, concise, and logically consistent**.
+    - Exactly one correct option exists for each question.
+      `.trim();
 }
 

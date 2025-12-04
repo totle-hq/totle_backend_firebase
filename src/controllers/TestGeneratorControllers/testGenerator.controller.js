@@ -464,35 +464,53 @@ export const evaluateTest = async (req, res) => {
     });
 
 
-const totalScore = scoredResults.reduce((s, q) => s + q.score, 0);
-const maxScore = questions.length;
-const percentage = Math.round((totalScore / maxScore) * 100);
+    const totalScore = scoredResults.reduce((s, q) => s + q.score, 0);
+    const maxScore = questions.length;
+    const percentage = Math.round((totalScore / maxScore) * 100);
 
-// ✅ Pass rule: ≥90% always passes (ignore gates)
-const passed = percentage >= 90;
+    // ✅ Pass rule: ≥90% always passes (ignore gates)
+    const passed = percentage >= 90;
 
-/* ------------------ 2) Apply rubrics (option impacts) ------------------ */
-let deltas = {};
-let gates = { teachingGatePassed: true, resilienceGatePassed: true };
+    /* ------------------ 2) Apply rubrics (option impacts) ------------------ */
+    let deltas = {};
+    let gates = { teachingGatePassed: true, resilienceGatePassed: true };
 
-try {
-  const { deltas: d, gates: g } = await applyRubricsToTest(testId);
-  deltas = d || {};
-  gates = g || gates;
-} catch (rubErr) {
-  console.error("⚠️ Rubric application failed:", rubErr?.message || rubErr);
-}
+    try {
+      const { deltas: d, gates: g } = await applyRubricsToTest(testId);
+      deltas = d || {};
+      gates = g || gates;
+    } catch (rubErr) {
+      console.error("⚠️ Rubric application failed:", rubErr?.message || rubErr);
+    }
 
-// ✅ Ensure all 47 CPS params are present
-const cpsScores100 = {};
-for (const key of CPS_KEYS) {
-  cpsScores100[key] = Number.isFinite(deltas[key]) ? deltas[key] : 0;
-}
+    // ✅ Ensure all 47 CPS params are present
+    // Get teacher_score separately, don't mix with CPS_KEYS
+    const teacherScore = deltas?.teacher_score ?? null;
 
-// ✅ Gates logged for analytics, but not blocking pass/fail
-const teachingGatePassed = gates.teachingGatePassed;
-const resilienceGatePassed = gates.resilienceGatePassed;
-const gatedPass = passed;
+    // Create CPS scores from only CPS_KEYS
+    const cpsScores100 = {};
+    for (const key of CPS_KEYS) {
+      cpsScores100[key] = Number.isFinite(deltas[key]) ? deltas[key] : 0;
+    }
+
+    // Save metrics
+    const perf = { ...(test.performance_metrics || {}) };
+    perf.evaluation_details = scoredResults;
+    perf.param_deltas = cpsScores100;
+    perf.cps_scores = cpsScores100;
+
+    // ✅ Add teacher_score separately (without disturbing evaluation logic)
+    if (teacherScore !== null) {
+      perf.teacher_score = teacherScore;
+    }
+
+    test.performance_metrics = perf;
+    perf.gates = { teachingGatePassed, resilienceGatePassed };
+
+    // ✅ Gates logged for analytics, but not blocking pass/fail
+    const teachingGatePassed = gates.teachingGatePassed;
+    const resilienceGatePassed = gates.resilienceGatePassed;
+    const gatedPass = passed;
 
 
     /* ------------------ 4) Cooling period ------------------ */
@@ -508,19 +526,6 @@ const gatedPass = passed;
     }
 
     /* ------------------ 5) Save metrics ------------------ */
-    const perf = { ...(test.performance_metrics || {}) };
-    perf.evaluation_details = scoredResults;
-perf.param_deltas = cpsScores100;
-    perf.cps_scores = cpsScores100;
-    perf.gates = { teachingGatePassed, resilienceGatePassed };
-    test.performance_metrics = perf;
-
-    test.result = {
-      percentage,
-      passed: gatedPass,
-      cps_scores: cpsScores100,
-    };
-    test.status = "evaluated";
 
     /* ------------------ 6) Mark eligible teachers ------------------ */
     if (gatedPass) {
@@ -940,16 +945,16 @@ export const generateTest = async (req, res) => {
     }
 
     console.log("🔹 Checking cooldown for user", userId, "topic", topicId);
-const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
-if (!eligible) {
-  return res.status(429).json({
-    success: false,
-    message: `You are still on cooldown. Next attempt available at ${cooldown_end}`,
-    cooldown_active: true,
-    waitTime,
-    cooldown_end,
-  });
-}
+    const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
+    if (!eligible) {
+      return res.status(429).json({
+        success: false,
+        message: `You are still on cooldown. Next attempt available at ${cooldown_end}`,
+        cooldown_active: true,
+        waitTime,
+        cooldown_end,
+      });
+    }
 
 
     console.log("🔹 Fetching subject/domain for topic", topicId);
@@ -986,8 +991,8 @@ if (!eligible) {
     // const isBaseline = priorCount === 0;
     // console.log("✅ Prior tests:", priorCount, "| Mode:", isBaseline ? "Baseline" : "CPS");
     const priorCount = await Test.count({ where: { user_id: userId, topic_uuid: topicId } });
-console.log("✅ Prior tests:", priorCount, "| Mode: forced baseline");
-const isBaseline = true;   // ✅ force baseline regardless
+    console.log("✅ Prior tests:", priorCount, "| Mode: forced baseline");
+    const isBaseline = true;   // ✅ force baseline regardless
 
 
     console.log("🔹 Fetching learner profile for user", userId);
@@ -1009,45 +1014,81 @@ const isBaseline = true;   // ✅ force baseline regardless
     const rubricRows = [];
 
     if (isBaseline) {
-      console.log("🔹 Using baseline generator (20 questions)");
-      const result = await generateQuestions({
-        subject: subjectName,
-        subjectDescription,
-        domain: domainName,
-        domainDescription,
-        topicName: topic.name,
-        topicDescription,
-        learnerProfile,
-        topicParams,
-        subtopics: [],
-        topicId,
-        userId,
-        count: 20,
-      });
+      console.log("🔹 Using per-dimension generator for 25-question baseline");
 
-      time_limit_minutes = result.time_limit_minutes || 30;
+      const recommendedMix = topic.recommended_item_mix || {};
+      const dimensions = [...CPS_KEYS, "teacher_score"];
+
       let globalId = 1;
 
-      for (const item of result.questions) {
-        flatQuestions.push({ id: globalId, text: item.text, options: item.options });
-        flatAnswers.push({ id: globalId, correct_answer: result.answers.find(a => a.id === item.id)?.correct_answer });
-        rubricRows.push({
-          block_key: "baseline",
-          global_qid: globalId,
-          option_impacts: { A:{}, B:{}, C:{}, D:{} },
-          gates: {},
-          item_weight: 1.0,
+      const dimensionPromises = dimensions.map(async (key) => {
+        const count = recommendedMix[key] || 0;
+        if (count <= 0) return [];
+
+        const dimensionParams = { [key]: 1.0 };
+
+        const result = await generateQuestions({
+          subject: subjectName,
+          subjectDescription,
+          domain: domainName,
+          domainDescription,
+          topicName: topic.name,
+          topicDescription,
+          learnerProfile,
+          topicParams: dimensionParams,
+          subtopics: [],
+          topicId,
+          userId,
+          count,
         });
-        globalId++;
+
+        const questions = [];
+        for (const item of result.questions) {
+          const answer = result.answers.find(a => a.id === item.id)?.correct_answer;
+          questions.push({ item, answer });
+        }
+
+        return questions.map(({ item, answer }) => {
+          const q = {
+            id: globalId,
+            text: item.text,
+            options: item.options,
+          };
+          const a = {
+            id: globalId,
+            correct_answer: answer,
+          };
+          const rubric = {
+            block_key: key,
+            global_qid: globalId,
+            option_impacts: { A: {}, B: {}, C: {}, D: {} },
+            gates: {},
+            item_weight: 1.0,
+          };
+          globalId++;
+          return { q, a, rubric };
+        });
+      });
+
+      const results = await Promise.all(dimensionPromises);
+      const all = results.flat();
+
+      for (const item of all) {
+        flatQuestions.push(item.q);
+        flatAnswers.push(item.a);
+        rubricRows.push(item.rubric);
       }
 
-      if (flatQuestions.length < 20) {
+      if (flatQuestions.length !== 25) {
         return res.status(500).json({
           success: false,
-          message: `Baseline generation failed. Got only ${flatQuestions.length}/20 questions.`,
+          message: `Baseline generation failed. Got only ${flatQuestions.length}/25 questions.`,
         });
       }
-    } else {
+
+      time_limit_minutes = 30;
+    }
+ else {
       console.log("🔹 CPS generation started");
       const onProgress = (evt) => {
         publishProgress({ userId, topicId, ...evt });
