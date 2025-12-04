@@ -81,15 +81,15 @@ async function distributePricesRecursively(parentId, prices) {
    CPS presets & math
 ------------------------------------------------------------------- */
 const ARCH = {
-  RecallHeavy:       { reasoning:.3, memory:.9, speed:.2, attention:.3, metacognition:.2, resilience:.2 },
-  ProofDerivation:   { reasoning:.9, memory:.3, speed:.2, attention:.4, metacognition:.5, resilience:.5 },
-  ProcedureExec:     { reasoning:.5, memory:.6, speed:.4, attention:.3, metacognition:.3, resilience:.3 },
-  ConceptBuild:      { reasoning:.7, memory:.5, speed:.3, attention:.4, metacognition:.4, resilience:.35 },
-  CaseAnalysis:      { reasoning:.7, memory:.45, speed:.3, attention:.6, metacognition:.5, resilience:.4 },
-  Synthesis:         { reasoning:.75, memory:.55, speed:.35, attention:.5, metacognition:.55, resilience:.5 },
-  FormulaDrill:      { reasoning:.45, memory:.65, speed:.5, attention:.3, metacognition:.25, resilience:.3 },
+  RecallHeavy:       { reasoning:.3, memory:.9, speed:.2, attention:.3, metacognition:.2, resilience:.2, teacher_score: .2, },
+  ProofDerivation:   { reasoning:.9, memory:.3, speed:.2, attention:.4, metacognition:.5, resilience:.5, teacher_score: .85 },
+  ProcedureExec:     { reasoning:.5, memory:.6, speed:.4, attention:.3, metacognition:.3, resilience:.3, teacher_score: .45 },
+  ConceptBuild:      { reasoning:.7, memory:.5, speed:.3, attention:.4, metacognition:.4, resilience:.35, teacher_score: .7 },
+  CaseAnalysis:      { reasoning:.7, memory:.45, speed:.3, attention:.6, metacognition:.5, resilience:.4, teacher_score: .75 },
+  Synthesis:         { reasoning:.75, memory:.55, speed:.35, attention:.5, metacognition:.55, resilience:.5, teacher_score: .9 },
+  FormulaDrill:      { reasoning:.45, memory:.65, speed:.5, attention:.3, metacognition:.25, resilience:.3, teacher_score: .35 },
 };
-const ZERO6 = { reasoning:0, memory:0, speed:0, attention:0, metacognition:0, resilience:0 };
+const ZERO7 = { reasoning:0, memory:0, speed:0, attention:0, metacognition:0, resilience:0, teacher_score:0 };
 
 const s = (x) => (x == null ? 0 : Math.max(0, Math.min(1, (x - 1) / 4))); // 1..5 -> 0..1
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
@@ -117,16 +117,22 @@ function H_fromTopic(t) {
     0.60*curve + 0.40*I(app === "meta");
   const resilience =
     0.55*complexity + 0.45*curve;
+  const teacher_score =
+    0.25 * retain +
+    0.20 * engage +
+    0.20 * complexity +
+    0.20 * depth +
+    0.15 * I(app === "conceptual" || app === "meta");
 
-  const raw = { reasoning, memory, speed, attention, metacognition, resilience };
+  const raw = { reasoning, memory, speed, attention, metacognition, resilience, teacher_score };
   // clamp+normalize by max (keeps shape)
   const maxv = Math.max(...Object.values(raw), 1e-9);
   const norm = Object.fromEntries(Object.entries(raw).map(([k,v]) => [k, clamp01(v / maxv)]));
   return norm;
 }
 
-function blendVectors({ D = ZERO6, H = ZERO6, A = ZERO6, wD = 0.3, wH = 0.4, wA = 0.3 }) {
-  const keys = Object.keys(ZERO6);
+function blendVectors({ D = ZERO7, H = ZERO7, A = ZERO7, wD = 0.3, wH = 0.4, wA = 0.3 }) {
+  const keys = Object.keys(ZERO7);
   const raw = {};
   for (const k of keys) raw[k] = (wD * (D[k] ?? 0)) + (wH * (H[k] ?? 0)) + (wA * (A[k] ?? 0));
   const maxv = Math.max(...Object.values(raw), 1e-9);
@@ -135,8 +141,8 @@ function blendVectors({ D = ZERO6, H = ZERO6, A = ZERO6, wD = 0.3, wH = 0.4, wA 
 }
 
 function recommendItemMix(final) {
-  // 20 cognitive items
-  const keys = Object.keys(final);
+  // 25 cognitive items
+  const keys = Object.keys(final).filter(k => k !== "teacher_score");
   const sum = keys.reduce((a,k)=>a+(final[k]||0),0) || 1;
   const ideal = keys.map(k => ({ k, v: (final[k]||0) / sum * 20 }));
   const floor = ideal.map(x => ({ k: x.k, n: Math.floor(x.v) }));
@@ -156,9 +162,11 @@ function recommendItemMix(final) {
   if (total > 20) {
     floor.sort((a,b)=>b.n - a.n);
     let idx = 0;
-    while (total>20 && idx<floor.length) { if (floor[idx].n>0){ floor[idx].n--; total--; } idx++; }
+    while (total>25 && idx<floor.length) { if (floor[idx].n>0){ floor[idx].n--; total--; } idx++; }
   }
-  return Object.fromEntries(floor.map(f=>[f.k, f.n]));
+  const mix = Object.fromEntries(floor.map(f => [f.k, f.n]));
+  mix.teacher_score = 5;   // FIXED VALUE
+  return mix;
 }
 
 function recommendTimePressure(final, topic) {
@@ -170,7 +178,7 @@ function recommendTimePressure(final, topic) {
   return pr;
 }
 
-const getArchetypePreset = (arch) => ARCH[arch] || ZERO6;
+const getArchetypePreset = (arch) => ARCH[arch] || ZERO7;
 
 /* ------------------------------------------------------------------
    Tree helpers
@@ -204,7 +212,7 @@ async function listDescendantsBFS(rootId) {
 ------------------------------------------------------------------- */
 async function recomputeTopicComputedFields(topic) {
   const domain = await findDomainAncestor(topic);
-  const D = domain?.domain_cognitive_profile || ZERO6;
+  const D = domain?.domain_cognitive_profile || ZERO7;
   const H = H_fromTopic(topic);
   const A = getArchetypePreset(topic.archetype);
   const final = blendVectors({ D, H, A, wD:0.3, wH:0.4, wA:0.3 });
@@ -345,7 +353,7 @@ export const updateNode = async (req, res) => {
     }
 
     // Recompute for topics when typed fields/archetype changed
-    if (updated.is_topic && (updated.archetype || updated.complexity_level)) {
+    if (updated.is_topic) {
       await recomputeTopicComputedFields(updated);
     }
 
@@ -552,9 +560,9 @@ export const ingestTopicTelemetry = async (req, res) => {
     const alpha = typeof req.body?.alpha === "number" ? Math.max(0, Math.min(1, req.body.alpha)) : 0.2;
 
     if (observed && typeof observed === "object") {
-      const current = t.topic_observed_pull_vector || ZERO6;
+      const current = t.topic_observed_pull_vector || ZERO7;
       const next = {};
-      for (const k of Object.keys(ZERO6)) {
+      for (const k of Object.keys(ZERO7)) {
         const o = Number(observed[k] ?? 0);
         next[k] = clamp01((1 - alpha) * (Number(current[k] ?? 0)) + alpha * o);
       }
