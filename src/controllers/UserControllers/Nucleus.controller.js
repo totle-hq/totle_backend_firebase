@@ -597,3 +597,30 @@ export const updateTestPaymentMode = async (req, res) => {
     error: "Missing required parameters: testId or (nodeId + mode)",
   });
 };
+
+
+export const updateCatalogueNodePaymentStatus = async (req, res) => {
+  try {
+    const nodeId = req.params.id;
+    const { payment_mode } = req.body;
+
+    if (!payment_mode || !['LIVE', 'DEMO'].includes(payment_mode)) {
+      return res.status(400).json({ success: false, message: "Invalid or missing payment_mode" });
+    }
+
+    const node = await CatalogueNode.findByPk(nodeId);
+
+    if (!node) {
+      console.error("node", node);
+      return res.status(404).json({ success: false, message: "Catalogue node not found" });
+    }
+
+    node.payment_mode = payment_mode;
+    await node.save();
+
+    return res.status(200).json({ success: true, message: "Payment mode updated", data: node });
+  } catch (error) {
+    console.error("❌ Failed to update payment_mode:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
+  }
+};
