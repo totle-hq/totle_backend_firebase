@@ -1,186 +1,165 @@
-// controllers/paymentController.js
+// controllers/PaymentControllers/paymentController.js
 
 import Razorpay from "razorpay";
 import shortid from "shortid";
-import jwt from "jsonwebtoken";
-
 import dotenv from "dotenv";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 import { BankDetails } from "../../Models/UserModels/BankDetailsModel.js";
 
 dotenv.config();
 
+function requireUser(req, res) {
+  const uid =
+    req.user?.id ||
+    req.user?.userId ||
+    req.user?.userid ||
+    req.user?.user_id;
 
-// const razorpay = new Razorpay({
-//   key_id: process.env.RAZORPAY_KEY_ID,       // paste your Test Key ID here
-//   key_secret: process.env.RAZORPAY_KEY_SECRET // paste your Test Key Secret here
-// });
-
-function getUserIdFromRequest(req) {
-  const token = req.cookies?.totle_at;
-  console.log("user token ",token);
-  if (!token) return null;
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    return decoded?.id;
-  } catch (err) {
-    console.error("❌ Token verification failed:", err.message);
+  if (!uid) {
+    res.status(401).json({ message: "Unauthenticated" });
     return null;
   }
+
+  return uid;
 }
 
 
-
-// Helper function to create Razorpay instance based on mode
-export function getRazorpayInstance(paymentMode = "DEMO") {
-  const isLive = paymentMode === "LIVE";
+// ---------------- RAZORPAY INSTANCE ----------------
+export function getRazorpayInstance(mode = "DEMO") {
+  const isLive = mode === "LIVE";
   return new Razorpay({
     key_id: isLive ? process.env.RAZORPAY_LIVE_KEY_ID : process.env.RAZORPAY_KEY_ID,
-    key_secret: isLive ? process.env.RAZORPAY_LIVE_KEY_SECRET : process.env.RAZORPAY_KEY_SECRET,
+    key_secret: isLive
+      ? process.env.RAZORPAY_LIVE_KEY_SECRET
+      : process.env.RAZORPAY_KEY_SECRET,
   });
 }
 
-
-// Controller to create order
+// ---------------- CREATE ORDER ----------------
 export const createOrder = async (req, res) => {
   try {
-    const { amount, paymentMode = "DEMO" } = req.body; // Accept paymentMode from request
+    const { amount, paymentMode = "DEMO" } = req.body;
 
-    const razorpay = getRazorpayInstance(paymentMode); // Get correct Razorpay instance
+    const rp = getRazorpayInstance(paymentMode);
 
-    const options = {
-      amount: amount * 100, // Razorpay uses paise
+    const order = await rp.orders.create({
+      amount: amount * 100,
       currency: "INR",
       receipt: shortid.generate(),
       payment_capture: 1,
-    };
+    });
 
-    const order = await razorpay.orders.create(options);
-
-    res.status(200).json({
+    res.json({
       success: true,
       orderId: order.id,
       currency: order.currency,
-      amount: amount,
-      paymentMode, // Return back for clarity
+      amount,
+      paymentMode,
     });
-
-  } catch (error) {
-    console.error("Error in createOrder:", error);
+  } catch (err) {
     res.status(500).json({ success: false, message: "Failed to create order" });
   }
 };
 
-
-
-// 🔹 GET bank details for a user
+// ---------------- GET BANK DETAILS ----------------
 export const getBankDetails = async (req, res) => {
+  const userId = requireUser(req, res);
+  if (!userId) return;
+
   try {
-    const userId = getUserIdFromRequest(req);
     const bank = await BankDetails.findOne({ where: { user_id: userId } });
-    if (!bank) return res.status(404).json({ message: "No bank details found" });
+
+if (!bank) {
+  return res.json({
+    accountNumber: null,
+    ifsc: null,
+    holderName: null,
+    bankName: null,
+    accountType: null,
+  });
+}
+
 
     res.json({
-      accountNumber: `**** **** ${bank.account_number.slice(-4)}`,
+      accountNumber: bank.account_number,
       ifsc: bank.ifsc_code,
       holderName: bank.account_holder,
       bankName: bank.bank_name,
-      isVerified: bank.is_verified
+      accountType: bank.account_type,
     });
+    console.log("BANK DETAILS → req.user =", req.user);
+
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// 🔹 POST/PUT Add or Update bank details
+// ---------------- ADD / UPDATE BANK DETAILS ----------------
 export const addOrUpdateBankDetails = async (req, res) => {
+  const userId = requireUser(req, res);
+  if (!userId) return;
+
   try {
     const {
       account_number,
       ifsc_code,
       account_holder,
       bank_name,
-      account_type,
-      isVerified = false
+      account_type = "savings",
     } = req.body;
-
-    const userId = getUserIdFromRequest(req);
 
     const existing = await BankDetails.findOne({ where: { user_id: userId } });
 
     if (existing) {
       await existing.update({
-        account_number: account_number,
-        ifsc_code: ifsc_code,
-        account_holder: account_holder,
-        bank_name: bank_name,
-        account_type: account_type || 'savings',
-        is_verified: isVerified,
-        verified_at: isVerified ? new Date() : null
+        account_number,
+        ifsc_code,
+        account_holder,
+        bank_name,
+        account_type,
       });
 
-      return res.json({ message: "Bank details updated" });
+      return res.json({ message: "BANK_UPDATED" });
     }
 
     await BankDetails.create({
       id: uuidv4(),
       user_id: userId,
-      account_number: account_number,
-      ifsc_code: ifsc_code,
-      account_holder: account_holder,
-      bank_name: bank_name,
-      account_type: account_type || 'savings',
-      is_verified: isVerified,
-      verified_at: isVerified ? new Date() : null
+      account_number,
+      ifsc_code,
+      account_holder,
+      bank_name,
+      account_type,
     });
 
-    res.status(201).json({ message: "Bank details added" });
+    res.status(201).json({ message: "BANK_ADDED" });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// 🔹 GET Transaction History (mocked)
+// ---------------- TRANSACTION HISTORY ----------------
 export const getTransactionHistory = async (req, res) => {
-  const mockTxns = [
-    { id: 'TXN_10234', date: '2023-10-15', amount: 15400, status: 'Paid', reference: 'HDFC000123' },
-    { id: 'TXN_10235', date: '2023-11-01', amount: 22100, status: 'Paid', reference: 'HDFC000456' },
-    { id: 'TXN_10236', date: '2023-11-15', amount: 18500, status: 'Processing', reference: '-' },
-  ];
-
-  res.json(mockTxns);
+  res.json([]); // backend team will plug real data later
 };
 
-// 🔹 GET Earnings Graph (mocked)
+// ---------------- EARNINGS TREND ----------------
 export const getEarningsTrend = async (req, res) => {
-  const mockGraph = [
-    { month: 'Jul', amount: 12000 },
-    { month: 'Aug', amount: 18500 },
-    { month: 'Sep', amount: 15400 },
-    { month: 'Oct', amount: 22100 },
-    { month: 'Nov', amount: 28000 },
-    { month: 'Dec', amount: 35000 }
-  ];
-
-  res.json(mockGraph);
+  res.json([]); // backend team fills in real trend
 };
 
-// 🔹 GET Balances
+// ---------------- BALANCE SUMMARY ----------------
 export const getBalanceStats = async (req, res) => {
-  const mockStats = {
-    totalEarned: 76000,
-    pendingClearance: 18500,
-    availableBalance: 4200
-  };
-
-  res.json(mockStats);
+  res.json({
+    totalEarned: 0,
+    pendingClearance: 0,
+    availableBalance: 0,
+  });
 };
 
-// 🔹 GET Download Statement (stubbed)
+// ---------------- DOWNLOAD STATEMENT ----------------
 export const downloadStatement = async (req, res) => {
-  // In real life: generate PDF/CSV & stream/download
-  res.json({ url: "https://example.com/statement.pdf" });
+  res.json({
+    url: null, // backend will generate PDF/CSV in phase 2
+  });
 };
