@@ -211,7 +211,14 @@ qualified_teacher_names: {
     },
     topic_observed_pull_vector: { type: DataTypes.JSONB, allowNull: true, defaultValue: null },
     last_telemetry_update: { type: DataTypes.DATE, allowNull: true },
-
+    topic_price: {
+      type: DataTypes.INTEGER,
+      defaultValue: 99,
+    },
+    payment_mode: {
+      type: DataTypes.STRING,
+      defaultValue: "LIVE",
+    },
   },
   {
     schema: "catalog",

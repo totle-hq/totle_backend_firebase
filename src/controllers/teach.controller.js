@@ -30,6 +30,7 @@ import {
   formatInTz,
   utcToZoned,
 } from "../utils/time.js"; // if you saved as JS, use: "../utils/time.js"
+import Feedback from "../Models/feedbackModels.js";
 
 // We pass +05:30 in ISO strings, so a plain Date ctor suffices.
 function zonedTimeToUtc(dateString /*, tzIgnored */) {
@@ -1425,7 +1426,7 @@ export const getTeacherFeedbackSummary = async (req, res) => {
       if (!outputHierarchy[domainName][subjectName][topicName])
         outputHierarchy[domainName][subjectName][topicName] = {
           name: topicName,
-          date: fb.created_at?.split("T")[0],
+          date: fb.created_at ? new Date(fb.created_at).toISOString().split("T")[0] : null,
           feedback: [],
         };
 

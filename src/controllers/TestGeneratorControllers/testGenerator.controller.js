@@ -118,8 +118,10 @@ const param = (req, ...names) => {
 export const initiateTestPayment = async (req, res) => {
   try {
 let { topicId, paymentMode } = req.body;
+console.log("💰 initiateTestPayment called with:", { topicId, paymentMode });
 
 paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
+// paymentMode = "DEMO";
     const userId = req.user.id;
 
     if (!topicId) {
@@ -319,18 +321,27 @@ export const checkTestPaymentStatus = async (req, res) => {
       order: [["created_at", "DESC"]],
     });
 
-    const mode = recentPaymentTest?.payment?.payment_mode ?? 'DEMO';
+    let payment_mode = recentPaymentTest?.payment?.payment_mode || null;
+    let topic_price = null;
 
-    const payment = await findUnusedSuccessfulPayment(userId, topicId, mode);
+    // 4️⃣ If no recent test, fallback to node settings
+    if (!payment_mode) {
+      const node = await CatalogueNode.findByPk(topicId);
+      payment_mode = node?.payment_mode || 'DEMO'; // fallback to DEMO
+      topic_price = node?.topic_price ?? 99; // fallback to 99
+    }
+
+    // 5️⃣ Check if there's still an unused successful payment
+    const payment = await findUnusedSuccessfulPayment(userId, topicId, payment_mode);
 
     return res.status(200).json({
       success: true,
       data: {
         paid: !!payment,
-        payment_mode: mode,
+        payment_mode,
         cooldown_active: false,
         already_bridger: false,
-        amount_required: payment ? 0 : 100,
+        amount_required: payment ? 0 : topic_price ?? 99,
       },
     });
 
@@ -505,11 +516,11 @@ export const evaluateTest = async (req, res) => {
     }
 
     test.performance_metrics = perf;
-    perf.gates = { teachingGatePassed, resilienceGatePassed };
-
+    
     // ✅ Gates logged for analytics, but not blocking pass/fail
     const teachingGatePassed = gates.teachingGatePassed;
     const resilienceGatePassed = gates.resilienceGatePassed;
+    perf.gates = { teachingGatePassed, resilienceGatePassed };
     const gatedPass = passed;
 
 
@@ -918,32 +929,35 @@ export const reportTest = async (req, res) => {
 
 
 export const generateTest = async (req, res) => {
+  const BASELINE_QUESTION_COUNT = 25;
+  const DEFAULT_TIME_LIMIT_MINUTES = 30;
+
   console.log("🔹 [generateTest] Request received", { body: req.body, userId: req?.user?.id });
 
   try {
     const { topicId } = req.body;
-    const userId = req.user.id;
-    console.log("➡️ Extracted params", { userId, topicId });
+    const userId = req.user?.id;
 
     if (!userId || !topicId) {
       console.warn("⚠️ Missing params", { userId, topicId });
       return res.status(400).json({ success: false, message: "Missing userId or topicId." });
     }
 
+    // ✅ Check payment status
     console.log("🔹 Checking payment gate");
     const hasValidPayment = await checkTestPayment(userId, topicId);
     console.log("✅ Payment check result:", hasValidPayment);
+
     if (!hasValidPayment) {
       return res.status(402).json({
         success: false,
-        // message: "Payment required to take this test. Please pay ₹99 to continue.",
-        message: "Payment required to take this test. Please pay ₹1 to continue.",
+        message: `Payment required to take this test. Please pay ₹1 to continue.`,
         payment_required: true,
-        // amount: 9900,
-        amount: 100,
+        amount: 100, // in paise
       });
     }
 
+    // ✅ Cooldown
     console.log("🔹 Checking cooldown for user", userId, "topic", topicId);
     const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
     if (!eligible) {
@@ -956,204 +970,95 @@ export const generateTest = async (req, res) => {
       });
     }
 
-
-    console.log("🔹 Fetching subject/domain for topic", topicId);
+    // ✅ Fetch topic/domain
     const { subject, domain } = await findSubjectAndDomain(topicId);
-    const subjectName = subject?.name || "";
-    const subjectDescription = subject?.description || "";
-    const domainName = domain?.name || "";
-    const domainDescription = domain?.description || "";
-    console.log("✅ Subject/Domain fetched:", { subjectName, domainName });
-
-    console.log("🔹 Fetching topic from DB", topicId);
     const topic = await CatalogueNode.findByPk(topicId);
     if (!topic || !topic.is_topic) {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
-    console.log("✅ Topic found:", topic.name);
+
+    const subjectName = subject?.name || "";
+    const subjectDescription = subject?.description || "";
+    const domainName = domain?.name || "";
+    const domainDescription = domain?.description || "";
     const topicDescription = topic.description || "";
 
-    const topicParams = {
-      ...(topic?.computed_cps_weights || {}),
-      ...(topic?.recommended_item_mix || {}),
-      ...(topic?.recommended_time_pressure ? { recommended_time_pressure: topic.recommended_time_pressure } : {}),
-      ...(topic?.metadata || {}),
-    };
+    console.log("✅ Subject & Topic resolved:", { subjectName, topicName: topic.name });
 
-    const domainParams = {
-      ...(domain?.domain_cognitive_profile || {}),
-      ...(domain?.knowledge_type_mix || {}),
-      ...(domain?.modality_mix || {}),
-    };
+    // ✅ Force Baseline Mode
+    const isBaseline = true;
 
-    console.log("🔹 Checking if baseline test for this user/topic");
-    // const priorCount = await Test.count({ where: { user_id: userId, topic_uuid: topicId } });
-    // const isBaseline = priorCount === 0;
-    // console.log("✅ Prior tests:", priorCount, "| Mode:", isBaseline ? "Baseline" : "CPS");
-    const priorCount = await Test.count({ where: { user_id: userId, topic_uuid: topicId } });
-    console.log("✅ Prior tests:", priorCount, "| Mode: forced baseline");
-    const isBaseline = true;   // ✅ force baseline regardless
-
-
-    console.log("🔹 Fetching learner profile for user", userId);
     const learnerProfile = await getUserLearningMetrics(userId);
-    console.log("✅ Learner profile fetched");
-
-    console.log("🔹 Sending SSE initial note");
     publishProgress({
       userId,
       topicId,
       phase: "connect",
       status: "ok",
-      note: isBaseline ? "Baseline: preparing a 20-item test…" : "Preparing CPS-aware test (7 blocks)…",
+      note: `Baseline: preparing a ${BASELINE_QUESTION_COUNT}-item test…`,
     });
 
     let flatQuestions = [];
     let flatAnswers = [];
-    let time_limit_minutes = 30;
     const rubricRows = [];
+    let time_limit_minutes = DEFAULT_TIME_LIMIT_MINUTES;
 
-    if (isBaseline) {
-      console.log("🔹 Using per-dimension generator for 25-question baseline");
+    // ✅ Baseline question generation
+    const result = await generateQuestions({
+      subject: subjectName,
+      subjectDescription,
+      domain: domainName,
+      domainDescription,
+      topicName: topic.name,
+      topicDescription,
+      learnerProfile,
+      topicParams: {
+        ...(topic?.computed_cps_weights || {}),
+        ...(topic?.recommended_item_mix || {}),
+        ...(topic?.recommended_time_pressure ? { recommended_time_pressure: topic.recommended_time_pressure } : {}),
+        ...(topic?.metadata || {}),
+      },
+      subtopics: [],
+      topicId,
+      userId,
+      count: BASELINE_QUESTION_COUNT,
+    });
 
-      const recommendedMix = topic.recommended_item_mix || {};
-      const dimensions = [...CPS_KEYS, "teacher_score"];
+    time_limit_minutes = result.time_limit_minutes || DEFAULT_TIME_LIMIT_MINUTES;
 
-      let globalId = 1;
+    let globalId = 1;
+    for (const item of result.questions) {
+      const correct_answer = result.answers.find((a) => a.id === item.id)?.correct_answer;
 
-      const dimensionPromises = dimensions.map(async (key) => {
-        const count = recommendedMix[key] || 0;
-        if (count <= 0) return [];
-
-        const dimensionParams = { [key]: 1.0 };
-
-        const result = await generateQuestions({
-          subject: subjectName,
-          subjectDescription,
-          domain: domainName,
-          domainDescription,
-          topicName: topic.name,
-          topicDescription,
-          learnerProfile,
-          topicParams: dimensionParams,
-          subtopics: [],
-          topicId,
-          userId,
-          count,
-        });
-
-        const questions = [];
-        for (const item of result.questions) {
-          const answer = result.answers.find(a => a.id === item.id)?.correct_answer;
-          questions.push({ item, answer });
-        }
-
-        return questions.map(({ item, answer }) => {
-          const q = {
-            id: globalId,
-            text: item.text,
-            options: item.options,
-          };
-          const a = {
-            id: globalId,
-            correct_answer: answer,
-          };
-          const rubric = {
-            block_key: key,
-            global_qid: globalId,
-            option_impacts: { A: {}, B: {}, C: {}, D: {} },
-            gates: {},
-            item_weight: 1.0,
-          };
-          globalId++;
-          return { q, a, rubric };
-        });
+      flatQuestions.push({
+        id: globalId,
+        text: item.text,
+        options: item.options,
       });
 
-      const results = await Promise.all(dimensionPromises);
-      const all = results.flat();
+      flatAnswers.push({
+        id: globalId,
+        correct_answer,
+      });
 
-      for (const item of all) {
-        flatQuestions.push(item.q);
-        flatAnswers.push(item.a);
-        rubricRows.push(item.rubric);
-      }
+      rubricRows.push({
+        block_key: "baseline",
+        global_qid: globalId,
+        option_impacts: { A: {}, B: {}, C: {}, D: {} },
+        gates: {},
+        item_weight: 1.0,
+      });
 
-      if (flatQuestions.length !== 25) {
-        return res.status(500).json({
-          success: false,
-          message: `Baseline generation failed. Got only ${flatQuestions.length}/25 questions.`,
-        });
-      }
-
-      time_limit_minutes = 30;
+      globalId++;
     }
- else {
-      console.log("🔹 CPS generation started");
-      const onProgress = (evt) => {
-        publishProgress({ userId, topicId, ...evt });
-      };
 
-      const result = await generateCpsQuestionSet({
-        subject: subjectName,
-        subjectDescription,
-        domain: domainName,
-        domainDescription,
-        topicName: topic.name,
-        topicDescription,
-        subtopics: [],
-        learnerProfile,
-        params: { topicParams, domainParams },
-        isBaseline: false,
-        onProgress,
-      });
-
-      time_limit_minutes = result.totalRecommendedTimeMin || 35;
-      let globalId = 1;
-      for (const step of result.steps) {
-        for (const item of step.items) {
-          flatQuestions.push({ id: globalId, text: item.text, options: item.options });
-          flatAnswers.push({ id: globalId, correct_answer: item.answer });
-
-          const safeImpacts = {};
-          for (const opt of ["A", "B", "C", "D"]) {
-            const entry = item?.rubric?.option_impacts?.[opt] || {};
-            const clean = {};
-            for (const [k, v] of Object.entries(entry)) {
-              const num = Number(v);
-              if (Number.isFinite(num)) clean[k] = num;
-            }
-            safeImpacts[opt] = clean;
-          }
-
-          rubricRows.push({
-            block_key: step.key,
-            global_qid: globalId,
-            option_impacts: safeImpacts,
-            gates: item?.rubric?.gates || {},
-            item_weight: 1.0,
-          });
-          globalId++;
-        }
-      }
-
-      if (flatQuestions.length !== 25) {
-        return res.status(500).json({
-          success: false,
-          message: "Generator did not return 25 questions (CPS path).",
-        });
-      }
-
-      publishProgress({
-        userId,
-        topicId,
-        phase: "done",
-        status: "progress",
-        note: "CPS questions and rubrics ready.",
+    if (flatQuestions.length < BASELINE_QUESTION_COUNT) {
+      return res.status(500).json({
+        success: false,
+        message: `Baseline generation failed. Got only ${flatQuestions.length}/${BASELINE_QUESTION_COUNT} questions.`,
       });
     }
 
-    console.log("🔹 Checking for unused payment");
+    // ✅ Final payment verification
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
     if (!payment) {
       return res.status(402).json({
@@ -1163,31 +1068,36 @@ export const generateTest = async (req, res) => {
       });
     }
 
-    console.log("🔹 Persisting Test row");
+    // ✅ Save Test
     const count = (await Test.count()) + 1;
     const savedTest = await Test.create({
       sl_no: count,
       topic_name: topic.name,
       user_id: userId,
       topic_uuid: topicId,
-      difficulty: isBaseline ? "baseline" : "mixed",
-      topics: [{ id: topic.id, name: topic.name, description: topic.description, session_count: topic.session_count, prices: topic.prices }],
+      difficulty: "baseline",
+      topics: [{
+        id: topic.id,
+        name: topic.name,
+        description: topic.description,
+        session_count: topic.session_count,
+        prices: topic.prices,
+      }],
       questions: flatQuestions,
       answers: flatAnswers,
       test_settings: {
-        difficulty: isBaseline ? "baseline" : "mixed",
+        difficulty: "baseline",
         time_limit_minutes,
         retest_wait: 5,
         fraud_risk_score: 0,
-        cps_baseline: isBaseline,
+        cps_baseline: true,
       },
       status: "generated",
       payment_id: payment.payment_id,
     });
-    console.log("✅ Test saved with id", savedTest.test_id);
 
+    // ✅ Save Rubrics
     if (rubricRows.length) {
-      console.log("🔹 Persisting rubrics:", rubricRows.length);
       await TestItemRubric.bulkCreate(
         rubricRows.map((row) => ({
           test_id: savedTest.test_id,
@@ -1199,11 +1109,15 @@ export const generateTest = async (req, res) => {
         })),
         { validate: true }
       );
-      console.log("✅ Rubrics persisted");
     }
 
-    console.log("🎉 Test generation complete", savedTest.test_id);
-    publishProgress({ userId, topicId, phase: "done", status: "done", note: "Test ready." });
+    publishProgress({
+      userId,
+      topicId,
+      phase: "done",
+      status: "done",
+      note: "Test ready.",
+    });
 
     return res.status(200).json({
       success: true,
@@ -1211,25 +1125,43 @@ export const generateTest = async (req, res) => {
       data: {
         test_id: savedTest.test_id,
         topicId,
-        difficulty: isBaseline ? "baseline" : "mixed",
+        difficulty: "baseline",
         time_limit_minutes,
         questions: flatQuestions,
       },
     });
   } catch (error) {
-    console.error("❌ Error generating test:", error);
+    console.error("❌ Error generating test:", {
+      error: error.message,
+      stack: error.stack,
+      topicId: req.body?.topicId,
+      userId: req?.user?.id,
+    });
+
     try {
       const { topicId } = req.body || {};
       const userId = req?.user?.id;
       if (userId && topicId) {
-        publishProgress({ userId, topicId, phase: "error", status: "error", note: "Generation failed." });
+        publishProgress({
+          userId,
+          topicId,
+          phase: "error",
+          status: "error",
+          note: "Generation failed.",
+        });
       }
     } catch (innerErr) {
       console.error("⚠️ SSE error reporting failed:", innerErr);
     }
-    return res.status(500).json({ success: false, message: "Failed to generate test.", error: error.message });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate test.",
+      error: error.message,
+    });
   }
 };
+
 
 
 // Add to: src/controllers/TestGeneratorControllers/testGenerator.controller.js
