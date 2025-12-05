@@ -488,60 +488,139 @@ export const getTestsWithPaymentMode = async (req, res) => {
       include: [
         {
           model: User,
-          as: "user",              // MUST MATCH ASSOCIATION ALIAS
+          as: "user",
           attributes: ["firstName", "email"],
           where: userSearch
-            ? { name: { [Op.iLike]: `%${userSearch}%` } }
-            : undefined,           // allow empty search
-          required: !!userSearch,  // only inner join when filtering
+            ? { firstName: { [Op.iLike]: `%${userSearch}%` } }
+            : undefined,
+          required: !!userSearch,
         },
         {
           model: CatalogueNode,
           as: "topicNode",
-          attributes: ["name"],
+          attributes: ["name", "payment_mode"], // include payment_mode
         },
         {
           model: Payment,
-          as: "payment",           // USE ALIAS
+          as: "payment",
           attributes: ["payment_mode"],
         },
       ],
       order: [["created_at", "DESC"]],
     });
 
-    const results = tests.map((test) => ({
-      testId: test.test_id,
-      user: test.user?.firstName ?? "Unknown",
-      topic: test.topicNode?.name ?? "N/A",
-      scheduledAt: test.createdAt,
-      paymentMode: test.payment?.payment_mode ?? "DEMO",
-    }));
+    const results = tests.map((test) => {
+      const userName = test.user?.firstName ?? "Unknown";
+      const topicName = test.topicNode?.name ?? "N/A";
+      const scheduledAt = test.createdAt;
+
+      // ✅ Prefer payment.payment_mode, fallback to topicNode.payment_mode, then "DEMO"
+      const paymentMode =
+        test.topicNode?.payment_mode?.toUpperCase() ||
+        test.payment?.payment_mode?.toUpperCase() ||
+        "DEMO";
+
+      return {
+        testId: test.test_id,
+        user: userName,
+        topic: topicName,
+        scheduledAt,
+        paymentMode,
+      };
+    });
 
     return res.json(results);
   } catch (err) {
-    console.error("Error fetching tests with payment:", err);
+    console.error("Error fetching tests with payment mode:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
 };
 
 export const updateTestPaymentMode = async (req, res) => {
-  const { testId, mode } = req.body;
+  const { testId, nodeId, mode } = req.body;
 
-  if (!['LIVE', 'DEMO'].includes(mode)) {
-    return res.status(400).json({ error: 'Invalid payment mode' });
+  // Step 1: If testId is provided, update payment mode from topic
+  if (testId) {
+    const test = await Test.findByPk(testId, {
+      include: [{ model: Payment, as: "payment" }],
+    });
+
+    if (!test || !test.payment) {
+      console.log(`Test or payment not found for testId: ${testId}`);
+      return res.status(404).json({ error: "Test or payment not found" });
+    }
+
+    const topic = await CatalogueNode.findByPk(test.topic_uuid);
+
+    if (!topic) {
+      console.log(`Topic not found for test: ${testId}`);
+      return res.status(404).json({ error: "Topic node not found" });
+    }
+
+    const paymentMode = topic.payment_mode?.toUpperCase() || "LIVE";
+
+    if (!["LIVE", "DEMO"].includes(paymentMode)) {
+      return res.status(400).json({ error: "Invalid payment mode in topic" });
+    }
+
+    test.payment.payment_mode = paymentMode;
+    await test.payment.save();
+
+    return res.json({
+      success: true,
+      message: `Payment mode updated to '${paymentMode}' from topic node.`,
+    });
   }
 
-  const test = await Test.findByPk(testId, {
-    include: [{ model: Payment, as: "payment" }]
+  // Step 2: If nodeId is provided, update payment mode in topic directly
+  if (nodeId && mode) {
+    if (!["LIVE", "DEMO"].includes(mode.toUpperCase())) {
+      return res.status(400).json({ error: "Invalid mode value" });
+    }
+
+    const node = await CatalogueNode.findByPk(nodeId);
+    if (!node) {
+      return res.status(404).json({ error: "Catalogue node not found" });
+    }
+
+    node.payment_mode = mode.toUpperCase();
+    await node.save();
+
+    return res.json({
+      success: true,
+      message: `Node payment_mode updated to '${mode.toUpperCase()}'`,
+    });
+  }
+
+  // Step 3: Missing required inputs
+  return res.status(400).json({
+    error: "Missing required parameters: testId or (nodeId + mode)",
   });
+};
 
-  if (!test || !test.payment) {
-    console.log(`Test or payment not found for testId: ${testId}`);
-    return res.status(404).json({ error: 'Test or payment not found' });
+
+export const updateCatalogueNodePaymentStatus = async (req, res) => {
+  try {
+    const nodeId = req.params.id;
+    const { payment_mode } = req.body;
+
+    if (!payment_mode || !['LIVE', 'DEMO'].includes(payment_mode)) {
+      return res.status(400).json({ success: false, message: "Invalid or missing payment_mode" });
+    }
+
+    const node = await CatalogueNode.findByPk(nodeId);
+
+    if (!node) {
+      console.error("node", node);
+      return res.status(404).json({ success: false, message: "Catalogue node not found" });
+    }
+
+    node.payment_mode = payment_mode;
+    await node.save();
+
+    return res.status(200).json({ success: true, message: "Payment mode updated", data: node });
+  } catch (error) {
+    console.error("❌ Failed to update payment_mode:", error);
+    return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
-
-  test.payment.payment_mode = mode;
-  await test.payment.save();
-
-  return res.json({ success: true, message: 'Payment mode updated' });
 };

@@ -113,6 +113,15 @@ export async function applyRubricsToTest(testId, { transaction } = {}) {
     }
   }
 
+  // 4b) Include teacher_score if present in totals
+  if (totals.teacher_score) {
+    const { sum, count } = totals.teacher_score;
+    const avg = count > 0 ? sum / count : 0;
+    const scaled = Math.round((avg + 1) * 50); // −1..+1 → 0..100
+    deltas.teacher_score = Math.max(0, Math.min(100, scaled));
+  }
+
+
   // 🔍 DEBUG
   console.log("✅ Final deltas for test", testId, deltas);
   console.log("✅ Gates summary:", {
