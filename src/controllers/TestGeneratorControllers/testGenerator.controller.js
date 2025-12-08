@@ -22,7 +22,8 @@ import crypto from "crypto";
 import { Payment } from "../../Models/PaymentModels.js";
 import { TestItemRubric } from "../../Models/TestItemRubric.model.js";
 import { applyRubricsToTest } from "../../services/cps/applyRubricsToTest.service.js";
-import { CPS_KEYS } from "../../services/cps/cpsKeys.js"; 
+import { CPS_KEYS } from "../../services/cps/cpsKeys.js";
+import { UserDevice } from "../../Models/UserModels/userDevice.model.js"
 
 import {
   generateCpsQuestionSet,
@@ -930,45 +931,23 @@ export const reportTest = async (req, res) => {
 
 export const generateTest = async (req, res) => {
   const BASELINE_QUESTION_COUNT = 25;
+  const REUSE_RATIO = 0.7;
+  const MAX_REUSE_PER_QUESTION = 3;
   const DEFAULT_TIME_LIMIT_MINUTES = 30;
 
-  console.log("🔹 [generateTest] Request received", { body: req.body, userId: req?.user?.id });
+  const userId = req?.user?.id;
+  const { topicId } = req.body;
+
+  if (!userId || !topicId) {
+    return res.status(400).json({ success: false, message: "Missing userId or topicId." });
+  }
 
   try {
-    const { topicId } = req.body;
-    const userId = req.user?.id;
-
-    if (!userId || !topicId) {
-      console.warn("⚠️ Missing params", { userId, topicId });
-      return res.status(400).json({ success: false, message: "Missing userId or topicId." });
-    }
-
-    // ✅ Check payment status
-    console.log("🔹 Checking payment gate");
-    const hasValidPayment = await checkTestPayment(userId, topicId);
-    console.log("✅ Payment check result:", hasValidPayment);
-
-    if (!hasValidPayment) {
-      return res.status(402).json({
-        success: false,
-        message: `Payment required to take this test. Please pay ₹1 to continue.`,
-        payment_required: true,
-        amount: 100, // in paise
-      });
-    }
-
-    // ✅ Cooldown
-    console.log("🔹 Checking cooldown for user", userId, "topic", topicId);
-    const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
-    if (!eligible) {
-      return res.status(429).json({
-        success: false,
-        message: `You are still on cooldown. Next attempt available at ${cooldown_end}`,
-        cooldown_active: true,
-        waitTime,
-        cooldown_end,
-      });
-    }
+    const [user, userDevice] = await Promise.all([
+      User.findByPk(userId),
+      UserDevice.findOne({ where: { userId } }),
+    ]);
+    const currentCity = userDevice?.city || user?.location || null;
 
     // ✅ Fetch topic/domain
     const { subject, domain } = await findSubjectAndDomain(topicId);
@@ -977,131 +956,90 @@ export const generateTest = async (req, res) => {
       return res.status(404).json({ success: false, message: "Invalid topic." });
     }
 
-    const subjectName = subject?.name || "";
-    const subjectDescription = subject?.description || "";
-    const domainName = domain?.name || "";
-    const domainDescription = domain?.description || "";
-    const topicDescription = topic.description || "";
-
-    console.log("✅ Subject & Topic resolved:", { subjectName, topicName: topic.name });
-
-    // ✅ Force Baseline Mode
-    const isBaseline = true;
-
+    const mix = topic?.recommended_item_mix || {};
     const learnerProfile = await getUserLearningMetrics(userId);
-    publishProgress({
-      userId,
+    const reuseLimit = Math.floor(BASELINE_QUESTION_COUNT * REUSE_RATIO);
+
+    // ✅ Step 1: Collect Reusable Questions (excluding same city)
+    const reusedPool = await getReusableQuestions({
       topicId,
-      phase: "connect",
-      status: "ok",
-      note: `Baseline: preparing a ${BASELINE_QUESTION_COUNT}-item test…`,
+      excludeUserId: userId,
+      excludeCity: currentCity,
+      reuseLimit,
+      mix,
+      maxReuseCount: MAX_REUSE_PER_QUESTION,
     });
 
-    let flatQuestions = [];
-    let flatAnswers = [];
-    const rubricRows = [];
-    let time_limit_minutes = DEFAULT_TIME_LIMIT_MINUTES;
+    const reusedQuestions = reusedPool.questions;
+    const reusedAnswers = reusedPool.answers;
+    const reusedRubrics = reusedPool.rubrics;
 
-    // ✅ Baseline question generation
-    const result = await generateQuestions({
-      subject: subjectName,
-      subjectDescription,
-      domain: domainName,
-      domainDescription,
-      topicName: topic.name,
-      topicDescription,
-      learnerProfile,
-      topicParams: {
-        ...(topic?.computed_cps_weights || {}),
-        ...(topic?.recommended_item_mix || {}),
-        ...(topic?.recommended_time_pressure ? { recommended_time_pressure: topic.recommended_time_pressure } : {}),
-        ...(topic?.metadata || {}),
-      },
-      subtopics: [],
-      topicId,
-      userId,
-      count: BASELINE_QUESTION_COUNT,
-    });
+    const remainingCount = BASELINE_QUESTION_COUNT - reusedQuestions.length;
+    let freshQuestions = [];
+    let freshAnswers = [];
+    let freshRubrics = [];
 
-    time_limit_minutes = result.time_limit_minutes || DEFAULT_TIME_LIMIT_MINUTES;
+    // ✅ Step 2: Generate remaining questions (AI fallback)
+    if (remainingCount > 0) {
+      const freshPerDimension = computeRemainingMix(mix, reusedRubrics);
 
-    let globalId = 1;
-    // 🚀 Strict mapping based on recommended_item_mix
-    const mix = topic?.recommended_item_mix || {}; // Example: { recall_fidelity: 3, ..., teacher_score: 5 }
-    const impactQueue = Object.entries(mix).flatMap(([dim, count]) =>
-      Array(count).fill(dim)
-    );
+      for (const [dimension, count] of Object.entries(freshPerDimension)) {
+        if (count <= 0) continue;
 
-    // Shuffle to avoid positional bias (optional)
-    impactQueue.sort(() => Math.random() - 0.5);
+        const result = await generateQuestions({
+          subject: subject?.name,
+          subjectDescription: subject?.description,
+          domain: domain?.name,
+          domainDescription: domain?.description,
+          topicName: topic?.name,
+          topicDescription: topic?.description,
+          learnerProfile,
+          topicParams: {
+            ...(topic?.computed_cps_weights || {}),
+            ...(topic?.recommended_item_mix || {}),
+            ...(topic?.recommended_time_pressure ? { recommended_time_pressure: topic.recommended_time_pressure } : {}),
+            ...(topic?.metadata || {}),
+            dimension_focus: dimension,
+          },
+          subtopics: [],
+          topicId,
+          userId,
+          count,
+        });
 
-    for (const item of result.questions) {
-      const correct_answer = result.answers.find((a) => a.id === item.id)?.correct_answer;
+        const freshGlobalIds = freshQuestions.length;
+        for (let i = 0; i < result.questions.length; i++) {
+          const q = result.questions[i];
+          const a = result.answers.find(ans => ans.id === q.id)?.correct_answer;
 
-      flatQuestions.push({
-        id: globalId,
-        text: item.text,
-        options: item.options,
-      });
+          const global_qid = freshGlobalIds + i + 1;
+          freshQuestions.push({ id: global_qid, text: q.text, options: q.options });
+          freshAnswers.push({ id: global_qid, correct_answer: a });
 
-      flatAnswers.push({
-        id: globalId,
-        correct_answer,
-      });
+          const impactTemplate = { A: {}, B: {}, C: {}, D: {} };
+          if (["A", "B", "C", "D"].includes(a)) {
+            impactTemplate[a] = { [dimension]: 1 };
+          }
 
-      // 🧠 Pick the next dimension in line
-      const cpsDimension = impactQueue.shift() || "recall_fidelity"; // fallback if overflow
-
-      // Create an impact for correct_answer only
-      const impactTemplate = { A: {}, B: {}, C: {}, D: {} };
-      if (["A", "B", "C", "D"].includes(correct_answer)) {
-        impactTemplate[correct_answer] = { [cpsDimension]: 1 }; // +1 to the target dimension
-      }
-
-      rubricRows.push({
-        block_key: "baseline",
-        global_qid: globalId,
-        option_impacts: impactTemplate,
-        gates: {},
-        item_weight: 1.0,
-      });
-
-      globalId++;
-    }
-
-    console.log("✅ Final dimension usage:", mix);
-
-    const dimCount = {};
-    for (const row of rubricRows) {
-      const impacts = row.option_impacts || {};
-      for (const opt of Object.values(impacts)) {
-        for (const k of Object.keys(opt)) {
-          dimCount[k] = (dimCount[k] || 0) + 1;
+          freshRubrics.push({
+            block_key: "baseline",
+            global_qid,
+            option_impacts: impactTemplate,
+            gates: {},
+            item_weight: 1.0,
+          });
         }
       }
     }
-    console.log("🧪 Rubric dimension distribution:", dimCount);
 
+    const flatQuestions = [...reusedQuestions, ...freshQuestions].slice(0, BASELINE_QUESTION_COUNT);
+    const flatAnswers = [...reusedAnswers, ...freshAnswers].slice(0, BASELINE_QUESTION_COUNT);
+    const rubricRows = [...reusedRubrics, ...freshRubrics].slice(0, BASELINE_QUESTION_COUNT);
 
-    if (flatQuestions.length < BASELINE_QUESTION_COUNT) {
-      return res.status(500).json({
-        success: false,
-        message: `Baseline generation failed. Got only ${flatQuestions.length}/${BASELINE_QUESTION_COUNT} questions.`,
-      });
-    }
-
-    // ✅ Final payment verification
+    // ✅ Final Save
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
-    if (!payment) {
-      return res.status(402).json({
-        success: false,
-        message: "No unused successful payment found for this test. Please complete a new payment.",
-        payment_required: true,
-      });
-    }
-
-    // ✅ Save Test
     const count = (await Test.count()) + 1;
+
     const savedTest = await Test.create({
       sl_no: count,
       topic_name: topic.name,
@@ -1119,7 +1057,7 @@ export const generateTest = async (req, res) => {
       answers: flatAnswers,
       test_settings: {
         difficulty: "baseline",
-        time_limit_minutes,
+        time_limit_minutes: DEFAULT_TIME_LIMIT_MINUTES,
         retest_wait: 5,
         fraud_risk_score: 0,
         cps_baseline: true,
@@ -1129,70 +1067,168 @@ export const generateTest = async (req, res) => {
     });
 
     // ✅ Save Rubrics
-    if (rubricRows.length) {
-      await TestItemRubric.bulkCreate(
-        rubricRows.map((row) => ({
-          test_id: savedTest.test_id,
-          block_key: row.block_key,
-          global_qid: row.global_qid,
-          option_impacts: row.option_impacts,
-          gates: row.gates,
-          item_weight: row.item_weight ?? 1,
-        })),
-        { validate: true }
-      );
-    }
-
-    publishProgress({
-      userId,
-      topicId,
-      phase: "done",
-      status: "done",
-      note: "Test ready.",
-    });
+    await TestItemRubric.bulkCreate(
+      rubricRows.map(row => ({
+        test_id: savedTest.test_id,
+        block_key: row.block_key,
+        global_qid: row.global_qid,
+        option_impacts: row.option_impacts,
+        gates: row.gates,
+        item_weight: row.item_weight ?? 1,
+      })),
+      { validate: true }
+    );
 
     return res.status(200).json({
       success: true,
-      message: "Test generated successfully.",
+      message: "Test generated with secure reuse strategy.",
       data: {
         test_id: savedTest.test_id,
         topicId,
         difficulty: "baseline",
-        time_limit_minutes,
+        time_limit_minutes: DEFAULT_TIME_LIMIT_MINUTES,
         questions: flatQuestions,
       },
     });
-  } catch (error) {
-    console.error("❌ Error generating test:", {
-      error: error.message,
-      stack: error.stack,
-      topicId: req.body?.topicId,
-      userId: req?.user?.id,
-    });
 
-    try {
-      const { topicId } = req.body || {};
-      const userId = req?.user?.id;
-      if (userId && topicId) {
-        publishProgress({
-          userId,
-          topicId,
-          phase: "error",
-          status: "error",
-          note: "Generation failed.",
-        });
-      }
-    } catch (innerErr) {
-      console.error("⚠️ SSE error reporting failed:", innerErr);
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to generate test.",
-      error: error.message,
-    });
+  } catch (err) {
+    console.error("❌ generateTest error:", err);
+    return res.status(500).json({ success: false, message: "Internal error generating test." });
   }
 };
+
+export async function getReusableQuestions({
+  topicId,
+  excludeUserId,
+  excludeCity,
+  reuseLimit,
+  mix,
+  maxReuseCount = 3,
+}) {
+  const questionMap = new Map(); // key: questionText, value: { ...q, reuseCount, dimensions }
+
+  const tests = await Test.findAll({
+    where: {
+      topic_uuid: topicId,
+      user_id: { [Op.ne]: excludeUserId },
+    },
+    order: [['createdAt', 'DESC']],
+    limit: 200, // limit scope for performance
+  });
+
+  const flagged = await TestFlag.findAll({
+    attributes: ['question_id'],
+    where: { reason: 'leaked' },
+  });
+  const flaggedQIDs = new Set(flagged.map(f => f.question_id));
+
+  for (const test of tests) {
+    const { questions = [], test_id, user_id } = test;
+
+    const device = await UserDevice.findOne({ where: { userId: user_id } });
+    const userCity = device?.city || null;
+
+    if (userCity && excludeCity && userCity.toLowerCase() === excludeCity.toLowerCase()) {
+      continue; // skip same city
+    }
+
+    const rubrics = await TestItemRubric.findAll({
+      where: { test_id },
+    });
+
+    const rubricMap = new Map();
+    rubrics.forEach(r => {
+      const dim = extractDimensionFromRubric(r.option_impacts);
+      rubricMap.set(r.global_qid, dim);
+    });
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      const global_qid = q.id;
+      if (flaggedQIDs.has(global_qid)) continue;
+
+      const dimension = rubricMap.get(global_qid);
+      const key = q.text;
+
+      if (!dimension || !mix[dimension]) continue;
+
+      if (!questionMap.has(key)) {
+        questionMap.set(key, {
+          question: q,
+          correct_answer: null, // will be filled later if needed
+          dimension,
+          reuseCount: 1,
+        });
+      } else {
+        const entry = questionMap.get(key);
+        entry.reuseCount++;
+        questionMap.set(key, entry);
+      }
+    }
+  }
+
+  const selected = [];
+  const answers = [];
+  const rubrics = [];
+  const countPerDimension = Object.fromEntries(Object.keys(mix).map(dim => [dim, 0]));
+
+  for (const { question, dimension, reuseCount } of questionMap.values()) {
+    if (reuseCount > maxReuseCount) continue;
+
+    if (countPerDimension[dimension] < mix[dimension]) {
+      const global_qid = selected.length + 1;
+      selected.push({ ...question, id: global_qid });
+      answers.push({ id: global_qid, correct_answer: question.correct_answer });
+
+      const impactTemplate = { A: {}, B: {}, C: {}, D: {} };
+      if (["A", "B", "C", "D"].includes(question.correct_answer)) {
+        impactTemplate[question.correct_answer] = { [dimension]: 1 };
+      }
+
+      rubrics.push({
+        block_key: "baseline",
+        global_qid,
+        option_impacts: impactTemplate,
+        gates: {},
+        item_weight: 1.0,
+      });
+
+      countPerDimension[dimension]++;
+      if (selected.length >= reuseLimit) break;
+    }
+  }
+
+  return {
+    questions: selected,
+    answers,
+    rubrics,
+  };
+}
+
+function extractDimensionFromRubric(optionImpacts) {
+  for (const opt of Object.values(optionImpacts)) {
+    const dims = Object.keys(opt || {});
+    if (dims.length > 0) return dims[0];
+  }
+  return null;
+}
+
+export function computeRemainingMix(fullMix, reusedRubrics) {
+  const dimUsed = {};
+
+  for (const row of reusedRubrics) {
+    const dim = extractDimensionFromRubric(row.option_impacts);
+    if (dim) dimUsed[dim] = (dimUsed[dim] || 0) + 1;
+  }
+
+  const result = {};
+  for (const [dim, targetCount] of Object.entries(fullMix)) {
+    const used = dimUsed[dim] || 0;
+    result[dim] = Math.max(0, targetCount - used);
+  }
+
+  return result;
+}
 
 
 

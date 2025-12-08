@@ -30,6 +30,7 @@ import { Department } from '../Models/UserModels/Department.js';
 import { FeatureRoadmap } from '../Models/Strategy/FeatureRoadmap.model.js';
 import { ProjectBoard } from "../Models/ProjectModels/ProjectBoard.model.js";
 import { ProjectTask } from "../Models/ProjectModels/ProjectTask.model.js";
+import { UserDevice } from "../Models/UserModels/userDevice.model.js";
 
 dotenv.config();
 
@@ -181,6 +182,8 @@ initCpsModels();
     await safeSync(Admin, { name: 'Admin' });
     await safeSync(Language, { name: "Language" }); 
     await safeSync(User, { name: 'User'});
+    await safeSync(UserDevice, {name: 'UserDevice'});
+    console.log(" User Device synced successfully!");
     await safeSync(SessionToken, {name: 'SessionToken'});
     console.log('✅ Session Token table synced successfully!');
 
