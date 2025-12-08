@@ -1026,6 +1026,15 @@ export const generateTest = async (req, res) => {
     time_limit_minutes = result.time_limit_minutes || DEFAULT_TIME_LIMIT_MINUTES;
 
     let globalId = 1;
+    // 🚀 Strict mapping based on recommended_item_mix
+    const mix = topic?.recommended_item_mix || {}; // Example: { recall_fidelity: 3, ..., teacher_score: 5 }
+    const impactQueue = Object.entries(mix).flatMap(([dim, count]) =>
+      Array(count).fill(dim)
+    );
+
+    // Shuffle to avoid positional bias (optional)
+    impactQueue.sort(() => Math.random() - 0.5);
+
     for (const item of result.questions) {
       const correct_answer = result.answers.find((a) => a.id === item.id)?.correct_answer;
 
@@ -1040,16 +1049,39 @@ export const generateTest = async (req, res) => {
         correct_answer,
       });
 
+      // 🧠 Pick the next dimension in line
+      const cpsDimension = impactQueue.shift() || "recall_fidelity"; // fallback if overflow
+
+      // Create an impact for correct_answer only
+      const impactTemplate = { A: {}, B: {}, C: {}, D: {} };
+      if (["A", "B", "C", "D"].includes(correct_answer)) {
+        impactTemplate[correct_answer] = { [cpsDimension]: 1 }; // +1 to the target dimension
+      }
+
       rubricRows.push({
         block_key: "baseline",
         global_qid: globalId,
-        option_impacts: { A: {}, B: {}, C: {}, D: {} },
+        option_impacts: impactTemplate,
         gates: {},
         item_weight: 1.0,
       });
 
       globalId++;
     }
+
+    console.log("✅ Final dimension usage:", mix);
+
+    const dimCount = {};
+    for (const row of rubricRows) {
+      const impacts = row.option_impacts || {};
+      for (const opt of Object.values(impacts)) {
+        for (const k of Object.keys(opt)) {
+          dimCount[k] = (dimCount[k] || 0) + 1;
+        }
+      }
+    }
+    console.log("🧪 Rubric dimension distribution:", dimCount);
+
 
     if (flatQuestions.length < BASELINE_QUESTION_COUNT) {
       return res.status(500).json({
