@@ -159,6 +159,12 @@ const User = sequelize1.define(
       },
       comment: "Parent's email address if user is aged 11-18",
     },
+    last_login_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+      comment: "Timestamp of last login"
+    },
 
   },
   {

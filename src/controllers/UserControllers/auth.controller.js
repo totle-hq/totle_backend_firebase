@@ -397,7 +397,7 @@ export const loginUser = async (req, res) => {
       null;
 
     await User.update(
-      { isLoggedIn: true, ipAddress: ip, browser, os },
+      { isLoggedIn: true, ipAddress: ip, browser, os , last_login_at: new Date() },
       { where: { id: user.id } }
     );
 
@@ -1134,9 +1134,10 @@ export const getUpdates = async (req, res) => {
 };
 
 
+
 export const SummaryOfHomePage = async (req, res) => {
   try {
-    // ✅ Get total users count
+    // ✅ Get total users count (ALL registered users)
     const userCount = await User.count();
 
     // ✅ Get all unique session_ids from SessionAttendance where users were present
@@ -1169,7 +1170,8 @@ export const SummaryOfHomePage = async (req, res) => {
 
     const totalMinutes = parseInt(sessionData?.total_minutes || 0);
 
-     const mentorsByTopic = await Test.findAll({
+    // ✅ Get eligible mentors count (Teachers who passed tests)
+    const mentorsByTopic = await Test.findAll({
       where: {
         eligible_for_bridger: true,
         topic_uuid: { [Sequelize.Op.ne]: null }
@@ -1192,19 +1194,34 @@ export const SummaryOfHomePage = async (req, res) => {
       }
     });
 
+    // ✅ Get ACTIVE TEACHERS (Teachers who passed tests RECENTLY - last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const activeTeachers = await Test.count({
+      distinct: true,
+      col: "user_id",
+      where: {
+        eligible_for_bridger: true,
+        topic_uuid: { [Sequelize.Op.ne]: null },
+        submitted_at: { [Op.gt]: thirtyDaysAgo } // Recently submitted tests
+      }
+    });
+
     const topics = await CatalogueNode.count({
-      where: { is_topic : true }
+      where: { is_topic: true }
     });
 
     const domains = await CatalogueNode.count({
-      where: { is_domain : true }
+      where: { is_domain: true }
     });
 
     return res.status(200).json({
-      users: userCount,
+      users: userCount,                // Total registered users (all roles)
+      active_teachers: activeTeachers, // Active teachers who passed tests recently
       sessions: attendedSessionCount,
       minutes: totalMinutes,
-      mentors: totalMentorCount,
+      mentors: totalMentorCount,       // Total eligible mentors (all time)
       topics: topics,
       domains: domains,
     });

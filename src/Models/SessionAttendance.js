@@ -19,6 +19,12 @@ export const SessionAttendance = sequelize1.define('SessionAttendance', {
     type: DataTypes.ENUM('present', 'absent', 'missed'),
     defaultValue: 'absent',
     allowNull: false,
+  
+  },
+
+  createdAt: {  
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW,
   },
   joined_at: {
     type: DataTypes.DATE,
