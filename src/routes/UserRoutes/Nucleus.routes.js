@@ -1,5 +1,5 @@
 import express from "express";
-import { addSyncEmails, changeAccountPassword, createAccountInDepartment, deleteInternRoleAccount, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, getTestsWithPaymentMode, sendOtpForProduction, toggleStatusForInterns, updateCatalogueNodePaymentStatus, updateSyncEmail, updateTestPaymentMode, updateUserDepartmentRolePassword, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
+import { addSyncEmails, backfillTestScoresToggleAPI, changeAccountPassword, createAccountInDepartment, deleteInternRoleAccount, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, getTestQuestionDetails, getTestsWithPaymentMode, sendOtpForProduction, testLogsOfUsers, toggleStatusForInterns, updateCatalogueNodePaymentStatus, updateSyncEmail, updateTestPaymentMode, updateUserDepartmentRolePassword, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
 import { verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 
 const router = express.Router();
@@ -23,5 +23,19 @@ router.delete("/sync-email/:id", verifyAdminToken, deleteSyncEmail);
 router.get('/tests-with-payment-mode', getTestsWithPaymentMode);
 router.post('/update-payment-mode', updateTestPaymentMode);
 router.patch('/update-payment-status/:id', updateCatalogueNodePaymentStatus);
+/**
+ * @route GET /test-logs
+ * @desc Fetch test logs with user/topic/result/date filters
+ * @queryParams userName, topicName, resultStatus, dateFrom, dateTo
+ */
+router.get("/test-logs", testLogsOfUsers);
 
+/**
+ * @route POST /backfill-test-scores
+ * @desc Backfill score, percentage, and result status
+ * @body { dryRun: boolean }
+ */
+router.post("/backfill-test-scores", backfillTestScoresToggleAPI);
+
+router.get("/test/:test_id/questions", getTestQuestionDetails);
 export default router;

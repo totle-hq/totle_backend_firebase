@@ -10,6 +10,7 @@ import { Test } from "../../Models/test.model.js";
 import { CatalogueNode, User } from "../../Models/index.js";
 import { Payment } from "../../Models/PaymentModels.js";
 import { Op } from "sequelize";
+import { sequelize1 } from "../../config/sequelize.js";
 
 
 export const AddDepartments = async (req, res) => {
@@ -624,3 +625,231 @@ export const updateCatalogueNodePaymentStatus = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error", error: error.message });
   }
 };
+
+
+
+
+export const testLogsOfUsers = async (req, res) => {
+  try {
+    const {
+      userName = "",
+      topicName = "",
+      resultStatus,
+      dateFrom,
+      dateTo,
+    } = req.query;
+
+    const whereClause = {
+      status: "submitted",
+    };
+
+    if (dateFrom || dateTo) {
+      whereClause.submitted_at = {};
+      if (dateFrom) whereClause.submitted_at[Op.gte] = new Date(dateFrom);
+      if (dateTo) whereClause.submitted_at[Op.lte] = new Date(dateTo);
+    }
+
+    const logs = await Test.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: "user",
+          attributes: ["firstName", "lastName"],
+          where: userName
+            ? {
+                [Op.or]: [
+                  { firstName: { [Op.iLike]: `%${userName}%` } },
+                  { lastName: { [Op.iLike]: `%${userName}%` } },
+                ],
+              }
+            : undefined,
+        },
+        {
+          model: CatalogueNode,
+          as: "topicNode",
+          attributes: ["name"],
+          where: topicName
+            ? { name: { [Op.iLike]: `%${topicName}%` } }
+            : undefined,
+        },
+      ],
+      order: [["submitted_at", "DESC"]],
+    });
+
+    const data = logs.map((log) => {
+      const result = log.evaluated_result_status ?? (log.eligible_for_bridger ? "Pass" : "Fail");
+
+      if (resultStatus && result.toLowerCase() !== resultStatus.toLowerCase()) {
+        return null;
+      }
+
+      return {
+        id: log.test_id,
+        nodeId: log.topic_uuid,
+        user: `${log.user.firstName} ${log.user.lastName ?? ""}`.trim(),
+        topic: log.topicNode.name,
+        score: log.score ?? 0,
+        maxScore: log.performance_metrics?.evaluation_details?.reduce(
+          (acc, q) => acc + (Number.isFinite(q.score) ? q.score : 1),
+          0
+        ) ?? 0,
+        percentage: log.percentage ?? 0,
+        result,
+        submittedAt: log.submitted_at,
+      };
+    });
+
+    res.json(data.filter(Boolean));
+  } catch (error) {
+    console.error("Error fetching test logs:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+
+export async function backfillTestScoresToggleAPI(req, res) {
+  const { dryRun = false } = req.body;
+
+  console.log(`🔁 Starting test score backfill ${dryRun ? "(dry run)" : ""}...`);
+
+  const tests = await Test.findAll({
+    where: {
+      [Op.or]: [
+        { score: null },
+        { percentage: null },
+        { evaluated_result_status: null },
+      ],
+    },
+    include: [
+      {
+        model: User,
+        as: "user",
+        attributes: ["firstName", "lastName"],
+      },
+      {
+        model: CatalogueNode,
+        as: "topicNode",
+        attributes: ["name"],
+      },
+    ],
+    order: [["submitted_at", "DESC"]],
+  });
+
+  let updated = 0;
+  let skipped = 0;
+  const report = [];
+
+  for (const test of tests) {
+    const evalDetails = test.performance_metrics?.evaluation_details;
+
+    if (!Array.isArray(evalDetails) || evalDetails.length === 0) {
+      skipped++;
+      report.push({
+        test_id: test.test_id,
+        reason: "No evaluation_details",
+        submittedAt: test.submitted_at,
+        user: `${test.user?.firstName ?? ""} ${test.user?.lastName ?? ""}`.trim(),
+        topic: test.topicNode?.name ?? "",
+        nodeId: test.topic_uuid,
+      });
+      continue;
+    }
+
+    const score = evalDetails.reduce((sum, q) => sum + (q.score || 0), 0);
+    const maxScore = evalDetails.reduce(
+      (sum, q) => sum + (Number.isFinite(q.score) ? Number(q.score) : 1),
+      0
+    );
+    if (maxScore === 0) {
+      skipped++;
+      report.push({
+        test_id: test.test_id,
+        reason: "Max score is 0",
+        submittedAt: test.submitted_at,
+        user: `${test.user?.firstName ?? ""} ${test.user?.lastName ?? ""}`.trim(),
+        topic: test.topicNode?.name ?? "",
+        nodeId: test.topic_uuid,
+      });
+      continue;
+    }
+
+    const percentage = (score / maxScore) * 100;
+    const evaluated_result_status = test.eligible_for_bridger ? "Pass" : "Fail";
+
+    if (!dryRun) {
+      test.score = score;
+      test.percentage = Math.round(percentage * 100) / 100;
+      test.evaluated_result_status = evaluated_result_status;
+      await test.save();
+    }
+
+    updated++;
+    report.push({
+      test_id: test.test_id,
+      user: `${test.user?.firstName ?? ""} ${test.user?.lastName ?? ""}`.trim(),
+      topic: test.topicNode?.name ?? "",
+      nodeId: test.topic_uuid,
+      submittedAt: test.submitted_at,
+      score,
+      percentage: Math.round(percentage * 100) / 100,
+      result: evaluated_result_status,
+      updated: !dryRun,
+    });
+  }
+
+  const summary = {
+    success: true,
+    dryRun,
+    totalProcessed: tests.length,
+    updated,
+    skipped,
+    message: `Backfill ${dryRun ? "simulated" : "completed"} successfully.`,
+  };
+
+  console.log(`✅ ${summary.message} | Updated: ${updated}, Skipped: ${skipped}`);
+  res.status(200).json({ ...summary, report });
+}
+
+export async function getTestQuestionDetails(req, res) {
+  const { test_id } = req.params;
+  console.log("test",test_id);
+
+  try {
+    const test = await Test.findByPk(test_id);
+
+    if (!test) {
+      return res.status(404).json({ error: "Test not found" });
+    }
+
+    const questions = test.questions || [];
+    const correctAnswers = test.answers || [];
+    const submittedAnswers = test.answers_submitted || {};
+
+    // Map answers for quick lookup
+    const correctAnswerMap = {};
+    for (const ans of correctAnswers) {
+      correctAnswerMap[ans.id] = ans.correct_answer;
+    }
+
+    // Build detailed result
+    const enrichedQuestions = questions.map((q) => {
+      const correctAnswer = correctAnswerMap[q.id];
+      const learnerAnswer = submittedAnswers[q.id];
+
+      return {
+        question_id: q.id,
+        text: q.text,
+        options: q.options,
+        correctAnswer,
+        learnerAnswer,
+        isCorrect: learnerAnswer === correctAnswer,
+      };
+    });
+
+    res.json({ test_id, questions: enrichedQuestions });
+  } catch (error) {
+    console.error("Error fetching test detail:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+}

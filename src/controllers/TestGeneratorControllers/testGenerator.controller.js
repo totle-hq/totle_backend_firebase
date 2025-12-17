@@ -516,13 +516,16 @@ export const evaluateTest = async (req, res) => {
       perf.teacher_score = teacherScore;
     }
 
-    test.performance_metrics = perf;
-    
     // ✅ Gates logged for analytics, but not blocking pass/fail
     const teachingGatePassed = gates.teachingGatePassed;
     const resilienceGatePassed = gates.resilienceGatePassed;
     perf.gates = { teachingGatePassed, resilienceGatePassed };
     const gatedPass = passed;
+    test.performance_metrics = perf;
+    test.performance_metrics = perf;
+    test.score = totalScore;
+    test.percentage = percentage;
+    test.evaluated_result_status = gatedPass ? "Pass" : "Fail";
 
 
     /* ------------------ 4) Cooling period ------------------ */

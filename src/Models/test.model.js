@@ -102,6 +102,21 @@ export const Test = sequelize1.define(
       allowNull: true,
       comment: "Cooling period in days based on test performance",
     },
+    score: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      comment: "Total score (derived from evaluation_details)",
+    },
+    percentage: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      comment: "Percentage score (0-100, derived from evaluation_details)",
+    },
+    evaluated_result_status: {
+      type: DataTypes.ENUM("Pass", "Fail"),
+      allowNull: true,
+      comment: "Final result based on evaluation logic and eligibility",
+    },
     payment_id: {
       type: DataTypes.UUID,
       allowNull: false,
