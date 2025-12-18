@@ -115,7 +115,7 @@ export const Test = sequelize1.define(
     evaluated_result_status: {
       type: DataTypes.ENUM("Pass", "Fail"),
       allowNull: true,
-      comment: "Final result based on evaluation logic and eligibility",
+      // comment: "Final result based on evaluation logic and eligibility",
     },
     payment_id: {
       type: DataTypes.UUID,
