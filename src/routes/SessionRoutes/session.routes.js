@@ -3,7 +3,7 @@ import express from "express";
 import authMiddleware from "../../middlewares/authMiddleware.js";
 
 /* ---------------- Controllers ---------------- */
-import { bookFreeSession } from "../../controllers/SessionStreamControllers/bookSession.controller.js";
+import { bookFreeSession, endSession, joinSession } from "../../controllers/SessionStreamControllers/bookSession.controller.js";
 import {
   getAllUpcomingTeacherSessions,
   getFirstUpcomingStudentSession,
@@ -134,6 +134,7 @@ router.get("/student/first-session", authMiddleware, getFirstUpcomingStudentSess
 router.get("/teacher/first-session", authMiddleware, getFirstUpcomingTeacherSession);
 router.get("/teacher/upcoming-sessions", authMiddleware, getAllUpcomingTeacherSessions);
 
+
 /* ------------------------------------------------------------------ */
 /* Helix (Operations) Admin APIs                                       */
 /* ------------------------------------------------------------------ */
@@ -157,6 +158,9 @@ router.post("/update-timing", authMiddleware, updateSessionTiming);
  * → Allows Helix admins to reassign a session to another teacher.
  */
 router.post("/reassign-teacher", authMiddleware, reassignTeacher);
+
+router.post("/end", endSession);
+router.post("/join", joinSession);
 
 /* ------------------------------------------------------------------ */
 export default router;

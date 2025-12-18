@@ -34,6 +34,7 @@ import {
   REFRESH_TOKEN_EXPIRES_DAYS
 } from "../../utils/tokenUtils.js";
 import { SessionToken } from "../../Models/SessionTokenModel.js";
+import SessionParticipant from "../../Models/SessionParticipant.js";
 
 dotenv.config();
 
@@ -1157,17 +1158,18 @@ export const SummaryOfHomePage = async (req, res) => {
     const attendedSessionCount = attendedSessionIds.length;
 
     // ✅ Calculate total duration for attended sessions only
-    const sessionData = await Session.findOne({
+    const learnerDurationData = await SessionParticipant.findOne({
       attributes: [
-        [fn('SUM', col('duration_minutes')), 'total_minutes']
+        [fn("SUM", col("duration_seconds")), "total_seconds"]
       ],
       where: {
-        session_id: { [Op.in]: attendedSessionIds }
+        role: "learner",
+        duration_seconds: { [Op.ne]: null }
       },
-      raw: true
+      raw: true,
     });
 
-    const totalMinutes = parseInt(sessionData?.total_minutes || 0);
+    const totalMinutes = Math.floor((learnerDurationData?.total_seconds || 0) / 60);
 
      const mentorsByTopic = await Test.findAll({
       where: {

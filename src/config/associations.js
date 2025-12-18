@@ -30,6 +30,7 @@ import { TestItemRubric } from "../Models/TestItemRubric.model.js";
 import  TeacherAvailability  from "../Models/TeacherAvailability.js";
 import { BankDetails } from "../Models/UserModels/BankDetailsModel.js";
 import { SessionToken } from "../Models/SessionTokenModel.js";
+import SessionParticipant from "../Models/SessionParticipant.js";
 
 const defineRelationships = () => {
   /* =========================
@@ -266,6 +267,22 @@ const defineRelationships = () => {
       onDelete: "SET NULL",
     });
   }
+
+  if (!User.associations?.sessionParticipations) {
+  User.hasMany(SessionParticipant, { foreignKey: "user_id", as: "sessionParticipations" });
+  }
+  if (!SessionParticipant.associations?.user) {
+    SessionParticipant.belongsTo(User, { foreignKey: "user_id", as: "user" });
+  }
+
+  // Session ↔ SessionParticipants
+  if (!Session.associations?.participants) {
+    Session.hasMany(SessionParticipant, { foreignKey: "session_id", as: "participants" });
+  }
+  if (!SessionParticipant.associations?.session) {
+    SessionParticipant.belongsTo(Session, { foreignKey: "session_id", as: "session" });
+  }
+  
   if (!User.associations?.learningSessions) {
     User.hasMany(Session, {
       foreignKey: "student_id",

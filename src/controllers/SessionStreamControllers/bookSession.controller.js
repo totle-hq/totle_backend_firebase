@@ -15,6 +15,7 @@ import {
   formatInTz,
   utcToZoned,
 } from "../../utils/time.js"; 
+import SessionParticipant from "../../Models/SessionParticipant.js";
 /* ============================================================================
    Utilities
    ============================================================================ */
@@ -704,5 +705,101 @@ export const getTeacherUpcomingSessions = async (req, res) => {
       success: false,
       message: "Failed to fetch upcoming sessions",
     });
+  }
+};
+
+
+export const joinSession = async (req, res) => {
+  const { sessionId, role } = req.body;
+  const userId = req.user?.id;
+
+  if (!sessionId || !role || !userId) {
+    return res.status(400).json({ success: false, message: "Missing fields" });
+  }
+
+  try {
+    // Prevent duplicate joins
+    const existing = await SessionParticipant.findOne({
+      where: {
+        session_id: sessionId,
+        user_id: userId,
+        role,
+        joined_at: { [Op.not]: null },
+        left_at: null, // Not ended yet
+      },
+    });
+
+    if (existing) {
+      return res.status(200).json({ success: true, message: "Already joined" });
+    }
+
+    await SessionParticipant.create({
+      session_id: sessionId,
+      user_id: userId,
+      role,
+      joined_at: new Date(),
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("❌ joinSession error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const endSession = async (req, res) => {
+  const { sessionId, durationSeconds, endedBy } = req.body;
+  const userId = req.user?.id;
+
+  if (!sessionId || !durationSeconds || !endedBy || !userId) {
+    return res.status(400).json({ success: false, message: "Missing fields" });
+  }
+
+  try {
+    // 1. Update this user's session participant record
+    const participant = await SessionParticipant.findOne({
+      where: {
+        session_id: sessionId,
+        user_id: userId,
+        role: endedBy,
+        left_at: null, // Only update if not already marked left
+      },
+    });
+
+    if (!participant) {
+      return res.status(404).json({
+        success: false,
+        message: "Active session participation not found",
+      });
+    }
+
+    participant.left_at = new Date();
+    participant.duration_seconds = durationSeconds;
+    await participant.save();
+
+    // 2. Check if all users have left
+    const stillActive = await SessionParticipant.count({
+      where: {
+        session_id: sessionId,
+        left_at: null,
+      },
+    });
+
+    if (stillActive === 0) {
+      await Session.update(
+        {
+          completed_at: new Date(),
+          status: "completed",
+        },
+        {
+          where: { session_id: sessionId },
+        }
+      );
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("❌ endSession error:", err);
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
