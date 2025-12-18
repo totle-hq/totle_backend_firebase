@@ -1,5 +1,5 @@
 import express from "express";
-import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile ,updateProfileMeta, SummaryOfHomePage, ChangeUserPassword, verifyToken} from "../../controllers/UserControllers/auth.controller.js";
+import { getUserCount, getUserProfile, loginUser, logout, otpVerification, resetPassword ,getAllBetaUsers, resetUser, sendContactEmail, signupUserAndSendOtp, updateUserProfile, submitSuggestion, verifyResetOtp, getWelcome, updateWelcome, getUpdates, getBetaUserProfile ,updateProfileMeta, SummaryOfHomePage, ChangeUserPassword, verifyToken, refreshToken} from "../../controllers/UserControllers/auth.controller.js";
 import upload from "../../middlewares/multer.js";
 import { loginLimiter, signupLimiter } from "../../middlewares/rateLimiter.js";
 import authMiddleware from "../../middlewares/authMiddleware.js";
@@ -54,6 +54,7 @@ router.patch("/queries/:id",updateQueryStatus);
 router.patch("/queriesByPriority/:id", updateQueryPriority);
 router.get("/queries/summary", countQueriesByStatus);
 router.get("/summary/homepage", SummaryOfHomePage);
-router.patch("/updatePassword", authMiddleware, ChangeUserPassword)
+router.patch("/updatePassword", authMiddleware, ChangeUserPassword);
+router.get("/refresh", refreshToken)
 
 export default router;
