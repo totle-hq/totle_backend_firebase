@@ -311,7 +311,7 @@ export const getChildren = async (req, res) => {
     await cacheSet(key, children);
     return res.json(children);
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });x``
   }
 };
 

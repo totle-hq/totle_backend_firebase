@@ -275,7 +275,10 @@ try {
 
     await safeSync(Session, { name: 'Session', allowAlter: false });
 
-    await safeSync(Payment, { name: "Payment" });  
+    await safeSync(Payment, { name: "Payment" });
+    await safeSync(PromoCode, { name: "PromoCode" });
+    await safeSync(PromoCodeRedemption, { name: "PromoCodeRedemption" });
+
     await safeSync(Test, { name: "Test" });
     await safeSync(TestItemRubric, { name: "TestItemRubric" });
 
@@ -307,6 +310,8 @@ import path from "path";
 import url from "url";
 import TeacherAvailability from "../Models/TeacherAvailability.js";
 import { SessionToken } from "../Models/SessionTokenModel.js";
+import { PromoCode } from "../Models/PromoCodes/PromoCode.Model.js";
+import { PromoCodeRedemption } from "../Models/PromoCodes/PromoCodeRedemption.Model.js";
 
 const thisFile = url.fileURLToPath(import.meta.url);
 const entryFile = path.resolve(process.argv[1] || "");

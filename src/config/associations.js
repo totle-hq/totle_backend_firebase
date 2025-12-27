@@ -31,6 +31,8 @@ import  TeacherAvailability  from "../Models/TeacherAvailability.js";
 import { BankDetails } from "../Models/UserModels/BankDetailsModel.js";
 import { SessionToken } from "../Models/SessionTokenModel.js";
 import SessionParticipant from "../Models/SessionParticipant.js";
+import { PromoCode } from "../Models/PromoCodes/PromoCode.Model.js";
+import { PromoCodeRedemption } from "../Models/PromoCodes/PromoCodeRedemption.Model.js";
 
 const defineRelationships = () => {
   /* =========================
@@ -337,6 +339,51 @@ const defineRelationships = () => {
   }
   if (!Payment.associations?.test) {
     Payment.hasOne(Test, { foreignKey: "payment_id", as: "test", onDelete: "RESTRICT", onUpdate: "CASCADE" });
+  }
+
+  if (!PromoCode.associations?.createdBy) {
+    PromoCode.belongsTo(User, {
+      foreignKey: "created_by",
+      as: "createdBy",
+      onDelete: "SET NULL"
+    });
+  }
+
+  if (!User.associations?.promoCodesCreated) {
+    User.hasMany(PromoCode, {
+      foreignKey: "created_by",
+      as: "promoCodesCreated"
+    });
+  }
+
+  if (!PromoCodeRedemption.associations?.promoCode) {
+    PromoCodeRedemption.belongsTo(PromoCode, {
+      foreignKey: "promo_code_id",
+      as: "promoCode"
+    });
+  }
+  
+  if (!PromoCode.associations?.redemptions) {
+    PromoCode.hasMany(PromoCodeRedemption, {
+      foreignKey: "promo_code_id",
+      as: "redemptions"
+    });
+  }
+
+  if (!PromoCode.associations?.user) {
+    PromoCode.belongsTo(User, {
+      foreignKey: "user_id",
+      as: "user", // 👈 This alias is important
+      onDelete: "SET NULL",
+    });
+  }
+
+  if (!User.associations?.assignedPromoCodes) {
+    User.hasMany(PromoCode, {
+      foreignKey: "user_id",
+      as: "assignedPromoCodes", // Optional alias
+      onDelete: "SET NULL",
+    });
   }
 
   /* =========================

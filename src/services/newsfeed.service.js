@@ -17,7 +17,7 @@ async function fetchRawArticles() {
 
   const { data } = await axios.get(url);
 
-  console.log(`📡 [newsfeed] Raw fetch → ${data.articles.length} articles`);
+  // console.log(`📡 [newsfeed] Raw fetch → ${data.articles.length} articles`);
 
   return data.articles.map((a, idx) => ({
     id: `news-${idx}-${Date.now()}`,
@@ -145,9 +145,9 @@ export async function fetchNewsFeed() {
 
 
 
-  dropped.forEach((d) =>
-    console.log(`🪣 Dropped: "${d.title}" → relevance ${d.relevance}, dept ${d.department}`)
-  );
+  // dropped.forEach((d) =>
+  //   console.log(`🪣 Dropped: "${d.title}" → relevance ${d.relevance}, dept ${d.department}`)
+  // );
 
   return kept;
 }

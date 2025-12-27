@@ -65,6 +65,7 @@ import cpsLogsRoutes from "./routes/cpsLogs.routes.js";
 import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 import iqQuestionRoutes from "./routes/cps/iqQuestion.routes.js";
 import sitemapRouter from "./routes/SiteMap/sitemap.js";
+import promoCodeRoutes from "./routes/PromoCode.routes.js";
 
 // DB sync (your existing)
 import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
@@ -387,6 +388,8 @@ app.use("/api/projects", projectTaskRoutes);
 app.use("/api/research", researchRoutes);
 app.use("/api/cps/logs", cpsLogsRoutes);
 app.use("/api", iqQuestionRoutes);
+
+app.use("/api/promo-codes", promoCodeRoutes);
 
 app.use('/api/session/paid', PaidSessionRoutes);
 

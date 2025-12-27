@@ -260,9 +260,8 @@ function buildPrompt({
       - Contain no phrases like “All of the above”, “None of the above”, “Both A and B”, etc.
     6. The correct answer must be fully justified by the information in the stem.
     7. The difficulty level must reflect Bloom’s “Application” and “Analysis” tiers.
-    8. Each batch must include at least 2 pedagogy-related or teachability-based questions.
-    9. The language must be formal, academic, and unambiguous.
-    10. Do not include explanations, reasoning, or commentary — **only the JSON object**.
+    8. The language must be formal, academic, and unambiguous.
+    9. Do not include explanations, reasoning, or commentary — **only the JSON object**.
 
     OUTPUT FORMAT (valid JSON only):
     {
