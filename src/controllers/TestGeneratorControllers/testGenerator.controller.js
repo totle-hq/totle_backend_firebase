@@ -118,48 +118,69 @@ const param = (req, ...names) => {
 // ✅ NEW: Initiate payment for test
 export const initiateTestPayment = async (req, res) => {
   try {
-let { topicId, paymentMode } = req.body;
-console.log("💰 initiateTestPayment called with:", { topicId, paymentMode });
+    let { topicId, paymentMode, amount, promoCode } = req.body;
+    console.log("💰 initiateTestPayment called with:", { topicId, paymentMode, promoCode });
 
-paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
-// paymentMode = "DEMO";
+    paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
     const userId = req.user.id;
 
     if (!topicId) {
-      return res.status(400).json({
-        success: false,
-        message: "Topic ID is required",
-      });
+      return res.status(400).json({ success: false, message: "Topic ID is required" });
     }
 
-    // Check if user already has a successful payment for this test
+    // Check for existing payment
     const existingPayment = await checkTestPayment(userId, topicId);
     if (existingPayment) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment already completed for this test",
-      });
+      return res.status(400).json({ success: false, message: "Payment already completed for this test" });
     }
 
-    // Verify topic exists
     const topic = await CatalogueNode.findByPk(topicId);
     if (!topic || !topic.is_topic) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid topic",
-      });
+      return res.status(404).json({ success: false, message: "Invalid topic" });
     }
-    // const amount = 9900; // ₹99 in paise
-    const amount = 100; // ₹1 in paise
+
+    const originalAmount = amount; // backup
+    let discountAmount = 0;
+
+    // ✅ Validate promo code if provided
+    if (promoCode) {
+      const promo = await PromoCode.findByPk(promoCode);
+
+      if (!promo || !promo.is_active)
+        return res.status(404).json({ success: false, message: "Invalid promo code" });
+
+      if (promo.expires_at && new Date() > promo.expires_at)
+        return res.status(410).json({ success: false, message: "Promo code expired" });
+
+      if (promo.used_count >= promo.usage_limit)
+        return res.status(429).json({ success: false, message: "Promo usage limit reached" });
+
+      if (promo.user_id && promo.user_id !== userId)
+        return res.status(403).json({ success: false, message: "Promo not assigned to this user" });
+
+      const alreadyUsed = await PromoCodeRedemption.findOne({ where: { promo_code: promoCode, user_id: userId } });
+      if (alreadyUsed)
+        return res.status(409).json({ success: false, message: "Promo already used by user" });
+
+      if (promo.min_order_value && amount < promo.min_order_value)
+        return res.status(400).json({ success: false, message: "Order value too low for this promo" });
+
+      // Apply discount
+      if (promo.type === "percentage") {
+        discountAmount = (promo.discount / 100) * amount;
+      } else if (promo.type === "amount") {
+        discountAmount = promo.discount;
+      }
+
+      amount = Math.max(1, Math.floor(amount - discountAmount)); // prevent zero/fractional amount
+
+      console.log(`✅ Promo ${promoCode} applied. Discount: ₹${discountAmount / 100}. Final amount: ₹${amount / 100}`);
+    }
+
     const currency = "INR";
-
-    // ✅ FIXED: Generate short receipt (≤40 characters)
     const receipt = generateReceiptId(topicId, userId);
-
-
-    // Create Razorpay order
-    // ✅ Use correct Razorpay instance based on mode
     const razorpay = getRazorpayInstance(paymentMode);
+
     const order = await razorpay.orders.create({
       amount,
       currency,
@@ -168,12 +189,12 @@ paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
         user_id: userId,
         topic_id: topicId,
         topic_name: topic.name,
-        entity_type: "test",
-  payment_mode: paymentMode === "LIVE" ? "live" : "test"
+        promo_code: promoCode || null,
+        discount_applied: discountAmount,
+        payment_mode: paymentMode,
       },
     });
 
-    // Save payment record
     const payment = await Payment.create({
       user_id: userId,
       entity_type: "test",
@@ -182,28 +203,27 @@ paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
       amount,
       currency,
       status: "created",
-      payment_mode: paymentMode, 
+      payment_mode: paymentMode,
     });
 
     return res.status(200).json({
       success: true,
       message: "Payment initiated successfully",
       data: {
-        key: (paymentMode === "LIVE") ? process.env.RAZORPAY_LIVE_KEY_ID : process.env.RAZORPAY_KEY_ID,
+        key: paymentMode === "LIVE" ? process.env.RAZORPAY_LIVE_KEY_ID : process.env.RAZORPAY_KEY_ID,
         order_id: order.id,
         amount,
         currency,
         topic_name: topic.name,
         payment_id: payment.payment_id,
+        promo_code: promoCode || null,
+        discount_applied: discountAmount,
+        original_amount: originalAmount,
       },
     });
   } catch (error) {
     console.error("❌ Error initiating test payment:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to initiate payment",
-      error: error.message,
-    });
+    return res.status(500).json({ success: false, message: "Failed to initiate payment", error: error.message });
   }
 };
 
