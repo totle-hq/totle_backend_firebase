@@ -92,6 +92,8 @@ const ORIGINS = [
   "http://localhost:3000",
   "http://127.0.0.1:3000",
   "http://localhost:5000",
+    "http://localhost:5001",
+
   "http://localhost:5173",   // ✅ added
   "http://127.0.0.1:5173",   // ✅ added
   "http://localhost:4173",   // ✅ added (Vite preview)
@@ -226,10 +228,14 @@ if (process.env.NODE_ENV === "development") {
           // Local development (remove if not needed in production)
           "http://localhost:3000",
           "http://localhost:5000",
+                    "http://localhost:5001",
+
           "http://localhost:5173",
           "http://localhost:4173",
           "ws://localhost:3000",
           "ws://localhost:5000",
+                    "ws://localhost:5001",
+
           "ws://localhost:5173",
           "ws://localhost:4173",
           // Stream.io endpoints (full list from docs, including wildcards and explicit for reliability)
@@ -446,7 +452,7 @@ const startServer = async () => {
     await runDbSync(false);
     console.log("✅ DB sync complete");
 
-    const PORT = process.env.PORT || 5000;
+    const PORT = process.env.PORT || 5001;
 
     // 🔹 Initialize Redis (shared across app)
     const redis = getRedis();

@@ -7,6 +7,7 @@ import { Language } from '../Models/LanguageModel.js';
 import { sequelize1 } from './sequelize.js';
 import { Sequelize, QueryTypes } from 'sequelize';
 import dotenv from 'dotenv';
+import { BetaUsers } from '../Models/UserModels/BetaUsersModel.js';
 
 import { Test } from '../Models/test.model.js';
 // import { BookedSession } from '../Models/BookedSession.js';
@@ -181,6 +182,8 @@ initCpsModels();
     const { Admin } = await import('../Models/UserModels/AdminModel.js');
     await safeSync(Admin, { name: 'Admin' });
     await safeSync(Language, { name: "Language" }); 
+    await safeSync(BetaUsers, { name: 'BetaUsers' });
+
     await safeSync(User, { name: 'User'});
     await safeSync(UserDevice, {name: 'UserDevice'});
     console.log(" User Device synced successfully!");

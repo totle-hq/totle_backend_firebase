@@ -1,126 +1,175 @@
-import NucleusDocs from "../Models/NucleusDocs.js";
-import { getUploadUrl, getDownloadUrl } from "../services/s3Service.js";
+import { NucleusDocFolder } from "../Models/NucleusDocs/NucleusDocFolder.js";
+import { NucleusDocument } from "../Models/NucleusDocs/NucleusDocument.js";
+import { getAdminContext } from "../utils/getAdminContext.js";
+import { canManageDocs } from "../utils/docsPermissions.js";
 
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
-
-// sanitize a folder prefix: collapse slashes, remove leading/trailing slashes
-function cleanFolder(raw = "") {
-  const s = String(raw || "")
-    .trim()
-    .replace(/\\/g, "/")
-    .replace(/^\/+|\/+$/g, "")
-    .replace(/\/{2,}/g, "/");
-  return s;
-}
-
-// 1. Generate presigned URL for upload
-export async function presignUpload(req, res) {
+/**
+ * GET /nucleus/docs/tree?department=Manhattan
+ */
+export async function getDocsTree(req, res) {
   try {
-    const { fileName, contentType, fileSize, folder } = req.body;
-    if (!fileName || !contentType || !fileSize) {
-      return res
-        .status(400)
-        .json({ error: "Missing fileName, contentType or fileSize" });
-    }
+    const { department } = req.query;
+    if (!department)
+      return res.status(400).json({ error: "department is required" });
 
-    if (fileSize > MAX_FILE_SIZE) {
-      return res.status(400).json({
-        error: `File too large. Maximum allowed size is ${MAX_FILE_SIZE / (1024 * 1024)} MB`,
-      });
-    }
-
-    // Optional folder prefix inside "nucleus-docs/"
-    const folderPart = cleanFolder(folder);
-    const basePrefix = "nucleus-docs";
-    const prefix = folderPart ? `${basePrefix}/${folderPart}` : basePrefix;
-
-    // Put a time prefix for easy sorting/uniqueness
-    const key = `${prefix}/${Date.now()}-${encodeURIComponent(fileName)}`;
-    const uploadUrl = await getUploadUrl(key, contentType);
-
-    return res.json({ uploadUrl, key });
-  } catch (err) {
-    console.error("presignUpload error:", err);
-    res.status(500).json({ error: "Failed to generate presigned URL" });
-  }
-}
-
-// 2. Save metadata after upload
-export async function saveMetadata(req, res) {
-  try {
-    const {
-      fileName,
-      fileSize,
-      contentType,
-      s3Key,
-      uploadedBy,
-      tags = [],
-    } = req.body;
-
-    if (!fileName || !fileSize || !contentType || !s3Key || !uploadedBy) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    const doc = await NucleusDocs.create({
-      fileName,
-      fileSize,
-      contentType,
-      s3Key,
-      uploadedBy,
-      tags,
-      uploadedAt: new Date(),
+    const folders = await NucleusDocFolder.findAll({
+      where: { department_code: department, is_deleted: false },
+      order: [["order_index", "ASC"]],
     });
 
-    res.json(doc);
-  } catch (err) {
-    console.error("saveMetadata error:", err);
-    res.status(500).json({ error: "Failed to save metadata" });
-  }
-}
-
-// 3. List documents
-export async function listDocs(req, res) {
-  try {
-    const docs = await NucleusDocs.findAll({
-      order: [["uploadedAt", "DESC"]],
+    const documents = await NucleusDocument.findAll({
+      where: { department_code: department, is_deleted: false },
     });
-    res.json(docs);
+
+    return res.json({ folders, documents });
   } catch (err) {
-    console.error("listDocs error:", err);
-    res.status(500).json({ error: "Failed to list documents" });
+    console.error("DOCS_TREE_ERROR", err);
+    return res.status(500).json({ error: "Failed to load documentation tree" });
   }
 }
 
-// 4. Delete document (soft delete with paranoid:true)
-export async function deleteDoc(req, res) {
+/**
+ * POST /nucleus/docs/folder
+ * body: { name, department_code, parent_id? }
+ */
+export async function createFolder(req, res) {
   try {
-    const { id } = req.params;
-    const doc = await NucleusDocs.findByPk(id);
-    if (!doc) return res.status(404).json({ error: "Not found" });
+    const adminContext = await getAdminContext(req.user.id);
+    const { name, department_code, parent_id } = req.body;
 
-    await doc.destroy();
-    res.json({ success: true });
+    if (!canManageDocs(adminContext, department_code)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
+    const folder = await NucleusDocFolder.create({
+      name,
+      department_code,
+      parent_id: parent_id || null,
+      created_by: adminContext.adminId,
+    });
+
+    return res.status(201).json(folder);
   } catch (err) {
-    console.error("deleteDoc error:", err);
-    res.status(500).json({ error: "Failed to delete document" });
+    console.error("CREATE_FOLDER_ERROR", err);
+    return res.status(500).json({ error: "Failed to create folder" });
   }
 }
 
-// 5. Generate presigned URL for download
-export async function presignDownload(req, res) {
+/**
+ * POST /nucleus/docs/document
+ * body: { title, content?, folder_id?, department_code }
+ */
+export async function createDocument(req, res) {
   try {
+    const adminContext = await getAdminContext(req.user.id);
+    const { title, content, folder_id, department_code } = req.body;
+
+    if (!canManageDocs(adminContext, department_code)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
+    const doc = await NucleusDocument.create({
+      title,
+      content: content || "",
+      folder_id: folder_id || null,
+      department_code,
+      created_by: adminContext.adminId,
+    });
+
+    return res.status(201).json(doc);
+  } catch (err) {
+    console.error("CREATE_DOCUMENT_ERROR", err);
+    return res.status(500).json({ error: "Failed to create document" });
+  }
+}
+
+/**
+ * PUT /nucleus/docs/document/:id
+ */
+export async function updateDocument(req, res) {
+  try {
+    const adminContext = await getAdminContext(req.user.id);
     const { id } = req.params;
-    const doc = await NucleusDocs.findByPk(id);
-    if (!doc || !doc.s3Key) {
+    const { title, content } = req.body;
+
+    const doc = await NucleusDocument.findByPk(id);
+    if (!doc || doc.is_deleted) {
       return res.status(404).json({ error: "Document not found" });
     }
 
-    // Expiry set to 5 minutes (300s)
-    const downloadUrl = await getDownloadUrl(doc.s3Key, 300);
+    if (!canManageDocs(adminContext, doc.department_code)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
 
-    res.json({ downloadUrl });
+    await doc.update({
+      title: title ?? doc.title,
+      content: content ?? doc.content,
+      updated_by: adminContext.adminId,
+    });
+
+    return res.json(doc);
   } catch (err) {
-    console.error("presignDownload error:", err);
-    res.status(500).json({ error: "Failed to generate download URL" });
+    console.error("UPDATE_DOCUMENT_ERROR", err);
+    return res.status(500).json({ error: "Failed to update document" });
+  }
+}
+
+/**
+ * POST /nucleus/docs/move
+ * body: { document_id, target_folder_id }
+ */
+export async function moveDocument(req, res) {
+  try {
+    const adminContext = await getAdminContext(req.user.id);
+    const { document_id, target_folder_id } = req.body;
+
+    const doc = await NucleusDocument.findByPk(document_id);
+    if (!doc || doc.is_deleted) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    if (!canManageDocs(adminContext, doc.department_code)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
+    await doc.update({
+      folder_id: target_folder_id,
+      updated_by: adminContext.adminId,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("MOVE_DOCUMENT_ERROR", err);
+    return res.status(500).json({ error: "Failed to move document" });
+  }
+}
+
+/**
+ * DELETE /nucleus/docs/:id
+ * Soft delete
+ */
+export async function deleteDoc(req, res) {
+  try {
+    const adminContext = await getAdminContext(req.user.id);
+    const { id } = req.params;
+
+    const doc = await NucleusDocument.findByPk(id);
+    if (!doc || doc.is_deleted) {
+      return res.status(404).json({ error: "Document not found" });
+    }
+
+    if (!canManageDocs(adminContext, doc.department_code)) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
+
+    await doc.update({
+      is_deleted: true,
+      updated_by: adminContext.adminId,
+    });
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("DELETE_DOCUMENT_ERROR", err);
+    return res.status(500).json({ error: "Failed to delete document" });
   }
 }

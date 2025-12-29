@@ -1,4 +1,4 @@
-// utils/get-admin-context.js
+// utils/getAdminContext.js
 import { Admin } from '../Models/UserModels/AdminModel.js';
 import { UserDepartment } from '../Models/UserModels/UserDepartment.js';
 import { Department } from '../Models/UserModels/Department.js';

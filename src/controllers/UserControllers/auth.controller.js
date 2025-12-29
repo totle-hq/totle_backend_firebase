@@ -38,6 +38,21 @@ import SessionParticipant from "../../Models/SessionParticipant.js";
 
 dotenv.config();
 
+function getCookieOptions() {
+  const isDevelopment =
+    process.env.NODE_ENV === "development" ||
+    process.env.NODE_ENV_DEV === "development";
+
+  return {
+    httpOnly: true,
+    secure: !isDevelopment,
+    sameSite: isDevelopment ? "lax" : "none",
+    path: "/",
+  };
+}
+
+const ACCESS_COOKIE_MAX_AGE_MS = 15 * 60 * 1000;
+
 // --- CPS helper: ensure baseline IQ CPS profile exists for a new user ---
 async function ensureCpsProfile(userId, transaction) {
   try {
@@ -115,9 +130,13 @@ const googleCallback = (req, res, next) => {
 
 export const logout = async (req, res) => {
   try {
+    const cookieOptions = getCookieOptions();
     const refresh = req.cookies.totle_rt;
-    if (!refresh)
+    if (!refresh) {
+      res.clearCookie("totle_rt", cookieOptions);
+      res.clearCookie("totle_at", cookieOptions);
       return res.status(200).json({ message: "Logged out" });
+    }
 
     const hashed = hashToken(refresh);
 
@@ -126,7 +145,8 @@ export const logout = async (req, res) => {
       { where: { refresh_token_hash: hashed } }
     );
 
-    res.clearCookie("totle_rt");
+    res.clearCookie("totle_rt", cookieOptions);
+    res.clearCookie("totle_at", cookieOptions);
 
     return res.json({ message: "Logout success" });
   } catch (err) {
@@ -423,24 +443,18 @@ export const loginUser = async (req, res) => {
       expires_at: expiresAt
     });
 
-    const isDevlopment = process.env.NODE_ENV_DEV === "development";
+    const cookieOptions = getCookieOptions();
 
     // ---- SEND REFRESH TOKEN AS HTTPONLY COOKIE ----
     res.cookie("totle_rt", refreshToken, {
-      httpOnly: true,
-      secure: isDevlopment,
-      sameSite: isDevlopment ? "lax" : "strict",
+      ...cookieOptions,
       maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
-      path: "/",
     });
 
     res.cookie("totle_at", accessToken, {
-        httpOnly: true,
-        secure: isDevlopment,
-        sameSite: isDevlopment ? "lax" : "strict",
-        maxAge: 60 * 60 * 1000, // 1 hour
-        path: "/"
-      });
+      ...cookieOptions,
+      maxAge: ACCESS_COOKIE_MAX_AGE_MS,
+    });
 
 
     return res.status(200).json({
@@ -1268,12 +1282,12 @@ export const refreshToken = async (req, res) => {
       expires_at: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_DAYS * 86400000)
     });
 
+    const cookieOptions = getCookieOptions();
+
     // send new refresh cookie
     res.cookie("totle_rt", newRefresh, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "strict",
-      maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 86400000
+      ...cookieOptions,
+      maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 86400000,
     });
 
     // new access token
@@ -1283,7 +1297,12 @@ export const refreshToken = async (req, res) => {
       userName: user.firstName
     });
 
-    return res.json({ accessToken: newAccess });
+    res.cookie("totle_at", newAccess, {
+      ...cookieOptions,
+      maxAge: ACCESS_COOKIE_MAX_AGE_MS,
+    });
+
+    return res.json({ success: true, accessToken: newAccess });
   } catch (err) {
     console.error("Refresh Error:", err);
     return res.status(500).json({ error: "Server error" });
