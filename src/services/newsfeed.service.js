@@ -145,9 +145,9 @@ export async function fetchNewsFeed() {
 
 
 
-  dropped.forEach((d) =>
-    console.log(`🪣 Dropped: "${d.title}" → relevance ${d.relevance}, dept ${d.department}`)
-  );
+  // dropped.forEach((d) =>
+  //   console.log(`🪣 Dropped: "${d.title}" → relevance ${d.relevance}, dept ${d.department}`)
+  // );
 
   return kept;
 }

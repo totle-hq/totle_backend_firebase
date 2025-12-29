@@ -1039,6 +1039,8 @@ export const generateTest = async (req, res) => {
     const flatAnswers = [...reusedAnswers, ...freshAnswers].slice(0, BASELINE_QUESTION_COUNT);
     const rubricRows = [...reusedRubrics, ...freshRubrics].slice(0, BASELINE_QUESTION_COUNT);
 
+    console.log("flat answers", flatAnswers)
+
     // ✅ Final Save
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
     const count = (await Test.count()) + 1;
