@@ -1,38 +1,52 @@
 import express from "express";
+import { authenticateAdmin } from "../middlewares/adminMiddleware.js";
+
 import {
-  presignUpload,
-  saveMetadata,
-  listDocs,
+  getDocsTree,
+  createFolder,
+  createDocument,
+  updateDocument,
+  moveDocument,
   deleteDoc,
-  presignDownload,
 } from "../controllers/nucleusDocs.controller.js";
 
 const router = express.Router();
 
 /**
  * ===============================
- * Nucleus Docs Routes (FULL)
+ * Nucleus Documentation Routes
  * ===============================
- * All routes are protected — only Founder & Superadmin
- * should be allowed by middleware before hitting here.
+ * All routes:
+ * - Nucleus-only
+ * - Admin JWT via authenticateAdmin
+ * - Permissions enforced inside controllers
  */
 
-// List all documents (metadata only)
-router.get("/list", listDocs);
+// Fetch full documentation tree for a department
+// GET /nucleus/docs/tree?department=Manhattan
+router.get("/tree", authenticateAdmin, getDocsTree);
 
-// Generate presigned URL for upload (with file size check)
-// Accepts: { fileName, contentType, fileSize, folder? }
-router.post("/presign", presignUpload);
+// Create a new folder
+// POST /nucleus/docs/folder
+// body: { name, department_code, parent_id? }
+router.post("/folder", authenticateAdmin, createFolder);
 
-// Save metadata after successful upload
-// Accepts: { fileName, fileSize, contentType, s3Key, uploadedBy, tags? }
-router.post("/upload", saveMetadata);
+// Create a new document
+// POST /nucleus/docs/document
+// body: { title, content?, folder_id?, department_code }
+router.post("/document", authenticateAdmin, createDocument);
 
-// Generate presigned URL for secure short-lived download
-// NOTE: Path is /presign-download/:id  (NOT /:id/presign-download)
-router.get("/presign-download/:id", presignDownload);
+// Update document content / title
+// PUT /nucleus/docs/document/:id
+router.put("/document/:id", authenticateAdmin, updateDocument);
 
-// Soft delete document by ID
-router.delete("/:id", deleteDoc);
+// Move document between folders
+// POST /nucleus/docs/move
+// body: { document_id, target_folder_id }
+router.post("/move", authenticateAdmin, moveDocument);
+
+// Soft delete document
+// DELETE /nucleus/docs/:id
+router.delete("/:id", authenticateAdmin, deleteDoc);
 
 export default router;

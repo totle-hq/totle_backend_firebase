@@ -6,7 +6,7 @@
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
 import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
-import { Teachertopicstats } from "./TeachertopicstatsModel.js";
+// import { Teachertopicstats } from "./TeachertopicstatsModel.js";
 import { User } from "./UserModels/UserModel.js";
 
 /* -----------------------------------------------------------------------------
@@ -127,11 +127,11 @@ Session.belongsTo(CatalogueNode, {
 
 
 // Session → TeacherTopicStats (for level/tier linkage)
-Session.belongsTo(Teachertopicstats, {
-  foreignKey: "teacher_id", // column on Session
-  targetKey: "teacherId", // attribute on Teachertopicstats
-  as: "teacherTopicStats",
-});
+// Session.belongsTo(Teachertopicstats, {
+//   foreignKey: "teacher_id", // column on Session
+//   targetKey: "teacherId", // attribute on Teachertopicstats
+//   as: "teacherTopicStats",
+// });
 
 // Session → Teacher (User)
 Session.belongsTo(User, {
@@ -172,39 +172,39 @@ CatalogueNode.hasMany(Session, {
  * Auto-fill session_tier & session_level from teacher’s topic stats at creation.
  * This ensures consistency between a teacher’s tier/level and session attributes.
  */
-Session.beforeCreate(async (session) => {
-  try {
-    const teacherStats = await Teachertopicstats.findOne({
-      where: {
-        teacherId: session.teacher_id,
-        node_id: session.topic_id,
-      },
-      attributes: ["tier", "level"],
-      raw: true,
-    });
+// Session.beforeCreate(async (session) => {
+//   try {
+//     const teacherStats = await Teachertopicstats.findOne({
+//       where: {
+//         teacherId: session.teacher_id,
+//         node_id: session.topic_id,
+//       },
+//       attributes: ["tier", "level"],
+//       raw: true,
+//     });
 
-    if (teacherStats) {
-      session.session_tier = teacherStats.tier || "free";
-      session.session_level = teacherStats.level || "Bridger";
-    } else {
-      session.session_tier = "free";
-      session.session_level = "Bridger";
-    }
-  } catch (error) {
-    console.error("❌ Error in Session.beforeCreate hook:", error);
-    if (!session.session_tier) session.session_tier = "free";
-    if (!session.session_level) session.session_level = "Bridger";
-  }
-});
+//     if (teacherStats) {
+//       session.session_tier = teacherStats.tier || "free";
+//       session.session_level = teacherStats.level || "Bridger";
+//     } else {
+//       session.session_tier = "free";
+//       session.session_level = "Bridger";
+//     }
+//   } catch (error) {
+//     console.error("❌ Error in Session.beforeCreate hook:", error);
+//     if (!session.session_tier) session.session_tier = "free";
+//     if (!session.session_level) session.session_level = "Bridger";
+//   }
+// });
 
-Session.prototype.getTopicStats = async function () {
-  return await Teachertopicstats.findOne({
-    where: {
-      teacherId: this.teacher_id,
-      node_id: this.topic_id,
-    },
-  });
-};
+// Session.prototype.getTopicStats = async function () {
+//   return await Teachertopicstats.findOne({
+//     where: {
+//       teacherId: this.teacher_id,
+//       node_id: this.topic_id,
+//     },
+//   });
+// };
 
 
 export default Session;
