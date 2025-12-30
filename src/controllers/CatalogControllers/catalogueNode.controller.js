@@ -262,6 +262,55 @@ export const createNode = async (req, res) => {
   }
 };
 
+// One-time fix to update teacher_score of all existing topic nodes
+export const patchAllTopicTeacherScores = async (_req, res) => {
+  try {
+    const topics = await CatalogueNode.findAll({
+      where: { is_topic: true }
+    });
+
+    const updatedNodes = [];
+    const skippedNodes = [];
+
+    for (const topic of topics) {
+      const weights = topic.computed_cps_weights || {};
+
+      if (weights.teacher_score === undefined || weights.teacher_score === null) {
+        weights.teacher_score = 5;
+
+        await topic.update({ computed_cps_weights: weights });
+
+        updatedNodes.push({
+          id: topic.id,
+          address: topic.address,
+          name: topic.name,
+          updated_teacher_score: 5
+        });
+      } else {
+        skippedNodes.push({
+          id: topic.id,
+          address: topic.address,
+          name: topic.name,
+          existing_teacher_score: weights.teacher_score
+        });
+      }
+    }
+
+    return res.json({
+      message: "🎯 Teacher scores patch operation completed",
+      total_updated: updatedNodes.length,
+      total_skipped: skippedNodes.length,
+      updated_nodes: updatedNodes,
+      skipped_nodes: skippedNodes
+    });
+
+  } catch (err) {
+    console.error("❌ Error patching teacher scores:", err);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+
 /* ---------- Get node by ID (existing) ---------- */
 export const getNodeById = async (req, res) => {
   const key = `catalogue:node:${req.params.id}`;

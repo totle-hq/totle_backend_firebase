@@ -18,6 +18,7 @@ import {
   recomputeDomainTopics,
   insertNodeBetween,
   deleteAndAdjustNode,
+  patchAllTopicTeacherScores,
 } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
@@ -29,6 +30,9 @@ router.get("/nodes", getChildren);          // NOW supports ?is_domain=true or ?
 router.put("/nodes/:id", updateNode);       // still supported for backward compatibility
 router.delete("/nodes/:id", deleteNode);
 router.get("/breadcrumbs/:id", getBreadcrumb);
+
+/*--------- Developement Purpose only --------------*/
+router.get('/patch', patchAllTopicTeacherScores);
 
 /* -------------------- Subtopics (existing) -------------------- */
 router.post("/nodes/:id/subtopics", addSubtopics);
