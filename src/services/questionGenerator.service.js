@@ -120,6 +120,7 @@ export async function generateQuestions({
     const numBatches = Math.ceil(count / batchSize);
 
     const prompts = Array.from({ length: numBatches }, (_, i) => {
+      const idStart = i * batchSize + 1;
       return buildPrompt({
         topicName,
         topicDescription,
@@ -132,6 +133,7 @@ export async function generateQuestions({
         subjectDescription,
         count: batchSize,
         offset: i * batchSize,
+        idStart
       });
     });
 
@@ -218,6 +220,7 @@ function buildPrompt({
   domainDescription = "",
   count = 4,
   offset = 0,
+  idStart = 1
 }) {
   const formatParams = (obj) =>
     Object.entries(obj)
@@ -250,7 +253,7 @@ function buildPrompt({
     ${formatParams(topicParams)}
 
     STRICT QUESTION-WRITING RULES:
-    1. Generate exactly ${count} MCQs, with IDs ${offset + 1}..${offset + count}.
+    1. Generate exactly ${count} MCQs, with IDs ${idStart}..${idStart + count - 1}.
     2. Text-only: no references to images, figures, graphs, charts, tables, maps, plots, or schematics.
     3. Each question must contain a **complete context** within its stem; it must stand alone without external reference.
     4. Provide exactly four options labeled "A", "B", "C", and "D".
@@ -268,7 +271,7 @@ function buildPrompt({
     {
       "questions": [
         {
-          "id": ${offset + 1},
+          "id": (each ID from ${idStart} to ${idStart + count - 1}),
           "text": "Stem here",
           "options": {
             "A": "Option text",
@@ -279,7 +282,7 @@ function buildPrompt({
         }
       ],
       "answers": [
-        { "id": ${offset + 1}, "correct_answer": "A" }
+        { "id": (same ID as the corresponding question), "correct_answer": "One of A, B, C, or D — randomly assigned" }
       ]
     }
 

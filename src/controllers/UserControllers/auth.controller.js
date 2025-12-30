@@ -733,15 +733,7 @@ export const getAllBetaUsers = async (req, res) => {
 
 export const updateUserProfile = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ error: true, message: "Unauthorized: Missing token" });
-    }
-
-    const token = authHeader.split(" ")[1];
+    const token = req.cookies?.totle_at
 
     if (!token || token.split(".").length !== 3) {
       return res
@@ -749,22 +741,14 @@ export const updateUserProfile = async (req, res) => {
         .json({ error: true, message: "Unauthorized: Malformed token" });
     }
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtError) {
-      console.error("❌ JWT Verification Error:", jwtError);
-      return res.status(401).json({
-        error: true,
-        message: "Unauthorized: Invalid or expired token",
-      });
-    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("decoded", decoded.id);
+    const userId = decoded.id;
 
-    const userId = decoded.id || decoded.userId || decoded.uid;
     if (!userId) {
       return res
         .status(401)
-        .json({ error: true, message: "Unauthorized: Invalid token payload" });
+        .json({ error: true, message: "Unauthorized: Invalid token" });
     }
 
     const updateData = {};

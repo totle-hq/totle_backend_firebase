@@ -56,7 +56,7 @@ export const Test = sequelize1.define(
       comment: "Array of topic objects included in this test",
     },
     questions: {
-      type: DataTypes.JSONB,
+      type: DataTypes.JSONB,  
       allowNull: false,
       comment:
         "Generated questions with metadata (ID, text, options, answers, etc.)",

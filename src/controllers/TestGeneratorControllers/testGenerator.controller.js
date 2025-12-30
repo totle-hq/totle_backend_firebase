@@ -594,7 +594,7 @@ export const evaluateTest = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Test evaluated",
-      evaluation: { total_score: totalScore, max_score: maxScore, percentage, gatedPass },
+      evaluation: { total_score: totalScore, max_score: maxScore, percentage, gatedPass, correct_answers: totalScore },
       cooling_period_days: test.cooling_period,
       cooling_period_end,
       eligible_for_bridger: test.eligible_for_bridger,
@@ -930,6 +930,31 @@ export const reportTest = async (req, res) => {
   }
 };
 
+function dedupeById(arr, options = {}) {
+  const {
+    allowUndefined = false,
+    allowNull = false,
+    idKey = "id"
+  } = options;
+
+  const map = new Map();
+
+  for (const item of arr) {
+    const id = item[idKey];
+
+    // Optional filtering: skip if correct_answer is undefined/null
+    if (!allowUndefined && "correct_answer" in item && item.correct_answer === undefined) continue;
+    if (!allowNull && "correct_answer" in item && item.correct_answer === null) continue;
+
+    if (!map.has(id)) {
+      map.set(id, item);
+    } else {
+      console.warn(`⚠️ Duplicate ${idKey} detected: ${id}. Skipping.`);
+    }
+  }
+
+  return Array.from(map.values());
+}
 
 
 export const generateTest = async (req, res) => {
@@ -1035,11 +1060,22 @@ export const generateTest = async (req, res) => {
       }
     }
 
-    const flatQuestions = [...reusedQuestions, ...freshQuestions].slice(0, BASELINE_QUESTION_COUNT);
-    const flatAnswers = [...reusedAnswers, ...freshAnswers].slice(0, BASELINE_QUESTION_COUNT);
-    const rubricRows = [...reusedRubrics, ...freshRubrics].slice(0, BASELINE_QUESTION_COUNT);
+    const flatQuestions = dedupeById(
+      [...reusedQuestions, ...freshQuestions],
+      { idKey: "id" }
+    ).slice(0, BASELINE_QUESTION_COUNT);
 
-    console.log("flat answers", flatAnswers)
+    const flatAnswers = dedupeById(
+      [...reusedAnswers, ...freshAnswers],
+      {
+        idKey: "id",
+        allowUndefined: false,
+        allowNull: false }).slice(0, BASELINE_QUESTION_COUNT);
+
+    const rubricRows = dedupeById([...reusedRubrics, ...freshRubrics], { idKey: "global_qid" }).slice(0, BASELINE_QUESTION_COUNT);
+
+    console.log("flat answers (DEDUPED)", flatAnswers);
+
 
     // ✅ Final Save
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
