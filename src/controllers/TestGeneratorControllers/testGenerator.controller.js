@@ -1072,17 +1072,17 @@ export const generateTest = async (req, res) => {
     });
 
     // ✅ Save Rubrics
-    await TestItemRubric.bulkCreate(
-      rubricRows.map(row => ({
-        test_id: savedTest.test_id,
-        block_key: row.block_key,
-        global_qid: row.global_qid,
-        option_impacts: row.option_impacts,
-        gates: row.gates,
-        item_weight: row.item_weight ?? 1,
-      })),
-      { validate: true }
-    );
+    // await TestItemRubric.bulkCreate(
+    //   rubricRows.map(row => ({
+    //     test_id: savedTest.test_id,
+    //     block_key: row.block_key,
+    //     global_qid: row.global_qid,
+    //     option_impacts: row.option_impacts,
+    //     gates: row.gates,
+    //     item_weight: row.item_weight ?? 1,
+    //   })),
+    //   { validate: true }
+    // );
 
     return res.status(200).json({
       success: true,
