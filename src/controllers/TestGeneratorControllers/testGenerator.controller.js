@@ -1071,6 +1071,20 @@ export const generateTest = async (req, res) => {
       payment_id: payment.payment_id,
     });
 
+    // Deduplicate rubric rows by global_qid
+    const uniqueRubrics = [];
+    const seenQids = new Set();
+
+    for (const row of rubricRows) {
+      if (!seenQids.has(row.global_qid)) {
+        seenQids.add(row.global_qid);
+        uniqueRubrics.push(row);
+      } else {
+        console.warn(`⚠️ Duplicate global_qid detected: ${row.global_qid}. Skipping.`);
+      }
+    }
+
+
     // ✅ Save Rubrics
     // await TestItemRubric.bulkCreate(
     //   rubricRows.map(row => ({
