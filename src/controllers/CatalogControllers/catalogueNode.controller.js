@@ -273,31 +273,38 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
     const skippedNodes = [];
 
     for (const topic of topics) {
-      const weights = topic.computed_cps_weights || {};
+      const domain = await findDomainAncestor(topic);
+      const D = domain?.domain_cognitive_profile || ZERO7;
+      const H = H_fromTopic(topic);
+      const A = getArchetypePreset(topic.archetype);
+      const final = blendVectors({ D, H, A });
 
-      if (weights.teacher_score === undefined || weights.teacher_score === null) {
-        weights.teacher_score = 5;
+      const existing = topic.computed_cps_weights || {};
+      const needsUpdate =
+        !existing || existing.teacher_score === undefined || existing.teacher_score === null || existing.teacher_score === 5;
 
-        await topic.update({ computed_cps_weights: weights });
+      if (needsUpdate) {
+        await topic.update({ computed_cps_weights: final });
 
         updatedNodes.push({
-          id: topic.id,
-          address: topic.address,
+          id: topic.node_id,
+          address: topic.address_of_node,
           name: topic.name,
-          updated_teacher_score: 5
+          updated_teacher_score: final.teacher_score,
+          full_weights: final,
         });
       } else {
         skippedNodes.push({
-          id: topic.id,
-          address: topic.address,
+          id: topic.node_id,
+          address: topic.address_of_node,
           name: topic.name,
-          existing_teacher_score: weights.teacher_score
+          existing_teacher_score: existing.teacher_score
         });
       }
     }
 
     return res.json({
-      message: "🎯 Teacher scores patch operation completed",
+      message: "🎯 Full CPS weights patched (including teacher_score)",
       total_updated: updatedNodes.length,
       total_skipped: skippedNodes.length,
       updated_nodes: updatedNodes,
@@ -305,7 +312,7 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Error patching teacher scores:", err);
+    console.error("❌ Error patching CPS weights:", err);
     return res.status(500).json({ error: err.message });
   }
 };
