@@ -19,6 +19,7 @@ import {
   insertNodeBetween,
   deleteAndAdjustNode,
   patchAllTopicTeacherScores,
+  getAllTopicWeights,
 } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
@@ -33,6 +34,9 @@ router.get("/breadcrumbs/:id", getBreadcrumb);
 
 /*--------- Developement Purpose only --------------*/
 router.get('/patch', patchAllTopicTeacherScores);
+
+// topic weights
+router.get('/tw', getAllTopicWeights);
 
 /* -------------------- Subtopics (existing) -------------------- */
 router.post("/nodes/:id/subtopics", addSubtopics);

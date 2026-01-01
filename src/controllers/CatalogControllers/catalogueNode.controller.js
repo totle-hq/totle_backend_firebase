@@ -317,6 +317,28 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
   }
 };
 
+export const getAllTopicWeights = async (_req, res) => {
+  try {
+    const topics = await CatalogueNode.findAll({
+      where: { is_topic: true },
+      attributes: ["node_id", "name", "address_of_node", "computed_cps_weights"],
+      order: [["created_at", "ASC"]],
+    });
+
+    const formatted = topics.map(t => ({
+      id: t.node_id,
+      name: t.name,
+      address: t.address_of_node,
+      weights: t.computed_cps_weights || {},
+    }));
+
+    return res.json(formatted);
+  } catch (err) {
+    console.error("❌ Error in GET /topicweights:", err);
+    return res.status(500).json({ error: "Failed to fetch topic weights" });
+  }
+};
+
 
 /* ---------- Get node by ID (existing) ---------- */
 export const getNodeById = async (req, res) => {
