@@ -321,7 +321,14 @@ export const getAllTopicWeights = async (_req, res) => {
   try {
     const topics = await CatalogueNode.findAll({
       where: { is_topic: true },
-      attributes: ["node_id", "name", "address_of_node", "computed_cps_weights"],
+      attributes: [
+        "node_id",
+        "name",
+        "address_of_node",
+        "computed_cps_weights",
+        "recommended_item_mix",
+        "recommended_time_pressure", // optional, can include it now
+      ],
       order: [["created_at", "ASC"]],
     });
 
@@ -329,7 +336,9 @@ export const getAllTopicWeights = async (_req, res) => {
       id: t.node_id,
       name: t.name,
       address: t.address_of_node,
-      weights: t.computed_cps_weights || {},
+      computed_cps_weights: t.computed_cps_weights || {},
+      item_mix: t.recommended_item_mix || {},
+      time_pressure: t.recommended_time_pressure || null, // optional
     }));
 
     return res.json(formatted);
