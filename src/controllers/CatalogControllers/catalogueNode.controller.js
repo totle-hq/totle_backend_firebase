@@ -281,30 +281,40 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
 
       const existing = topic.computed_cps_weights || {};
       const needsUpdate =
-        !existing || existing.teacher_score === undefined || existing.teacher_score === null || existing.teacher_score === 5;
+        !existing ||
+        existing.teacher_score === undefined ||
+        existing.teacher_score === null ||
+        existing.teacher_score === 5;
 
       if (needsUpdate) {
-        await topic.update({ computed_cps_weights: final });
+        const itemMix = recommendItemMix(final);
+        const timePressure = recommendTimePressure(final, topic); // optional but keeps system in sync
+
+        await topic.update({
+          computed_cps_weights: final,
+          recommended_item_mix: itemMix,
+          recommended_time_pressure: timePressure
+        });
 
         updatedNodes.push({
           id: topic.node_id,
-          address: topic.address_of_node,
           name: topic.name,
+          address: topic.address_of_node,
           updated_teacher_score: final.teacher_score,
-          full_weights: final,
+          new_item_mix: itemMix,
         });
       } else {
         skippedNodes.push({
           id: topic.node_id,
-          address: topic.address_of_node,
           name: topic.name,
+          address: topic.address_of_node,
           existing_teacher_score: existing.teacher_score
         });
       }
     }
 
     return res.json({
-      message: "🎯 Full CPS weights patched (including teacher_score)",
+      message: "🎯 CPS weights, item mix, and time pressure patched",
       total_updated: updatedNodes.length,
       total_skipped: skippedNodes.length,
       updated_nodes: updatedNodes,
@@ -312,7 +322,7 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Error patching CPS weights:", err);
+    console.error("❌ Error patching CPS weights and mix:", err);
     return res.status(500).json({ error: err.message });
   }
 };
