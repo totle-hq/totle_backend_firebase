@@ -279,17 +279,18 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
       const A = getArchetypePreset(topic.archetype);
       const final = blendVectors({ D, H, A });
 
-      const existing = topic.computed_cps_weights || {};
-      const needsUpdate =
-        !existing ||
-        existing.teacher_score === undefined ||
-        existing.teacher_score === null ||
-        existing.teacher_score === 5;
+      const itemMix = recommendItemMix(final);
+      const timePressure = recommendTimePressure(final, topic);
 
-      if (needsUpdate) {
-        const itemMix = recommendItemMix(final);
-        const timePressure = recommendTimePressure(final, topic); // optional but keeps system in sync
+      const existingWeights = topic.computed_cps_weights || {};
+      const existingMix = topic.recommended_item_mix || {};
+      const existingPressure = topic.recommended_time_pressure || null;
 
+      const weightsChanged = JSON.stringify(existingWeights) !== JSON.stringify(final);
+      const mixChanged = JSON.stringify(existingMix) !== JSON.stringify(itemMix);
+      const pressureChanged = existingPressure !== timePressure;
+
+      if (weightsChanged || mixChanged || pressureChanged) {
         await topic.update({
           computed_cps_weights: final,
           recommended_item_mix: itemMix,
@@ -300,21 +301,26 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
           id: topic.node_id,
           name: topic.name,
           address: topic.address_of_node,
-          updated_teacher_score: final.teacher_score,
+          previous_weights: existingWeights,
+          new_weights: final,
           new_item_mix: itemMix,
+          new_time_pressure: timePressure,
+          weightsChanged,
+          mixChanged,
+          pressureChanged,
         });
       } else {
         skippedNodes.push({
           id: topic.node_id,
           name: topic.name,
           address: topic.address_of_node,
-          existing_teacher_score: existing.teacher_score
+          existing_teacher_score: existingWeights.teacher_score
         });
       }
     }
 
     return res.json({
-      message: "🎯 CPS weights, item mix, and time pressure patched",
+      message: "🎯 CPS weights, item mix, and time pressure recomputed and patched if needed",
       total_updated: updatedNodes.length,
       total_skipped: skippedNodes.length,
       updated_nodes: updatedNodes,
@@ -322,7 +328,7 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ Error patching CPS weights and mix:", err);
+    console.error("❌ Error patching CPS fields:", err);
     return res.status(500).json({ error: err.message });
   }
 };
