@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 
-export const ACCESS_TOKEN_EXPIRES = "15m";
+export const ACCESS_TOKEN_EXPIRES = "1d";
 export const REFRESH_TOKEN_EXPIRES_DAYS = 30;
 
 export function generateAccessToken(payload) {
