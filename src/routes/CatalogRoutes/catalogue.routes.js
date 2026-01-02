@@ -63,7 +63,7 @@ router.post("/domains/:id/recompute", recomputeDomainTopics); // recompute all t
 /* -------------------- CPS-aware: topics -------------------- */
 router.get("/topic/:id", getTopicById);             // rich topic read
 router.post("/topics", createTopic);                 // create with typed fields + archetype
-router.patch("/topics/:id", updateTopic);            // update typed fields; recompute
+router.patch("/nucleus/topics/:id", updateTopic);            // update typed fields; recompute
 router.post("/topics/:id/recompute", recomputeTopic);
 
 /* -------------------- Generator + Telemetry -------------------- */
