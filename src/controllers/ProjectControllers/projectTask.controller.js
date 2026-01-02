@@ -155,8 +155,9 @@ export const updateTask = async (req, res) => {
 
 // 🧩 Helper function: extract Cloudinary public_id from image URL
 const extractPublicId = (url) => {
+  if (typeof url !== 'string') return null;
   const parts = url.split('/');
-  const file = parts.pop()?.split('.')[0]; // remove extension
+  const file = parts.pop()?.split('.')[0];
   const folder = parts.slice(parts.indexOf('upload') + 1).join('/');
   return folder ? `${folder}/${file}` : file;
 };
