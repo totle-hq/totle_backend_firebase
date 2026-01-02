@@ -380,6 +380,27 @@ export const getNodeById = async (req, res) => {
   }
 };
 
+// Get node by Id for user
+export const getNodeByIdForUser = async (req, res) => {
+  const key = `catalogue:node:${req.params.id}`;
+  const cached = await cacheGet(key);
+  if (cached) return res.json(cached);
+  
+  try {
+    const node = await CatalogueNode.findOne({
+      where: { node_id: req.params.id, status: "active" }, // ✅ status filter added
+    });
+
+    if (!node) return res.status(404).json({ error: "Node not found" });
+
+    await cacheSet(key, node);
+    return res.json(node);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+
 /* ---------- Children OR domains list ---------- */
 export const getChildren = async (req, res) => {
   const { parent_id: parentIdRaw, is_domain, type } = req.query;
@@ -418,6 +439,44 @@ export const getChildren = async (req, res) => {
   }
 };
 
+/* ---------- Children OR domains list For User ---------- */
+export const getChildrenForUser = async (req, res) => {
+  const { parent_id: parentIdRaw, is_domain, type } = req.query;
+
+  // explicit domains list:
+  if (String(is_domain).toLowerCase() === "true" || String(type).toLowerCase() === "domain") {
+    const key = `catalogue:domains`;
+    const cached = await cacheGet(key);
+    if (cached) return res.json(cached);
+    try {
+      const rows = await CatalogueNode.findAll({
+        where: { is_domain: true, status: "active" },
+        order: [["created_at", "ASC"]],
+      });
+      await cacheSet(key, rows);
+      return res.json(rows);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  const parentId = parentIdRaw || null;
+  const key = `catalogue:children:${parentId}`;
+  const cached = await cacheGet(key);
+  if (cached) return res.json(cached);
+
+  try {
+    const children = await CatalogueNode.findAll({
+      where: { parent_id: parentId, status: "active" },
+      order: [["created_at", "ASC"]],
+    });
+    await cacheSet(key, children);
+    return res.json(children);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
 /* ---------- NEW: explicit domains ---------- */
 export const getDomains = async (_req, res) => {
   const key = `catalogue:domains`;
@@ -426,6 +485,23 @@ export const getDomains = async (_req, res) => {
   try {
     const rows = await CatalogueNode.findAll({
       where: { is_domain: true },
+      order: [["created_at", "ASC"]],
+    });
+    await cacheSet(key, rows);
+    return res.json(rows);
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+/* ---------- NEW: explicit domains ---------- */
+export const getDomainsForUser = async (_req, res) => {
+  const key = `catalogue:domains`;
+  const cached = await cacheGet(key);
+  if (cached) return res.json(cached);
+  try {
+    const rows = await CatalogueNode.findAll({
+      where: { is_domain: true, status: "active" },
       order: [["created_at", "ASC"]],
     });
     await cacheSet(key, rows);
@@ -498,7 +574,7 @@ export const deleteNode = async (req, res) => {
 /* ---------- Counts (existing) ---------- */
 export const getDomainCount = async (_req, res) => {
   try {
-    const domainCount = await CatalogueNode.count({ where: { is_domain: true } });
+    const domainCount = await CatalogueNode.count({ where: { is_domain: true, status: "active" } });
     return res.json({ count: domainCount });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -506,7 +582,7 @@ export const getDomainCount = async (_req, res) => {
 };
 export const getTopicCount = async (_req, res) => {
   try {
-    const topicCount = await CatalogueNode.count({ where: { is_topic: true } });
+    const topicCount = await CatalogueNode.count({ where: { is_topic: true, status: "active" } });
     return res.json({ count: topicCount });
   } catch (err) {
     return res.status(500).json({ error: err.message });

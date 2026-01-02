@@ -688,7 +688,7 @@ export const testLogsOfUsers = async (req, res) => {
         id: log.test_id,
         nodeId: log.topic_uuid,
         user: `${log.user.firstName} ${log.user.lastName ?? ""}`.trim(),
-        topic: log.topicNode.name,
+        topic: log.topic_name,
         score: log.score ?? 0,
         maxScore: log.performance_metrics?.evaluation_details?.reduce(
           (acc, q) => acc + (Number.isFinite(q.score) ? q.score : 1),

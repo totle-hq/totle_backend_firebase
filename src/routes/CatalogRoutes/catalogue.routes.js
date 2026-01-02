@@ -20,18 +20,24 @@ import {
   deleteAndAdjustNode,
   patchAllTopicTeacherScores,
   getAllTopicWeights,
+  getNodeByIdForUser,
+  getChildrenForUser,
+  getDomainsForUser,
 } from "../../controllers/CatalogControllers/catalogueNode.controller.js";
 
 const router = express.Router();
 
 /* -------------------- Existing nodes endpoints -------------------- */
-router.post("/nodes", createNode);
-router.get("/nodes/:id", getNodeById);
-router.get("/nodes", getChildren);          // NOW supports ?is_domain=true or ?type=domain
-router.put("/nodes/:id", updateNode);       // still supported for backward compatibility
-router.delete("/nodes/:id", deleteNode);
-router.get("/breadcrumbs/:id", getBreadcrumb);
+router.post("/nucleus/nodes", createNode);
+router.get("/nucleus/nodes/:id", getNodeById);
+router.get("/nucleus/nodes", getChildren);          // NOW supports ?is_domain=true or ?type=domain
+router.put("/nucleus/nodes/:id", updateNode);       // still supported for backward compatibility
+router.delete("/nucleus/nodes/:id", deleteNode);
+router.get("/nucleus/breadcrumbs/:id", getBreadcrumb);
 
+
+router.get("/user/nodes/:id", getNodeByIdForUser);
+router.get("/user/nodes", getChildrenForUser); 
 /*--------- Developement Purpose only --------------*/
 router.get('/patch', patchAllTopicTeacherScores);
 
@@ -49,7 +55,8 @@ router.get("/domain-count", getDomainCount);
 router.get("/topic-count", getTopicCount);
 
 /* -------------------- CPS-aware: domains -------------------- */
-router.get("/domains", getDomains);                  // list ALL domains
+router.get("/user/domains", getDomainsForUser);                  // list ALL domains
+router.get("/nucleus/domains", getDomains);                  // list ALL domains
 router.patch("/domains/:id", updateDomain);          // edit CPS domain priors/mixes/meta
 router.post("/domains/:id/recompute", recomputeDomainTopics); // recompute all topics in domain
 
