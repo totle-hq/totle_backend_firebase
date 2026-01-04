@@ -4,6 +4,7 @@ export default function authMiddleware(req, res, next) {
   const token = req.cookies?.totle_at;
 
   if (!token) {
+    console.log("No token found");
     return res.status(401).json({
       message: "No access token cookie",
       error: "ACCESS_TOKEN_MISSING",
@@ -12,7 +13,7 @@ export default function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
+    console.log("Invalid")
     if (!decoded?.id) {
       return res.status(401).json({
         message: "Invalid token payload",

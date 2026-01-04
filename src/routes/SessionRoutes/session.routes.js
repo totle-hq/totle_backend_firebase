@@ -20,6 +20,7 @@ import { reassignTeacher } from "../../controllers/SessionStreamControllers/reas
 import { sequelize1 } from "../../config/sequelize.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { QueryTypes } from "sequelize";
+import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 
 const router = express.Router();
 
@@ -144,6 +145,7 @@ router.get("/teacher/upcoming-sessions", authMiddleware, getAllUpcomingTeacherSe
  *    Used in Nucleus → Helix → SessionControlCenter.
  */
 router.get("/all", authMiddleware, getAllSessions);
+router.get("/nucleus/all", getAllSessions);
 
 /**
  * POST /api/session/update-timing
