@@ -752,6 +752,7 @@ export const joinSession = async (req, res) => {
   const userId = req.user?.id;
 
   if (!sessionId || !role || !userId) {
+    console.log("missing: ", sessionId, role, userId)
     return res.status(400).json({ success: false, message: "Missing fields" });
   }
 
