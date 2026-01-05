@@ -28,6 +28,7 @@ import { Test } from "../../Models/test.model.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { sequelize1 } from "../../config/sequelize.js"; // ✅ for raw SQL insert into cps_profiles
 import {
+  ACCESS_TOKEN_EXPIRES_MS,
   generateAccessToken,
   generateRefreshToken,
   hashToken,
@@ -51,7 +52,6 @@ function getCookieOptions() {
   };
 }
 
-const ACCESS_COOKIE_MAX_AGE_MS = 15 * 60 * 1000;
 
 // --- CPS helper: ensure baseline IQ CPS profile exists for a new user ---
 async function ensureCpsProfile(userId, transaction) {
@@ -453,7 +453,7 @@ export const loginUser = async (req, res) => {
 
     res.cookie("totle_at", accessToken, {
       ...cookieOptions,
-      maxAge: ACCESS_COOKIE_MAX_AGE_MS,
+      maxAge: ACCESS_TOKEN_EXPIRES_MS,
     });
 
 
