@@ -16,6 +16,7 @@ import {
   utcToZoned,
 } from "../../utils/time.js"; 
 import SessionParticipant from "../../Models/SessionParticipant.js";
+import { sendSessionBookedEmail } from "../../utils/otpService.js";
 /* ============================================================================
    Utilities
    ============================================================================ */
@@ -333,12 +334,49 @@ export const bookFreeSession = async (req, res) => {
       status: "upcoming",
     });
 
-    await updateAvailabilityAfterBooking(session);
-
     const topic = await CatalogueNode.findByPk(topic_id, {
       attributes: ["name"],
       raw: true,
     });
+
+    const learnerUser = await User.findByPk(learner_id, {
+      attributes: ["email", "firstName"],
+    });
+
+    const teacherUser = await User.findByPk(selected.teacher_id, {
+      attributes: ["email", "firstName"],
+    });
+
+    // 🔔 Fire and forget (do NOT await both)
+    // 🔔 Fire-and-forget but SAFE
+    Promise.allSettled([
+      sendSessionBookedEmail({
+        to: learnerUser.email,
+        role: "learner",
+        otherUserName: teacherUser.firstName,
+        topicName: topic?.name || "Unknown Topic",
+        scheduledAt: formatInTz(
+          selected.scheduled_at,
+          req.userTz || "UTC",
+          "dd MMM yyyy, HH:mm"
+        ),
+      }),
+      sendSessionBookedEmail({
+        to: teacherUser.email,
+        role: "teacher",
+        otherUserName: learnerUser.firstName,
+        topicName: topic?.name || "Unknown Topic",
+        scheduledAt: formatInTz(
+          selected.scheduled_at,
+          req.userTz || "UTC",
+          "dd MMM yyyy, HH:mm"
+        ),
+      }),
+    ]).catch(err => {
+      console.error("📧 Session email failed:", err);
+    });
+
+    await updateAvailabilityAfterBooking(session);
 
     const teacher = await User.findByPk(selected.teacher_id, {
       attributes: ["firstName", "lastName"],

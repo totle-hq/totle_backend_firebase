@@ -228,3 +228,34 @@ export const sendWelcomeEmail = async (email, firstName) => {
     console.error("❌ Error sending Welcome Email:", error);
   }
 };
+
+
+export const sendSessionBookedEmail = async ({
+  to,
+  role,
+  otherUserName,
+  topicName,
+  scheduledAt,
+}) => {
+  const subject =
+    role === "learner"
+      ? "✅ Your session is booked on TOTLE"
+      : "📘 New learner booked a session";
+
+  const html = `
+    <p>Hi,</p>
+    <p>Your session has been successfully booked.</p>
+    <p><b>Topic:</b> ${topicName}</p>
+    <p><b>With:</b> ${otherUserName}</p>
+    <p><b>Scheduled at:</b> ${scheduledAt}</p>
+    <br/>
+    <p>— Team TOTLE</p>
+  `;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to,
+    subject,
+    html,
+  });
+};
