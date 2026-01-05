@@ -162,7 +162,7 @@ router.post("/update-timing", authMiddleware, updateSessionTiming);
 router.post("/reassign-teacher", authMiddleware, reassignTeacher);
 
 router.post("/end", endSession);
-router.post("/join", joinSession);
+router.post("/join",authMiddleware, joinSession);
 
 /* ------------------------------------------------------------------ */
 export default router;
