@@ -13,8 +13,9 @@ export default function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("Invalid")
+    console.log("decoded Invalid")
     if (!decoded?.id) {
+      console.log("Invalid token payload");
       return res.status(401).json({
         message: "Invalid token payload",
         error: "ACCESS_TOKEN_INVALID",
