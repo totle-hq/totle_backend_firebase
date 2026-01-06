@@ -12,6 +12,7 @@ export const SupportQueryForUser = async (req, res) => {
       description,
     } = req.body;
 
+    // updated with http only cookie
     const token = req.cookies?.totle_at
     
     if (!token || token.split(".").length !== 3) {
