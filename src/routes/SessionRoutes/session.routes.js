@@ -152,7 +152,7 @@ router.get("/nucleus/all", getAllSessions);
  * Body: { sessionId, newTime }
  * → Allows Helix admins to postpone or prepone a session.
  */
-router.post("/update-timing", authMiddleware, updateSessionTiming);
+router.post("/update-timing", authenticateAdmin, updateSessionTiming);
 
 /**
  * POST /api/session/reassign-teacher
