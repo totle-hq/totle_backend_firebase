@@ -12,14 +12,14 @@ export const SupportQueryForUser = async (req, res) => {
       description,
     } = req.body;
 
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const token = req.cookies?.totle_at
+    
+    if (!token || token.split(".").length !== 3) {
       return res
         .status(401)
-        .json({ error: true, message: "Unauthorized: Missing token" });
+        .json({ error: true, message: "Unauthorized: Malformed token" });
     }
-
-    const token = authHeader.split(" ")[1];
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     // console.log("Decoded user ID:", decoded.id);
     const query = await SupportQueryMaster.findOne({ where: { id: query_id } });

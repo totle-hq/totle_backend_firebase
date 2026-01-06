@@ -47,7 +47,7 @@ router.get("/allBetaUsers",getAllBetaUsers);
 router.put("/user/updateUser", upload.single("dp"), updateUserProfile)
 // router.get("/:userId", getUserById);
 // router.put("/:userId", updateUser);
-router.post("/queries",SupportQueryForUser);
+router.post("/queries", authMiddleware, SupportQueryForUser);
 router.get("/queryList", getQueriesList);
 router.get("/queryStats",getSupportQueries);
 router.patch("/queries/:id",updateQueryStatus);
