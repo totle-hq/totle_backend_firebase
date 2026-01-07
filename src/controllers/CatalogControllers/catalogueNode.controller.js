@@ -75,7 +75,19 @@ async function distributePricesRecursively(parentId, prices) {
   }
   const fresh = await CatalogueNode.findAll({ where: { parent_id: parentId } });
   await cacheSet(`catalogue:children:${parentId}`, fresh);
+  await cacheDel(`catalogue:children:user:${parentId}*`)
 }
+
+async function isActiveThroughTree(node) {
+  let cur = node;
+  while (cur) {
+    if (cur.status !== "active") return false;
+    if (!cur.parent_id) break;
+    cur = await CatalogueNode.findByPk(cur.parent_id);
+  }
+  return true;
+}
+
 
 /* ------------------------------------------------------------------
    CPS presets & math
@@ -225,6 +237,7 @@ async function recomputeTopicComputedFields(topic) {
     recommended_time_pressure: tp,
   });
   await cacheDel(`catalogue:node:${topic.node_id}`);
+  await cacheDel(`catalogue:node:user:${topic.node_id}`);
   return topic;
 }
 
@@ -241,6 +254,9 @@ export const createNode = async (req, res) => {
 
     await cacheDel(`catalogue:children:${node.parent_id}*`);
     await cacheDel(`catalogue:domains*`);
+
+    await cacheDel(`catalogue:children:user:${node.parent_id}*`);
+    await cacheDel(`catalogue:domains:user*`);
 
     const domainNode = await findUniformDomainParent(node);
     console.log("domain node", domainNode)
@@ -382,7 +398,7 @@ export const getNodeById = async (req, res) => {
 
 // Get node by Id for user
 export const getNodeByIdForUser = async (req, res) => {
-  const key = `catalogue:node:${req.params.id}`;
+  const key = `catalogue:node:user:${req.params.id}`;
   const cached = await cacheGet(key);
   if (cached) return res.json(cached);
   
@@ -391,7 +407,7 @@ export const getNodeByIdForUser = async (req, res) => {
       where: { node_id: req.params.id, status: "active" }, // ✅ status filter added
     });
 
-    if (!node) return res.status(404).json({ error: "Node not found" });
+    if (!node || !(await isActiveThroughTree(node))) return res.status(404).json({ error: "Node not found" });
 
     await cacheSet(key, node);
     return res.json(node);
@@ -445,7 +461,7 @@ export const getChildrenForUser = async (req, res) => {
 
   // explicit domains list:
   if (String(is_domain).toLowerCase() === "true" || String(type).toLowerCase() === "domain") {
-    const key = `catalogue:domains`;
+    const key = `catalogue:domains:user`;
     const cached = await cacheGet(key);
     if (cached) return res.json(cached);
     try {
@@ -453,15 +469,23 @@ export const getChildrenForUser = async (req, res) => {
         where: { is_domain: true, status: "active" },
         order: [["created_at", "ASC"]],
       });
-      await cacheSet(key, rows);
-      return res.json(rows);
+      
+      const filtered = [];
+      for (const node of rows) {
+        if (await isActiveThroughTree(node)) {
+          filtered.push(node);
+        }
+      }
+
+      await cacheSet(key, filtered);
+      return res.json(filtered);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   }
 
   const parentId = parentIdRaw || null;
-  const key = `catalogue:children:${parentId}`;
+  const key = `catalogue:children:user:${parentId}`;
   const cached = await cacheGet(key);
   if (cached) return res.json(cached);
 
@@ -470,8 +494,15 @@ export const getChildrenForUser = async (req, res) => {
       where: { parent_id: parentId, status: "active" },
       order: [["created_at", "ASC"]],
     });
-    await cacheSet(key, children);
-    return res.json(children);
+    const filtered = [];
+    for (const node of children) {
+      if (await isActiveThroughTree(node)) {
+        filtered.push(node);
+      }
+    }
+
+    await cacheSet(key, filtered);
+    return res.json(filtered);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -496,7 +527,7 @@ export const getDomains = async (_req, res) => {
 
 /* ---------- NEW: explicit domains ---------- */
 export const getDomainsForUser = async (_req, res) => {
-  const key = `catalogue:domains`;
+  const key = `catalogue:domains:user`;
   const cached = await cacheGet(key);
   if (cached) return res.json(cached);
   try {
@@ -504,8 +535,12 @@ export const getDomainsForUser = async (_req, res) => {
       where: { is_domain: true, status: "active" },
       order: [["created_at", "ASC"]],
     });
-    await cacheSet(key, rows);
-    return res.json(rows);
+    const filtered = [];
+    for (const d of rows) {
+      if (await isActiveThroughTree(d)) filtered.push(d);
+    }
+    await cacheSet(key, filtered);
+    return res.json(filtered);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -525,6 +560,10 @@ export const updateNode = async (req, res) => {
     await cacheDel(`catalogue:node:${req.params.id}`);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
     await cacheDel(`catalogue:domains*`);
+
+    await cacheDel(`catalogue:node:user:${req.params.id}`);
+    await cacheDel(`catalogue:children:user:${node.parent_id}*`);
+    await cacheDel(`catalogue:domains:user*`);
 
     const domainNode = await findUniformDomainParent(updated);
     if (domainNode?.prices) {
@@ -558,6 +597,10 @@ export const deleteNode = async (req, res) => {
     await cacheDel(`catalogue:node:${req.params.id}`);
     await cacheDel(`catalogue:children:${node.parent_id}*`);
     await cacheDel(`catalogue:domains*`);
+
+    await cacheDel(`catalogue:node:user:${req.params.id}`);
+    await cacheDel(`catalogue:children:user:${node.parent_id}*`);
+    await cacheDel(`catalogue:domains:user*`);
 
     const domainNode = await findUniformDomainParent(parent);
     if (domainNode?.prices) {
@@ -616,6 +659,9 @@ if (dom.metadata?.uniform && dom.prices) {
     await cacheDel(`catalogue:node:${dom.node_id}`);
     await cacheDel(`catalogue:domains*`);
 
+    await cacheDel(`catalogue:node:user:${dom.node_id}`);
+    await cacheDel(`catalogue:domains:user*`);
+
     return res.json(dom);
   } catch (err) {
     return res.status(400).json({ error: err.message });
@@ -668,6 +714,7 @@ export const createTopic = async (req, res) => {
       await distributePricesRecursively(domainNode.node_id, domainNode.prices);
     }
     await cacheDel(`catalogue:children:${full.parent_id}*`);
+    await cacheDel(`catalogue:children:user:${full.parent_id}*`);
     return res.status(201).json(full);
   } catch (err) {
     return res.status(400).json({ error: err.message });
@@ -685,6 +732,9 @@ export const updateTopic = async (req, res) => {
 
     await cacheDel(`catalogue:node:${t.node_id}`);
     await cacheDel(`catalogue:children:${t.parent_id}*`);
+
+    await cacheDel(`catalogue:node:user:${t.node_id}`);
+    await cacheDel(`catalogue:children:user:${t.parent_id}*`);
 
     return res.json(full);
   } catch (err) {
@@ -889,6 +939,9 @@ export const insertNodeBetween = async (req, res) => {
     await cacheDel(`catalogue:children:${parentId}*`);
     await cacheDel(`catalogue:children:${insertedNode.node_id}*`);
     await cacheDel(`catalogue:domains*`);
+    await cacheDel(`catalogue:children:user:${parentId}*`);
+    await cacheDel(`catalogue:children:user:${insertedNode.node_id}*`);
+    await cacheDel(`catalogue:domains:user*`);
 
     // Step 5: Domain propagation if needed
     const domainNode = await findUniformDomainParent(fullInsertedNode);
@@ -945,8 +998,10 @@ export const deleteAndAdjustNode = async (req, res) => {
 
     // Step 3: Clear caches
     await cacheDel(`catalogue:children:${nodeId}*`);
+    await cacheDel(`catalogue:children:user:${nodeId}*`);
     if (parentId) {
       await cacheDel(`catalogue:children:${parentId}*`);
+      await cacheDel(`catalogue:children:user:${parentId}*`);
     }
 
     return res.json({
