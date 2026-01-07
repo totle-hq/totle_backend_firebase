@@ -74,7 +74,7 @@ export async function updateCpsProfileFromTest({
     if (!uid) throw new Error("Cannot resolve user_id for CPS update");
 
     const incoming = pickCpsDeltas({ deltas, test });
-    console.log("🔍 [CPS-EMA] Incoming deltas for user", uid, "→", incoming);
+    // console.log("🔍 [CPS-EMA] Incoming deltas for user", uid, "→", incoming);
 
     /* ----------------------------- Determine context ---------------------------- */
     let context_type = "IQ";
@@ -90,9 +90,9 @@ export async function updateCpsProfileFromTest({
       }
     }
 
-    console.log(
-      `🧩 [CPS-EMA] Context resolved → type=${context_type}, ref=${context_ref_id || "NULL"}`
-    );
+    // console.log(
+    //   `🧩 [CPS-EMA] Context resolved → type=${context_type}, ref=${context_ref_id || "NULL"}`
+    // );
 
     /* ------------------------- Ensure profile row exists ------------------------ */
     const [profile] = await CpsProfile.findOrCreate({
@@ -130,9 +130,9 @@ export async function updateCpsProfileFromTest({
 
     const nextSeen = testsSeen + 1;
 
-    console.log(
-      `✅ [CPS-EMA] Updating profile for user=${uid} (${context_type}) → ${updatedCount} keys`
-    );
+    // console.log(
+    //   `✅ [CPS-EMA] Updating profile for user=${uid} (${context_type}) → ${updatedCount} keys`
+    // );
 
     await profile.update(
       { ...updated, tests_seen: nextSeen, last_test_id: test.test_id },

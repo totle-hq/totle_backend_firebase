@@ -56,7 +56,7 @@ export async function applyRubricsToTest(testId, { transaction } = {}) {
   });
 
   // 🔍 DEBUG
-  console.log("🟢 Loaded rubrics count:", rubrics.length);
+  // console.log("🟢 Loaded rubrics count:", rubrics.length);
 
   // 3) Aggregate param deltas
   const totals = {}; // { param: { sum, count } }
@@ -123,11 +123,11 @@ export async function applyRubricsToTest(testId, { transaction } = {}) {
 
 
   // 🔍 DEBUG
-  console.log("✅ Final deltas for test", testId, deltas);
-  console.log("✅ Gates summary:", {
-    teachingGateFail,
-    resilienceReboundOK,
-  });
+  // console.log("✅ Final deltas for test", testId, deltas);
+  // console.log("✅ Gates summary:", {
+  //   teachingGateFail,
+  //   resilienceReboundOK,
+  // });
 
   // 5) Persist into performance_metrics
   const perf = { ...(test.performance_metrics || {}) };
