@@ -471,7 +471,7 @@ export const submitTest = async (req, res) => {
     }
 
     console.log("📄 [submitTest] Test fetched", {
-      testId: test.id,
+      testId: test.test_id,
       currentStatus: test.status,
     });
 
@@ -496,7 +496,7 @@ export const submitTest = async (req, res) => {
     await test.save();
 
     console.log("✅ [submitTest] Test submitted successfully", {
-      testId: test.id,
+      testId: test.test_id,
       newStatus: test.status,
       durationMs: Date.now() - startTime,
     });
