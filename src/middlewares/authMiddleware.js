@@ -13,7 +13,7 @@ export default function authMiddleware(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("decoded Invalid")
+    console.log("decoded validation", decoded)
     if (!decoded?.id) {
       console.log("Invalid token payload");
       return res.status(401).json({
