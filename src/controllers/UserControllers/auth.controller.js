@@ -960,10 +960,10 @@ export const updateWelcome = async (req, res) => {
 };
 
 export const sendContactEmail = async (req, res) => {
-  const { name, email, message } = req.body;
+  const { name, email, category, message, company } = req.body;
   console.log('email', email);
 
-  if (!name || !email || !message) {
+  if (!name || !email || !message || !category) {
     return res
       .status(400)
       .json({ error: true, message: "All fields are required!" });
@@ -979,19 +979,25 @@ export const sendContactEmail = async (req, res) => {
       },
     });
 
+    const htmlParts = [
+      `<h3>Contact Form Submission</h3>`,
+      `<p><strong>Name:</strong> ${name}</p>`,
+      `<p><strong>Email:</strong> ${email}</p>`,
+      company && `<p><strong>Company:</strong> ${company}</p>`,
+      `<p><strong>Category:</strong> ${category}</p>`,
+      `<p><strong>Message:</strong> ${message}</p>`,
+    ].filter(Boolean);
+
+    const contacthtml = htmlParts.join("");
+
+
     // Email Content
     const mailOptions = {
       from: process.env.EMAIL_USER, // Sender Email
       to: ["support@totle.co", "totleedtech@gmail.com"], // Destination Email
       replyTo: email,
       subject: `New Contact Form Submission from ${name}`,
-      html: `
-        <h3>Contact Form Submission</h3>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Message:</strong></p>
-        <p>${message}</p>
-      `,
+      html: contacthtml,
     };
 
     // Send Email
