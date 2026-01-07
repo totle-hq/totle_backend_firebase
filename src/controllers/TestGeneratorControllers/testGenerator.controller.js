@@ -461,50 +461,73 @@ export const submitTest = async (req, res) => {
       timingsCount: Object.keys(question_timings).length,
     });
 
-    const test = await Test.findByPk(testId);
+    // 🔒 ATOMIC UPDATE — submit only if still ongoing
+    const [affectedRows] = await Test.update(
+      {
+        answers_submitted: submittedAnswers,
+        question_timings,
+        status: "submitted",
+        submitted_at: new Date(),
+      },
+      {
+        where: {
+          test_id: testId,
+          status: "ongoing",
+        },
+      }
+    );
 
-    if (!test) {
-      console.warn("⚠️ [submitTest] Test not found", { testId });
-      return res
-        .status(404)
-        .json({ success: false, message: "Test not found" });
-    }
+    // ❌ Nothing updated → already submitted / evaluated / not found
+    if (affectedRows === 0) {
+      const test = await Test.findByPk(testId);
 
-    console.log("📄 [submitTest] Test fetched", {
-      testId: test.test_id,
-      currentStatus: test.status,
-    });
+      if (!test) {
+        console.warn("⚠️ [submitTest] Test not found", { testId });
+        return res.status(404).json({
+          success: false,
+          message: "Test not found",
+        });
+      }
 
-    if (test.status === "submitted" || test.status === "evaluated") {
-      console.warn("🚫 [submitTest] Resubmission blocked", {
+      console.warn("ℹ️ [submitTest] Duplicate submit attempt", {
         testId,
         status: test.status,
       });
 
-      return res.status(400).json({
+      if (test.status === "submitted") {
+        return res.status(200).json({
+          success: true,
+          message: "Test already submitted",
+          data: test,
+        });
+      }
+
+      if (test.status === "evaluated") {
+        return res.status(400).json({
+          success: false,
+          message: "Test already evaluated. Cannot resubmit.",
+        });
+      }
+
+      // Fallback (should never happen)
+      return res.status(409).json({
         success: false,
-        message: `Test already ${test.status}. Cannot resubmit.`,
+        message: "Test cannot be submitted in current state",
       });
     }
 
-    // 🔄 Update test
-    test.answers_submitted = submittedAnswers;
-    test.status = "submitted";
-    test.submitted_at = new Date();
-    test.question_timings = question_timings;
-
-    await test.save();
+    // ✅ Fetch updated test for response
+    const updatedTest = await Test.findByPk(testId);
 
     console.log("✅ [submitTest] Test submitted successfully", {
-      testId: test.test_id,
-      newStatus: test.status,
+      testId,
       durationMs: Date.now() - startTime,
     });
 
     return res.status(200).json({
       success: true,
       message: "Test submitted successfully",
-      data: test,
+      data: updatedTest,
     });
   } catch (error) {
     console.error("❌ [submitTest] Error submitting test", {
