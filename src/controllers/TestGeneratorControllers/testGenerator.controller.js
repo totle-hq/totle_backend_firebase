@@ -411,32 +411,113 @@ if (!eligible) {
   }
 };
 
+//without logs
+// export const submitTest = async (req, res) => {
+//   try {
+//     const testId = param(req, "test_id", "testId", "sessionId");
+//     const submittedAnswers = req.body.answers || {};
+//     const question_timings = req.body.timing || {};
+
+//     const test = await Test.findByPk(testId);
+//     if (!test) return res.status(404).json({ success: false, message: "Test not found" });
+
+//     if (test.status === "submitted" || test.status === "evaluated") {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Test already ${test.status}. Cannot resubmit.`,
+//       });
+//     }
+
+//     test.answers_submitted = submittedAnswers;
+//     test.status = "submitted";
+//     test.submitted_at = new Date();
+//     test.question_timings = question_timings;
+//     await test.save();
+
+//     return res.status(200).json({ success: true, message: "Test submitted successfully", data: test });
+//   } catch (error) {
+//     console.error("❌ Error submitting test:", error);
+//     return res.status(500).json({ success: false, message: "Failed to submit test", error: error.message });
+//   }
+// };
+
+// with logs
 export const submitTest = async (req, res) => {
+  const startTime = Date.now();
+
   try {
+    console.log("📝 [submitTest] Request received", {
+      params: req.params,
+      userId: req.user?.id,
+    });
+
     const testId = param(req, "test_id", "testId", "sessionId");
     const submittedAnswers = req.body.answers || {};
     const question_timings = req.body.timing || {};
 
+    console.log("🧪 [submitTest] Parsed payload", {
+      testId,
+      answersCount: Object.keys(submittedAnswers).length,
+      timingsCount: Object.keys(question_timings).length,
+    });
+
     const test = await Test.findByPk(testId);
-    if (!test) return res.status(404).json({ success: false, message: "Test not found" });
+
+    if (!test) {
+      console.warn("⚠️ [submitTest] Test not found", { testId });
+      return res
+        .status(404)
+        .json({ success: false, message: "Test not found" });
+    }
+
+    console.log("📄 [submitTest] Test fetched", {
+      testId: test.id,
+      currentStatus: test.status,
+    });
 
     if (test.status === "submitted" || test.status === "evaluated") {
+      console.warn("🚫 [submitTest] Resubmission blocked", {
+        testId,
+        status: test.status,
+      });
+
       return res.status(400).json({
         success: false,
         message: `Test already ${test.status}. Cannot resubmit.`,
       });
     }
 
+    // 🔄 Update test
     test.answers_submitted = submittedAnswers;
     test.status = "submitted";
     test.submitted_at = new Date();
     test.question_timings = question_timings;
+
     await test.save();
 
-    return res.status(200).json({ success: true, message: "Test submitted successfully", data: test });
+    console.log("✅ [submitTest] Test submitted successfully", {
+      testId: test.id,
+      newStatus: test.status,
+      durationMs: Date.now() - startTime,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Test submitted successfully",
+      data: test,
+    });
   } catch (error) {
-    console.error("❌ Error submitting test:", error);
-    return res.status(500).json({ success: false, message: "Failed to submit test", error: error.message });
+    console.error("❌ [submitTest] Error submitting test", {
+      message: error.message,
+      stack: error.stack,
+      durationMs: Date.now() - startTime,
+    });
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to submit test",
+      error: error.message,
+    });
   }
 };
 
