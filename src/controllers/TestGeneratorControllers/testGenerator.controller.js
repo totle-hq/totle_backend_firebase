@@ -1320,7 +1320,7 @@ function validatePoolQuestion(pq) {
   if (!pq) return "❌ pq is null or undefined";
 
   const q = pq.question;
-  console.log("type",typeof q, typeof pq);
+  // console.log("type",typeof q, typeof pq);
   if (!q || typeof q !== "object") return "❌ pq.question is missing or not an object";
 
   if (!q.text || typeof q.text !== "string") return "❌ pq.text is missing or not a string";
@@ -1515,7 +1515,7 @@ export const generateTest = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        test_id: test.id,
+        test_id: test.test_id,
         topicId,
         difficulty: "baseline",
         time_limit_minutes: DEFAULT_TIME_LIMIT_MINUTES,
