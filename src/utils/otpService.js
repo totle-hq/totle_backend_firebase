@@ -1,20 +1,35 @@
 import fs from "fs";
-import path from "path";import dotenv from "dotenv";
+import path from "path";
+import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import twilio from "twilio";
-// import { userDb } from "../config/prismaClient.js";
 import { fileURLToPath } from "url";
-import {OTP} from "../Models/UserModels/OtpModel.js";
+import { OTP } from "../Models/UserModels/OtpModel.js";
 import { Sequelize } from "sequelize";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config();
-// ✅ Configure Twilio Client for SMS OTP
-const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-// ✅ Configure Email Transporter for Email OTP
+/* ------------------------------------------------------------------
+   ✅ SAFE TWILIO INITIALIZATION (THE ONLY REAL FIX)
+------------------------------------------------------------------ */
+let twilioClient = null;
+
+if (
+  process.env.TWILIO_ACCOUNT_SID &&
+  process.env.TWILIO_AUTH_TOKEN
+) {
+  twilioClient = twilio(
+    process.env.TWILIO_ACCOUNT_SID,
+    process.env.TWILIO_AUTH_TOKEN
+  );
+}
+
+/* ------------------------------------------------------------------
+   ✅ EMAIL TRANSPORTER (UNCHANGED)
+------------------------------------------------------------------ */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -23,20 +38,18 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-/**
- * ✅ Send OTP to Email
- * @param {string} email - User's Email Address
- * @param {string} otp - OTP Code
- */
+/* ------------------------------------------------------------------
+   EMAIL OTP
+------------------------------------------------------------------ */
 export const sendEmailOtp = async (email, otp) => {
   if (!email) throw new Error("❌ Email is required for OTP.");
-  console.log('email', email, 'otp', otp, process.env.EMAIL_PASS)
+  console.log("email", email, "otp", otp, process.env.EMAIL_PASS);
 
   try {
-
-    const templatePath = path.join(__dirname, "email.html"); // Update the path accordingly
+    const templatePath = path.join(__dirname, "email.html");
     let emailTemplate = fs.readFileSync(templatePath, "utf-8");
     emailTemplate = emailTemplate.replace("{{OTP}}", otp);
+
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
@@ -52,16 +65,17 @@ export const sendEmailOtp = async (email, otp) => {
   }
 };
 
-/**
- * ✅ Send OTP to Mobile (SMS)
- * @param {string} mobile - User's Mobile Number
- * @param {string} otp - OTP Code
- */
+/* ------------------------------------------------------------------
+   SMS OTP
+------------------------------------------------------------------ */
 export const sendSmsOtp = async (mobile, otp) => {
   if (!mobile) throw new Error("❌ Mobile number is required for OTP.");
 
+  if (!twilioClient) {
+    throw new Error("❌ Twilio is not configured");
+  }
+
   try {
-    // ✅ Ensure Mobile Number has +91 Prefix (for India)
     if (!mobile.startsWith("+91")) {
       mobile = "+91" + mobile;
     }
@@ -79,157 +93,149 @@ export const sendSmsOtp = async (mobile, otp) => {
   }
 };
 
-/**
- * ✅ Send OTP to Either Email or Mobile
- * @param {string} email - User's Email (Optional)
- * @param {string} mobile - User's Mobile Number (Optional)
- * @param {string} otp - OTP Code
- */
+/* ------------------------------------------------------------------
+   SEND OTP (EMAIL ONLY – UNCHANGED LOGIC)
+------------------------------------------------------------------ */
 export const sendOtp = async (email) => {
-  console.log('email send otp', email)
+  console.log("email send otp", email);
+
   if (!email) {
-    throw new Error("❌ No Email  provided for OTP.");
+    throw new Error("❌ No Email provided for OTP.");
   }
+
   const otp = Math.floor(100000 + Math.random() * 900000);
   const expiry = new Date(Date.now() + 5 * 60 * 1000);
-  // const isEmail = identifier.includes("@");
-  // if (identifier) {
-    try {
-      const existingOtp = await OTP.findOne({ where: { email } });
-      // const existingOtp = await OTP.findOne({ where: { email:identifier } });
-      // console.log('existing otp', existingOtp)
-      if (existingOtp) {
-        if (new Date() < existingOtp.expiry) {
-          const timeRemaining = Math.round((existingOtp.expiry - new Date()) / 1000); // Time remaining in seconds
-          const minutes = Math.floor(timeRemaining / 60);
-          const seconds = timeRemaining % 60;
-  
-          const professionalMessages = [
-            "Your OTP is still valid for ${minutes} minutes and ${seconds} seconds. Please check your email (${identifier}).",
-            "You have ${minutes} minutes and ${seconds} seconds remaining to use your OTP sent to ${identifier}.",
-            "The OTP sent to ${identifier} is valid for another ${minutes} minutes and ${seconds} seconds.",
-          ];
-          
-          const randomIndex = Math.floor(Math.random() * professionalMessages.length);
-          const selectedMessage = professionalMessages[randomIndex].replace("${minutes}", minutes).replace("${seconds}", seconds).replace("${identifier}", email);
-          
-          return { 
-            error: false,
-            message: selectedMessage, 
-            expiry: existingOtp.expiry,
-            nextStep: "already-sent" 
-          };
-        } else {
-          // Existing OTP has expired; generate a new one
-          const professionalSentMessage = "A new OTP has been generated and sent to ${identifier}. Please use it before it expires.";
 
-          await OTP.update(
-            { otp, expiry, isVerified: false },
-            { where: { email }}
-          );
-          
-          try {
-            await sendEmailOtp(email, otp);
-          } catch (error) {
-            console.error("❌ Email OTP sending failed:", error);
-            return { error: true, message: "Failed to send OTP via email." };
-          }
-          return { 
-            error: false, 
-            message: professionalSentMessage.replace("${identifier}", email) 
-          };
+  try {
+    const existingOtp = await OTP.findOne({ where: { email } });
 
-        }
+    if (existingOtp) {
+      if (new Date() < existingOtp.expiry) {
+        const timeRemaining = Math.round(
+          (existingOtp.expiry - new Date()) / 1000
+        );
+        const minutes = Math.floor(timeRemaining / 60);
+        const seconds = timeRemaining % 60;
+
+        const professionalMessages = [
+          "Your OTP is still valid for ${minutes} minutes and ${seconds} seconds. Please check your email (${identifier}).",
+          "You have ${minutes} minutes and ${seconds} seconds remaining to use your OTP sent to ${identifier}.",
+          "The OTP sent to ${identifier} is valid for another ${minutes} minutes and ${seconds} seconds.",
+        ];
+
+        const selectedMessage = professionalMessages[
+          Math.floor(Math.random() * professionalMessages.length)
+        ]
+          .replace("${minutes}", minutes)
+          .replace("${seconds}", seconds)
+          .replace("${identifier}", email);
+
+        return {
+          error: false,
+          message: selectedMessage,
+          expiry: existingOtp.expiry,
+          nextStep: "already-sent",
+        };
       } else {
-        // Create a new OTP if none exists
-        
-        await OTP.create({
-            email: email,
-            otp: otp,
-            expiry: expiry,
-            isVerified: false,
-        });
-        
-        // console.log('entered send otp email')
+        await OTP.update(
+          { otp, expiry, isVerified: false },
+          { where: { email } }
+        );
+
         await sendEmailOtp(email, otp);
-        return { error: false, message: `An OTP is sent for registration, Please check your ${email} inbox` };
+
+        return {
+          error: false,
+          message: `A new OTP has been generated and sent to ${email}.`,
+        };
       }
-    } catch (error) {
-      console.error("Error sending OTP:", error);
-      return { error: true, message: "Failed sending otp to email" };
+    } else {
+      await OTP.create({
+        email,
+        otp,
+        expiry,
+        isVerified: false,
+      });
+
+      await sendEmailOtp(email, otp);
+
+      return {
+        error: false,
+        message: `An OTP is sent for registration, Please check your ${email} inbox`,
+      };
     }
-  // } else {
-  //   try {
-  //     await sendSmsOtp(identifier, otp);
-  //     return { error: false, mesage: `Otp sent to ${identifier}` }
-  //   } catch (error) {
-  //     console.error("Error sending OTP:", error);
-  //     return { error: true, message: "Failed sending otp" };
-  //   }
-  // }
+  } catch (error) {
+    console.error("Error sending OTP:", error);
+    return { error: true, message: "Failed sending otp to email" };
+  }
 };
 
-export const verifyOtp = async ( email, otp ) => {
+/* ------------------------------------------------------------------
+   VERIFY OTP
+------------------------------------------------------------------ */
+export const verifyOtp = async (email, otp) => {
   try {
-
     if (!email || !otp) {
       return { error: true, message: "❌ Email and OTP are required." };
     }
 
-    // ✅ Fetch OTP from database
     const otpRecord = await OTP.findOne({
-      where: { email, otp},
+      where: { email, otp },
     });
 
     if (!otpRecord) {
-      console.log("❌ OTP Not Found or Already Used.");
       return { error: true, message: "Invalid OTP, please try again." };
     }
 
-    // ✅ Check if OTP is expired
     if (new Date() > otpRecord.expiry) {
-      console.log("⏳ OTP Expired:", otpRecord.expiry);
-      return { error: true, message: "Your OTP has expired. Please request a new one." };
+      return {
+        error: true,
+        message: "Your OTP has expired. Please request a new one.",
+      };
     }
 
-    // ✅ Verify OTP
     await OTP.update({ isVerified: true }, { where: { email } });
-    return { error: false, message: "OTP verified successfully!" };
 
+    return { error: false, message: "OTP verified successfully!" };
   } catch (error) {
-    return { error: true, message: "Something went wrong. Please try again.", details: error.message };
+    return {
+      error: true,
+      message: "Something went wrong. Please try again.",
+      details: error.message,
+    };
   }
 };
 
-
+/* ------------------------------------------------------------------
+   WELCOME EMAIL
+------------------------------------------------------------------ */
 export const sendWelcomeEmail = async (email, firstName) => {
   try {
-    // ✅ Load the email template
-    const templatePath = path.join(__dirname, "welcome4.html");  // Adjust path if necessary
+    const templatePath = path.join(__dirname, "welcome4.html");
     let emailTemplate = fs.readFileSync(templatePath, "utf-8");
 
-    // ✅ Replace placeholders with actual values
     emailTemplate = emailTemplate.replace("[User's Name]", firstName);
-    emailTemplate = emailTemplate.replace('<a class="button">🚀 Login to Your Account</a>', 
-      `<a href="http://totle.co/auth" class="button">🚀 Login to Your Account</a>`);
+    emailTemplate = emailTemplate.replace(
+      '<a class="button">🚀 Login to Your Account</a>',
+      `<a href="http://totle.co/auth" class="button">🚀 Login to Your Account</a>`
+    );
 
-    // ✅ Email options
-    const mailOptions = {
+    await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: email,
       subject: "🎉 Welcome to TOTLE!  — Let’s Begin Your Journey to Teach and Learn",
       html: emailTemplate,
-    };
+    });
 
-    // ✅ Send Email
-    await transporter.sendMail(mailOptions);
     console.log(`✅ Welcome Email sent to ${email}`);
   } catch (error) {
     console.error("❌ Error sending Welcome Email:", error);
   }
 };
 
-
+/* ------------------------------------------------------------------
+   SESSION BOOKED EMAIL
+------------------------------------------------------------------ */
 export const sendSessionBookedEmail = async ({
   to,
   role,

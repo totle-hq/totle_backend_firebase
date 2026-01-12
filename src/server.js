@@ -451,8 +451,17 @@ const startServer = async () => {
     // 🔹 Ensure DB schema with associations known
     await runDbSync(false);
     console.log("✅ DB sync complete");
+const ENV_PORT = Number(process.env.PORT);
+const START_PORT =
+  process.env.NODE_ENV === "production"
+    ? (ENV_PORT || 5000)
+    : (ENV_PORT && ENV_PORT !== 5000 ? ENV_PORT : 5001);
+const MAX_PORT = START_PORT + 20;
 
-    const PORT = process.env.PORT || 5001;
+let PORT = START_PORT;
+
+console.log(`🔌 Preferred start PORT=${START_PORT}`);
+
 
     // 🔹 Initialize Redis (shared across app)
     const redis = getRedis();
@@ -551,9 +560,36 @@ const startServer = async () => {
       console.error("UncaughtException:", err);
     });
 
-    server.listen(PORT,'0.0.0.0', () => {
-      console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
-    });
+const tryListen = () => {
+  server.listen(PORT, "0.0.0.0");
+};
+
+server.on("listening", () => {
+  console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.warn(`⚠️ Port ${PORT} busy, trying ${PORT + 1}...`);
+    PORT++;
+
+    if (PORT > MAX_PORT) {
+      console.error(`❌ No free ports available from ${START_PORT} to ${MAX_PORT}. Aborting startup.`);
+      process.exit(1);
+    }
+
+    setTimeout(tryListen, 100);
+    return;
+  }
+
+  console.error("❌ Server failed to start:", err);
+  process.exit(1);
+});
+
+// kick off
+tryListen();
+
+
   } catch (error) {
     console.error("❌ Error during database setup or server start:", error);
   }

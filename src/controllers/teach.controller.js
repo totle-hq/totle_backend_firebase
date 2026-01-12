@@ -18,9 +18,10 @@ import { findSubjectAndDomain } from "../utils/getsubject.js";
 import { assertTeacherBuffer, calculateMismatchPercentage, getDistance, getEligibleTeacherIds, scoreTeacher } from "../utils/sessionUtils.js";
 import TeacherAvailability from "../Models/TeacherAvailability.js";
 import { format, addDays, getDay, startOfDay } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
 import {Test} from '../Models/test.model.js';
 import {FeedbackSummary} from "../Models/feedbacksummary.js";
+import dateFnsTz from "date-fns-tz";
+const { formatInTimeZone } = dateFnsTz;
 
 // ⬇️ timezone + range helpers (date-fns-tz v3)
 import {
