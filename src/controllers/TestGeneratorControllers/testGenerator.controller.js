@@ -400,7 +400,7 @@ if (!eligible) {
       return res.status(400).json({ success: false, message: "Test cannot be started in its current state" });
     }
 
-    test.status = "started";
+    test.status = "ongoing";
     test.started_at = new Date();
     await test.save();
 
@@ -472,7 +472,7 @@ export const submitTest = async (req, res) => {
       {
         where: {
           test_id: testId,
-          status: "ongoing",
+          status: ["generated", "ongoing"]
         },
       }
     );
