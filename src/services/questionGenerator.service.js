@@ -2,7 +2,9 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
 import { Test } from "../Models/test.model.js";
-
+import { checkApiBudget } from "./questionMaintenance.service.js";
+import { QuestionPool } from "../Models/Fallback/QuestionsPool.js";
+import nodemailer from "nodemailer";
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -100,6 +102,75 @@ function sanitizeQA(questions = [], answers = []) {
   return { questions: cleanQs, answers: cleanAns };
 }
 
+async function callYourExistingAI({ topicName, topicId, userId, dimension, count }) {
+  const { questions, answers } = await generateQuestions({
+    topicName,
+    topicParams: { dimension_focus: dimension },
+    topicId,
+    userId,
+    count,
+  });
+
+  return questions.map((q) => ({
+    text: q.text,
+    options: q.options,
+    correct_answer: answers.find((a) => a.id === q.id)?.correct_answer,
+  }));
+}
+
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER, // Your email
+    pass: process.env.EMAIL_PASS, // App password (if using Gmail)
+  },
+});
+
+
+export async function sendMail({ to, subject, text }) {
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+    });
+    console.log("📧 Admin notified via email");
+  } catch (err) {
+    console.error("❌ Failed to send alert email", err);
+  }
+}
+
+export async function generateQuestionsForDimension({
+  topicName,
+  topicId,
+  userId,
+  dimension,
+  count,
+}) {
+  console.log('GenQforDime', topicId)
+  console.log(
+    `🤖 [AI] Generating ${count} questions for dimension: ${dimension}`
+  );
+
+  // reuse your existing prompt logic internally
+  const questions = await callYourExistingAI({
+    topicName,
+    topicId,
+    userId,
+    dimension,
+    count,
+  });
+
+  console.log(
+    `✅ [AI] Generated ${questions.length}/${count} for ${dimension}`
+  );
+
+  return questions;
+}
+
+
 /* ----------------------- MAIN GENERATOR ---------------------- */
 export async function generateQuestions({
   subject,
@@ -116,6 +187,102 @@ export async function generateQuestions({
   count = 20,
 }) {
   try {
+    const topic_uuid = topicId;
+    console.log("topic-uuid", topic_uuid);
+
+    const { overLimit, notice } = await checkApiBudget();
+
+    if (overLimit) {
+      console.warn("❌ API budget exceeded. Fallback initiated.");
+
+      // 2️⃣ Notify admin
+      await sendMail({
+        to: "example@gmail.com",
+        subject: `⚠️ [Fallback Used] API Budget Limit Hit`,
+        text: `AI budget exceeded for user: ${userId}, topic: ${topicName}\nA fallback set of questions was used instead.`
+      });
+
+
+      const userWrongOrUnanswered = [];
+
+      const testRecords = await Test.findAll({
+        where: {
+          topic_uuid,
+          user_id: userId,
+        },
+        order: [["createdAt", "DESC"]],
+        limit: 20,
+      });
+
+      for (const test of testRecords) {
+        const questions = test.questions || [];
+        const submitted = test.answers_submitted || {};
+        const answers = test.answers || [];
+
+        for (const q of questions) {
+          const userAnswer = submitted[q.id];
+          const correctAnswer = answers.find(a => a.id === q.id)?.correct_answer;
+
+          if (!userAnswer || userAnswer !== correctAnswer) {
+            userWrongOrUnanswered.push({
+              topic_uuid,
+              dimension: q.dimension,
+              question: q,
+              correct_answer: correctAnswer,
+              usage_count: 99,
+              is_buffer: true,
+            });
+          }
+        }
+      }
+
+
+      // 3️⃣ Attempt to fetch reusable pool questions
+      const fallbackQuestions = await QuestionPool.findAll({
+        where: {
+          topic_uuid,
+          usage_count: { [Op.lt]: 3 },
+          is_archived: false,
+        },
+        order: [["usage_count", "ASC"]],
+        limit: count,
+      });
+
+      if (fallbackQuestions.length === 0) {
+        throw new Error("No fallback questions available");
+      }
+
+
+      // Deduplicate by question text
+      const seen = new Set(
+        fallbackQuestions.map(q =>
+          q.question?.text?.toLowerCase()
+        )
+      );
+
+      // Add wrong/unanswered questions next
+      for (const q of userWrongOrUnanswered) {
+        if (fallbackQuestions.length >= count) break;
+
+        const textKey = q.question?.text?.toLowerCase();
+        if (!seen.has(textKey)) {
+          fallbackQuestions.push(q);
+          seen.add(textKey);
+        }
+      }
+
+      return {
+        questions: fallbackQuestions.map(q => ({
+          text: q.question.text,
+          options: q.question.options,
+          correct_answer: q.correct_answer,
+          dimension: q.dimension,
+        })),
+        answers: [], // leave empty
+        time_limit_minutes: 30,
+        notice,
+      };
+    }
     const batchSize = 4; // 5 parallel batches * 4 = 20
     const numBatches = Math.ceil(count / batchSize);
 
@@ -173,7 +340,7 @@ export async function generateQuestions({
 
     // Deduplicate against user’s past
     const previousTests = await Test.findAll({
-      where: { topic_uuid: topicId, user_id: userId },
+      where: { topic_uuid, user_id: userId },
       attributes: ["questions"],
     });
 
@@ -193,7 +360,9 @@ export async function generateQuestions({
     answers = answers.filter((a) => validIds.has(Number(a.id)));
 
     if (questions.length < count) {
-      console.warn(`⚠️ Only got ${questions.length}/${count} usable questions after filtering.`);
+      console.warn(
+        `⚠️ [GENERATOR] Topic="${topicName}" | Dimension="${topicParams?.dimension_focus}" | ${questions.length}/${count}`
+      );
     }
 
     return {

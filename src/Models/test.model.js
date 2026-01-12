@@ -151,6 +151,11 @@ export const Test = sequelize1.define(
       { fields: ["payment_id"], unique: true },
       { fields: ["status"] },
       { fields: ["submitted_at"] },
+      // ✅ NEW: fast lookup for "same user + topic + evaluated" history
+      { fields: ["user_id", "topic_uuid", "status", "created_at"] },
+
+      // ✅ NEW: fast lookup for "topic + evaluated" history (other users)
+      { fields: ["topic_uuid", "status", "created_at"] },
     ],
   }
 );

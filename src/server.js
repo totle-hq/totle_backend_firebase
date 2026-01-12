@@ -73,6 +73,7 @@ import { initCpsModels } from "./Models/Cps/index.js";
 // ✅ Ensure all base models & associations are loaded exactly once at boot
 import "./Models/index.js";
 import cookieParser from "cookie-parser";
+import { scheduleQuestionPoolMaintenance } from "./services/questionMaintenance.service.js";
 
 // ----------------------------------------
 
@@ -554,6 +555,8 @@ const startServer = async () => {
     server.listen(PORT,'0.0.0.0', () => {
       console.log(`🚀 Server running with WebSocket on port ${PORT} (LAN accessible)`);
     });
+    scheduleQuestionPoolMaintenance(); // ✅ Start cron jobs
+
   } catch (error) {
     console.error("❌ Error during database setup or server start:", error);
   }

@@ -3,13 +3,14 @@
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { getUserLearningMetrics } from "../../services/learnerProfile.service.js";
 import { evaluateDifficulty } from "../../utils/testDifficulty.utils.js";
-import { generateQuestions } from "../../services/questionGenerator.service.js";
+// import { generateQuestions } from "../../services/questionGenerator.service.js";
+import { generateQuestionsForDimension } from "../../services/questionGenerator.service.js";
 import { isUserEligibleForRetest } from "../../utils/testCooldown.utils.js";
 import { saveTest } from "../../services/testStorage.service.js";
 import { Test } from "../../Models/test.model.js";
 // import { Topic } from "../../Models/CatalogModels/TopicModel.js";
 import jwt from "jsonwebtoken";
-import { Op } from "sequelize";
+import { Op, UUID, UUIDV4 } from "sequelize";
 import { Session } from "../../Models/SessionModel.js";
 import { Review } from "../../Models/ReviewModel.js";
 import { User } from "../../Models/UserModels/UserModel.js";
@@ -37,11 +38,24 @@ import { sequelize1 } from "../../config/sequelize.js";
 // ✅ Use your existing EWMA updater service
 import { updateCpsProfileFromTest } from "../../services/cps/cpsEma.service.js";
 import { getRazorpayInstance } from "../PaymentControllers/paymentController.js";
+import { QuestionPool } from "../../Models/Fallback/QuestionsPool.js";
+import { TopicQuestionPoolMeta } from "../../Models/Fallback/TopicQuestionPoolMeta.model.js";
 
 /**
  * POST /api/tests/generate
  * Request Body: { userId: string, topicId: string }
  */
+
+/**
+ * CONSTANTS
+ */
+const REQUIRED_TOTAL = 25;
+const BUFFER_PER_DIMENSION = 2;
+const MAX_USAGE = 3;
+
+const LEARNER_TOTAL_REQUIRED = 20;
+const TEACHER_SCORE_REQUIRED = 5;
+const DEFAULT_TIME_LIMIT_MINUTES = 30;
 
 // Initialize Razorpay
 // const razorpay = new Razorpay({
@@ -400,7 +414,7 @@ if (!eligible) {
       return res.status(400).json({ success: false, message: "Test cannot be started in its current state" });
     }
 
-    test.status = "started";
+    test.status = "ongoing";
     test.started_at = new Date();
     await test.save();
 
@@ -472,7 +486,7 @@ export const submitTest = async (req, res) => {
       {
         where: {
           test_id: testId,
-          status: "ongoing",
+          status: ["generated", "ongoing"]
         },
       }
     );
@@ -566,7 +580,20 @@ export const evaluateTest = async (req, res) => {
       correctAnswerMap[item.id] = item.correct_answer;
     }
 
-    const scoredResults = questions.map((q) => {
+    /* ------------------ 2) Split questions ------------------ */
+    const learnerQuestions = [];
+    const teacherScoreQuestions = [];
+
+    for (const q of questions) {
+      if (q.dimension === "teacher_score") {
+        teacherScoreQuestions.push(q);
+      } else {
+        learnerQuestions.push(q);
+      }
+    }
+
+
+    const scoredResults = learnerQuestions.map((q) => {
       const learnerAnswer = submittedAnswers[q.id];
       const correct = correctAnswerMap[q.id];
       const isCorrect = learnerAnswer === correct;
@@ -579,10 +606,20 @@ export const evaluateTest = async (req, res) => {
       };
     });
 
+    const teacherScoreEvaluation = teacherScoreQuestions.map((q) => {
+      const learnerAnswer = submittedAnswers[q.id];
+      const correct = correctAnswerMap[q.id];
+      return {
+        question_id: q.id,
+        learnerAnswer,
+        correctAnswer: correct,
+        correct: learnerAnswer === correct,
+      };
+    });
 
     const totalScore = scoredResults.reduce((s, q) => s + q.score, 0);
-    const maxScore = questions.length;
-    const percentage = Math.round((totalScore / maxScore) * 100);
+    const maxScore = learnerQuestions.length;
+    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
 
     // ✅ Pass rule: ≥90% always passes (ignore gates)
     const passed = percentage >= 90;
@@ -614,6 +651,12 @@ export const evaluateTest = async (req, res) => {
     perf.evaluation_details = scoredResults;
     perf.param_deltas = cpsScores100;
     perf.cps_scores = cpsScores100;
+    perf.teacher_score_evaluation = {
+      total: teacherScoreEvaluation.length,
+      correct: teacherScoreEvaluation.filter(e => e.correct).length,
+      details: teacherScoreEvaluation,
+    };
+
 
     // ✅ Add teacher_score separately (without disturbing evaluation logic)
     if (teacherScore !== null) {
@@ -1060,146 +1103,404 @@ function dedupeById(arr, options = {}) {
   return Array.from(map.values());
 }
 
+export async function selectQuestionsWithOneDifferencePerDimension({
+  topic_uuid,
+  dimension,
+  count = 4,
+  transaction,
+}) {
+  // Step 1: Get eligible non-buffer pool questions
+  const poolQuestions = await QuestionPool.findAll({
+    where: {
+      topic_uuid,
+      dimension,
+      is_buffer: false,
+      usage_count: { [Op.lt]: MAX_USAGE },
+    },
+    order: sequelize1.literal("RANDOM()"), // Shuffled selection
+    transaction,
+  });
 
-export const generateTest = async (req, res) => {
-  const BASELINE_QUESTION_COUNT = 25;
-  const REUSE_RATIO = 0.7;
-  const MAX_REUSE_PER_QUESTION = 3;
-  const DEFAULT_TIME_LIMIT_MINUTES = 30;
-
-  const userId = req?.user?.id;
-  const { topicId } = req.body;
-
-  if (!userId || !topicId) {
-    return res.status(400).json({ success: false, message: "Missing userId or topicId." });
+  if (poolQuestions.length < count - 1) {
+    console.warn(`⚠️ Not enough pool questions. Need ${count - 1}, got ${poolQuestions.length}`);
+    return await regenerateDimension(topic_uuid, dimension, count, transaction);
   }
 
-  try {
-    const [user, userDevice] = await Promise.all([
-      User.findByPk(userId),
-      UserDevice.findOne({ where: { userId } }),
-    ]);
-    const currentCity = userDevice?.city || user?.location || null;
+  // Step 2: Pick N-1 from pool
+  const selectedMain = poolQuestions.slice(0, count - 1);
 
-    // ✅ Fetch topic/domain
-    const { subject, domain } = await findSubjectAndDomain(topicId);
-    const topic = await CatalogueNode.findByPk(topicId);
-    if (!topic || !topic.is_topic) {
-      return res.status(404).json({ success: false, message: "Invalid topic." });
-    }
+  // Step 3: Try to find a unique 1-question difference
+  const buffer = await QuestionPool.findAll({
+    where: {
+      topic_uuid,
+      dimension,
+      is_buffer: true,
+      usage_count: { [Op.lt]: MAX_USAGE },
+    },
+    order: Sequelize.literal("RANDOM()"),
+    limit: 1,
+    transaction,
+  });
 
-    const mix = topic?.recommended_item_mix || {};
-    const learnerProfile = await getUserLearningMetrics(userId);
-    const reuseLimit = Math.floor(BASELINE_QUESTION_COUNT * REUSE_RATIO);
-
-    // ✅ Step 1: Collect Reusable Questions (excluding same city)
-    const reusedPool = await getReusableQuestions({
-      topicId,
-      excludeUserId: userId,
-      excludeCity: currentCity,
-      reuseLimit,
-      mix,
-      maxReuseCount: MAX_REUSE_PER_QUESTION,
+  let oneDiff;
+  if (buffer.length > 0) {
+    oneDiff = buffer[0];
+  } else {
+    console.warn(`⚠️ No fallback buffer left for ${dimension}. Regenerating...`);
+    const topic = await CatalogueNode.findByPk(topic_uuid);
+    const newQs = await generateQuestionsForDimension({
+      topic_uuid,
+      topicName: topic.name, // Replace if you have mapping
+      dimension,
+      count: 1,
     });
 
-    const reusedQuestions = reusedPool.questions;
-    const reusedAnswers = reusedPool.answers;
-    const reusedRubrics = reusedPool.rubrics;
+    if (newQs?.[0]) {
+      oneDiff = await QuestionPool.create(
+        {
+          topic_uuid,
+          dimension,
+          question: { text: newQs[0].text, options: newQs[0].options },
+          correct_answer: newQs[0].correct_answer,
+          usage_count: 0,
+          is_buffer: true,
+        },
+        { transaction }
+      );
+    } else {
+      throw new Error(`❌ Failed to get 1-question difference for ${dimension}`);
+    }
+  }
 
-    const remainingCount = BASELINE_QUESTION_COUNT - reusedQuestions.length;
-    let freshQuestions = [];
-    let freshAnswers = [];
-    let freshRubrics = [];
+  const finalSet = shuffleArray([...selectedMain, oneDiff]);
+  return finalSet;
+}
 
-    // ✅ Step 2: Generate remaining questions (AI fallback)
-    if (remainingCount > 0) {
-      const freshPerDimension = computeRemainingMix(mix, reusedRubrics);
+async function regenerateDimension(topic_uuid, dimension, count, transaction) {
+  const topic = await CatalogueNode.findByPk(topic_uuid);
+  const newQs = await generateQuestionsForDimension({
+    topic_uuid,
+    topicName: topic.name, // Map topic_uuid if possible
+    dimension,
+    count,
+  });
 
-      for (const [dimension, count] of Object.entries(freshPerDimension)) {
-        if (count <= 0) continue;
+  const created = await Promise.all(
+    newQs.map((q) =>
+      QuestionPool.create(
+        {
+          topic_uuid,
+          dimension,
+          question: { text: q.text, options: q.options },
+          correct_answer: q.correct_answer,
+          usage_count: 0,
+          is_buffer: false,
+        },
+        { transaction }
+      )
+    )
+  );
 
-        const result = await generateQuestions({
-          subject: subject?.name,
-          subjectDescription: subject?.description,
-          domain: domain?.name,
-          domainDescription: domain?.description,
-          topicName: topic?.name,
-          topicDescription: topic?.description,
-          learnerProfile,
-          topicParams: {
-            ...(topic?.computed_cps_weights || {}),
-            ...(topic?.recommended_item_mix || {}),
-            ...(topic?.recommended_time_pressure ? { recommended_time_pressure: topic.recommended_time_pressure } : {}),
-            ...(topic?.metadata || {}),
-            dimension_focus: dimension,
-          },
-          subtopics: [],
-          topicId,
-          userId,
-          count,
-        });
+  return created;
+}
 
-        const freshGlobalIds = freshQuestions.length;
-        for (let i = 0; i < result.questions.length; i++) {
-          const q = result.questions[i];
-          const a = result.answers.find(ans => ans.id === q.id)?.correct_answer;
+async function ensureQuestionPool(topic_uuid, userId, topicName, mix) {
+  await sequelize1.transaction(async (t) => {
+    let meta = await TopicQuestionPoolMeta.findByPk(topic_uuid, {
+      lock: t.LOCK.UPDATE,
+      transaction: t,
+    });
 
-          const global_qid = freshGlobalIds + i + 1;
-          freshQuestions.push({ id: global_qid, text: q.text, options: q.options });
-          freshAnswers.push({ id: global_qid, correct_answer: a });
-
-          const impactTemplate = { A: {}, B: {}, C: {}, D: {} };
-          if (["A", "B", "C", "D"].includes(a)) {
-            impactTemplate[a] = { [dimension]: 1 };
-          }
-
-          freshRubrics.push({
-            block_key: "baseline",
-            global_qid,
-            option_impacts: impactTemplate,
-            gates: {},
-            item_weight: 1.0,
-          });
-        }
-      }
+    if (!meta) {
+      meta = await TopicQuestionPoolMeta.create(
+        {
+          topic_uuid,
+          pool_status: "seeding",
+        },
+        { transaction: t }
+      );
     }
 
-    const flatQuestions = dedupeById(
-      [...reusedQuestions, ...freshQuestions],
-      { idKey: "id" }
-    ).slice(0, BASELINE_QUESTION_COUNT);
+    if (meta.pool_status === "ready") {
+      return;
+    }
 
-    const flatAnswers = dedupeById(
-      [...reusedAnswers, ...freshAnswers],
+    // If already ready, we only check for refill
+    const seededDims = meta.dimensions_seeded || {}; // Load existing seeded dimensions
+    const updatedDims = { ...seededDims }; // Clone for update
+
+    for (const [dimension, required] of Object.entries(mix)) {
+      const count = Number(required);
+      if (!Number.isFinite(count) || count <= 0) continue;
+
+      // ✅ Skip already seeded dimension
+      if (seededDims[dimension] === true) {
+        console.log(`✅ [POOL] Skipping already seeded: ${dimension}`);
+        continue;
+      }
+
+      const activeCount = await QuestionPool.count({
+        where: {
+          topic_uuid,
+          dimension,
+          usage_count: { [Op.lt]: MAX_USAGE },
+        },
+        transaction: t,
+      });
+
+      const target = count + BUFFER_PER_DIMENSION;
+      const deficit = target - activeCount;
+      if (deficit <= 0) {
+        console.log(`✅ [POOL] ${dimension} already has sufficient questions`);
+        updatedDims[dimension] = true;
+        continue;
+      }
+
+      console.log(`🤖 [POOL] Generating ${deficit} questions for ${dimension}`);
+      const questions = await generateQuestionsForDimension({
+        topicName,
+        topicId: topic_uuid,
+        userId,
+        dimension,
+        count: deficit,
+      });
+
+      // let success = true;
+
+      for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        const isBuffer = i >= required; // `required` = main question count, rest are buffer
+
+        await QuestionPool.findOrCreate({
+          where: {
+            topic_uuid,
+            dimension,
+            "question.text": q.text,
+          },
+          defaults: {
+            topic_uuid,
+            dimension,
+            question: { text: q.text, options: q.options },
+            correct_answer: q.correct_answer,
+            usage_count: 0,
+            is_buffer: isBuffer, // ✅ SET HERE
+          },
+          transaction: t,
+        });
+      }
+
+      if (questions.length < deficit) {
+        console.warn(`⚠️ Partial generation for ${dimension}. Generated: ${questions.length}/${deficit}`);
+        updatedDims[dimension] = false; // mark as unseeded
+      } else {
+        updatedDims[dimension] = true;
+      }
+
+    }
+    await meta.update(
       {
-        idKey: "id",
-        allowUndefined: false,
-        allowNull: false }).slice(0, BASELINE_QUESTION_COUNT);
+        pool_status: "ready",
+        last_seeded_at: new Date(),
+        dimensions_seeded: updatedDims // <- dynamically
+      },
+      { transaction: t }
+    );
+  });
+}
 
-    const rubricRows = dedupeById([...reusedRubrics, ...freshRubrics], { idKey: "global_qid" }).slice(0, BASELINE_QUESTION_COUNT);
+function shuffleArray(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
 
-    console.log("flat answers (DEDUPED)", flatAnswers);
+function validatePoolQuestion(pq) {
+  if (!pq) return "❌ pq is null or undefined";
+
+  const q = pq.question;
+  console.log("type",typeof q, typeof pq);
+  if (!q || typeof q !== "object") return "❌ pq.question is missing or not an object";
+
+  if (!q.text || typeof q.text !== "string") return "❌ pq.text is missing or not a string";
+
+  if (!q.options || typeof q.options !== "object") return "❌ pq.options is missing or not an object";
+
+  const optionsKeys = Object.keys(q.options);
+  if (optionsKeys.length !== 4) return `❌ pq.question.options has ${optionsKeys.length} options instead of 4`;
+
+  if (!["A", "B", "C", "D"].includes(pq.correct_answer)) {
+    return `❌ pq.correct_answer is invalid: ${pq.correct_answer}`;
+  }
+
+  if (!q.options[pq.correct_answer]) {
+    return `❌ pq.correct_answer '${pq.correct_answer}' not found in options`;
+  }
+
+  return null; // ✅ No error
+}
 
 
-    // ✅ Final Save
+
+export const generateTest = async (req, res) => {
+
+  const userId = req.user.id;
+  const { topicId } = req.body;
+
+  try {
+    /* =======================
+       STEP 0: LOAD CONTEXT
+    ======================= */
+    const topic = await CatalogueNode.findByPk(topicId);
+    if (!topic || !topic.is_topic) {
+      return res.status(404).json({ success: false, message: "Invalid topic" });
+    }
+
+    const mix = topic.recommended_item_mix;
+
+    const mixTotal = Object.values(mix).reduce((a, b) => a + b, 0);
+    const learnerTotal = Object.entries(mix)
+      .filter(([k]) => k !== "teacher_score")
+      .reduce((s, [, v]) => s + Number(v || 0), 0);
+
+    if (learnerTotal !== LEARNER_TOTAL_REQUIRED || mix.teacher_score !== TEACHER_SCORE_REQUIRED) {
+      throw new Error(
+        `❌ Invalid mix: learner questions must sum to ${LEARNER_TOTAL_REQUIRED}, and teacher_score must be ${TEACHER_SCORE_REQUIRED}. Got learner=${learnerTotal}, teacher_score=${mix.teacher_score}`
+      );
+    }
+
+    
+    /* =======================
+      STEP 1: BUILD TEST FROM QUESTION POOL
+    ======================= */
+
+    await ensureQuestionPool(topicId, userId, topic.name, mix);
+
+    // const learnerProfile = await getUserLearningMetrics(userId);
+    /* =======================
+      STEP 2: BUILD TEST FROM POOL
+    ======================= */
+    let finalQuestions = [];
+    let finalAnswers = [];
+    let finalRubrics = [];
+
+    
+    await sequelize1.transaction(async (t) => {
+      for (const [dimension, required] of Object.entries(mix)) {
+        const count = Number(required);
+        if (!Number.isFinite(count) || count <= 0) continue;
+
+        let rawPool = await QuestionPool.findAll({
+          where: {
+            topic_uuid: topicId,
+            dimension,
+            usage_count: { [Op.lt]: 3 },
+          },
+          order: [["usage_count", "ASC"]], // still prefer low-used
+          limit: 10, // fetch extra
+          lock: t.LOCK.UPDATE,
+          transaction: t,
+        });
+
+        // Shuffle in JS
+        rawPool = shuffleArray(rawPool); // Use helper function
+        const poolQuestions = rawPool.slice(0, required);
+
+        if (poolQuestions.length < count) {
+          console.warn(`⚠️ Pool shortage for ${dimension}. Attempting fallback...`);
+          let topicName = topic.name;
+          const fallbackQs = await generateQuestionsForDimension({
+            topicId,
+            topicName,
+            userId,
+            dimension,
+            count,
+          });
+
+          const normalizedFallback = fallbackQs.map((q) => ({
+            id: null, // not from DB
+            question: {
+              text: q.text,
+              options: q.options
+            },
+            correct_answer: q.correct_answer,
+            is_fallback: true
+          }));
+
+          poolQuestions.push(...normalizedFallback);
+        }
+
+        if (poolQuestions.length < count) {
+          throw new Error(`Insufficient pool questions for ${dimension} even after fallback.`);
+        }
+
+        for (const pq of poolQuestions) {
+          // const id = finalQuestions.length + 1;
+    
+          const error = validatePoolQuestion(pq);
+          if (error) {
+            console.warn(`⚠️ Malformed question (ID=${pq?.id || "N/A"}): ${error}`);
+            console.dir(pq, { depth: null });
+            continue;
+          }
+
+          if (!pq?.question?.text || !pq?.question?.options || Object.keys(pq?.question?.options).length !== 4 || !["A", "B", "C", "D"].includes(pq.correct_answer)) {
+            throw new Error("Invalid question format");
+          }
+
+          finalQuestions.push({
+            id: UUIDV4(),
+            pool_qid: pq.id,
+            dimension,
+            text: pq.question.text,
+            options: pq.question.options,
+          });
+
+    
+          finalAnswers.push({ id: UUIDV4(), correct_answer: pq.correct_answer });
+    
+          finalRubrics.push({
+            block_key: "baseline",
+            global_qid: UUIDV4(),
+            option_impacts: {
+              [pq.correct_answer]: { [dimension]: 1 },
+            },
+            item_weight: 1,
+          });
+    
+          if (pq.id && typeof pq.increment === "function") {
+            await pq.increment("usage_count", { transaction: t });
+          }
+        }
+      }
+    });
+    
+
+    if (finalQuestions.length !== REQUIRED_TOTAL) {
+      throw new Error(
+        `Test generation failed: expected ${REQUIRED_TOTAL}, got ${finalQuestions.length}`
+      );
+    }
+
+    /* =======================
+       STEP 4: SAVE TEST
+    ======================= */
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
-    const count = (await Test.count()) + 1;
-
-    const savedTest = await Test.create({
-      sl_no: count,
-      topic_name: topic.name,
+    
+    const test = await Test.create({
       user_id: userId,
       topic_uuid: topicId,
-      difficulty: "baseline",
-      topics: [{
+      topic_name: topic.name,
+      topics : [{
         id: topic.id,
         name: topic.name,
         description: topic.description,
         session_count: topic.session_count,
         prices: topic.prices,
       }],
-      questions: flatQuestions,
-      answers: flatAnswers,
+      questions: finalQuestions,
+      answers: finalAnswers,
       test_settings: {
         difficulty: "baseline",
         time_limit_minutes: DEFAULT_TIME_LIMIT_MINUTES,
@@ -1207,52 +1508,27 @@ export const generateTest = async (req, res) => {
         fraud_risk_score: 0,
         cps_baseline: true,
       },
-      status: "generated",
-      payment_id: payment.payment_id,
+      payment_id: payment?.payment_id,
+      status: "generated"
     });
-
-    // Deduplicate rubric rows by global_qid
-    const uniqueRubrics = [];
-    const seenQids = new Set();
-
-    for (const row of rubricRows) {
-      if (!seenQids.has(row.global_qid)) {
-        seenQids.add(row.global_qid);
-        uniqueRubrics.push(row);
-      } else {
-        console.warn(`⚠️ Duplicate global_qid detected: ${row.global_qid}. Skipping.`);
-      }
-    }
-
-
-    // ✅ Save Rubrics
-    // await TestItemRubric.bulkCreate(
-    //   rubricRows.map(row => ({
-    //     test_id: savedTest.test_id,
-    //     block_key: row.block_key,
-    //     global_qid: row.global_qid,
-    //     option_impacts: row.option_impacts,
-    //     gates: row.gates,
-    //     item_weight: row.item_weight ?? 1,
-    //   })),
-    //   { validate: true }
-    // );
 
     return res.status(200).json({
       success: true,
-      message: "Test generated with secure reuse strategy.",
       data: {
-        test_id: savedTest.test_id,
+        test_id: test.id,
         topicId,
         difficulty: "baseline",
         time_limit_minutes: DEFAULT_TIME_LIMIT_MINUTES,
-        questions: flatQuestions,
       },
     });
 
+
   } catch (err) {
     console.error("❌ generateTest error:", err);
-    return res.status(500).json({ success: false, message: "Internal error generating test." });
+    return res.status(500).json({
+      success: false,
+      message: "Internal error generating test",
+    });
   }
 };
 
@@ -1414,7 +1690,7 @@ export const getTestReview = async (req, res) => {
       correctAnswerMap[item.id] = item.correct_answer;
     }
 
-    const reviewData = questions.map((q) => {
+    const reviewData = questions.filter(q => q.dimension !== "teacher_score").map((q) => {
       const submitted = submittedAnswers[q.id];
       const correct = correctAnswerMap[q.id];
 

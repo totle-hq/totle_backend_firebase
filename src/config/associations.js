@@ -31,6 +31,7 @@ import  TeacherAvailability  from "../Models/TeacherAvailability.js";
 import { BankDetails } from "../Models/UserModels/BankDetailsModel.js";
 import { SessionToken } from "../Models/SessionTokenModel.js";
 import SessionParticipant from "../Models/SessionParticipant.js";
+import { QuestionPool } from "../Models/Fallback/QuestionsPool.js";
 
 const defineRelationships = () => {
   /* =========================
@@ -433,6 +434,43 @@ const defineRelationships = () => {
       onUpdate: 'CASCADE',
     });
   }
+
+  /* =========================
+  * Fallback Questions (Topic scoped)
+  * ========================= */
+
+  if (!QuestionPool.associations?.topic) {
+    QuestionPool.belongsTo(CatalogueNode, {
+      foreignKey: "topic_uuid",
+      targetKey: "node_id",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!CatalogueNode.associations?.questionPool) {
+    CatalogueNode.hasMany(QuestionPool, {
+      foreignKey: "topic_uuid",
+      sourceKey: "node_id",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!Test.associations?.questionPool) {
+    Test.hasMany(QuestionPool, {
+      foreignKey: "test_id",
+      onDelete: "CASCADE",
+    });
+  }
+
+  if (!QuestionPool.associations?.test) {
+    QuestionPool.belongsTo(Test, {
+      foreignKey: "test_id",
+      as: "test",
+    });
+  }
+
 
   if (!User.associations?.bankDetails) {
     User.hasOne(BankDetails, { foreignKey: "user_id", as: "bankDetails", onDelete: "CASCADE" });
