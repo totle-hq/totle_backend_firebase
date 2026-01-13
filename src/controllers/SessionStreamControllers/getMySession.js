@@ -95,6 +95,8 @@ export const getStudentSessions = async (req, res) => {
       teacherName: `${session.teacher.firstName} ${session.teacher.lastName}`,
       topicName: session.topic.name,
       scheduled_at: session.scheduled_at.toISOString(),
+      duration: session.duration_minutes,
+      completed_at: session.completed_at.toISOString(),
       feedbackSubmitted: session.feedbacks?.length > 0,
     }));
     

@@ -88,11 +88,16 @@ export const updateSessionTiming = async (req, res) => {
 
     const oldTime = session.scheduled_at;
     session.scheduled_at = parsedTime;
+
+    // 👉 Add 90 minutes to scheduled time
+    const completedTime = new Date(parsedTime.getTime() + 90 * 60000);
+    session.completed_at = completedTime;
     await session.save();
 
     console.log("✅ [8] Session updated successfully!");
     console.log("🧩 [8a] Old Time:", oldTime);
     console.log("🧩 [8b] New Time:", parsedTime);
+    console.log("🧩 [8c] Complets At:", completedTime);
     console.log("🧩 [8c] Database Save Complete ✓");
 
     /* ---------------------------------------------------------------
