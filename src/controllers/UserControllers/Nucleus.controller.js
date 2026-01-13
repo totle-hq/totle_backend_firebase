@@ -89,16 +89,12 @@ export const getAllRoles = async (req, res) => {
 
 export const generateProfileBasedOnRole = async (req, res) => {
     try {
-    const { id } = req.user;
-    const { name,email, departmentCode, password, role } = req.body;
 
-    
-    const superAdmin = await Admin.findByPk(id);
-    console.info(superAdmin.global_role);
-    if (!superAdmin || (superAdmin.global_role !== 'Superadmin' && superAdmin.global_role !== 'Founder')) {
-        console.info("Acess denied", superAdmin.global_role)
-      return res.status(403).json({ message: "Access denied: Invalid superadmin" });
-    }
+      if (!req.admin || (req.admin.role !== "Superadmin" && req.admin.role !== "Founder")) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { name,email, departmentCode, password, role } = req.body;
 
     if (!name || !departmentCode) {
       return res.status(400).json({ message: "Role name and department ID are required" });
@@ -200,6 +196,11 @@ export const getAccountsByDepartmentCode = async (req, res) => {
 // body: { name, email, password, departmentCode, role }
 export const createAccountInDepartment = async (req, res) => {
   try {
+
+    if (!req.admin || (req.admin.role !== "Superadmin" && req.admin.role !== "Founder")) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can create accounts" });
+    }
+
     const { name, email, password, departmentCode, role } = req.body;
     if (!name || !email || !password || !departmentCode || !role) {
       return res.status(400).json({ message: 'name, email, password, departmentCode, role are required' });
@@ -239,7 +240,7 @@ export const createAccountInDepartment = async (req, res) => {
 // body: { newPassword }
 export const changeAccountPassword = async (req, res) => {
   try {
-    const { id } = req.user; // this is roleId (PK)
+    const { id } = req.admin; // this is roleId (PK)
     // const {id} = req.user;
     const { oldPassword, newPassword } = req.body;
     if (!newPassword) return res.status(400).json({ message: 'newPassword is required' });
@@ -303,6 +304,10 @@ export const verifyOtpForProduction = async (req, res) => {
 
 export const addSyncEmails = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can sync emails" });
+    }
+
     const { emails } = req.body;
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
@@ -328,6 +333,10 @@ export const addSyncEmails = async (req, res) => {
 
 export const getSyncEmails = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can sync emails" });
+    }
+
     const { activeOnly } = req.query;
 
     const where = activeOnly === "true" ? { is_active: true } : {};
@@ -343,6 +352,9 @@ export const getSyncEmails = async (req, res) => {
 
 export const updateSyncEmail = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can sync emails" });
+    }
     const { id } = req.params;
     const { email, is_active } = req.body;
 
@@ -365,6 +377,9 @@ export const updateSyncEmail = async (req, res) => {
 
 export const deleteSyncEmail = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can sync emails" });
+    }
     const { id } = req.params;
 
     const deleted = await SyncEmail.destroy({ where: { id } });
@@ -383,11 +398,16 @@ export const deleteSyncEmail = async (req, res) => {
 
 
 export const toggleStatusForInterns = async (req, res) => {
-  const { id } = req.params;
 
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+        return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can toggle intern status" });
+      }
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ error: 'Missing account ID' });
+    }
     const account = await UserDepartment.findByPk(id);
-
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });
     }
@@ -404,9 +424,13 @@ export const toggleStatusForInterns = async (req, res) => {
 };
 
 export const deleteInternRoleAccount =async (req, res) => {
-  const { id } = req.params;
-
+  
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can toggle intern status" });
+    }
+    
+    const { id } = req.params;
     const account = await UserDepartment.findByPk(id);
 
     if (!account) {
@@ -424,14 +448,21 @@ export const deleteInternRoleAccount =async (req, res) => {
 
 const SALT_ROUNDS = 10;
 export const updateUserDepartmentRolePassword= async (req, res) => {
-  const { id } = req.params;
-  const { newPassword } = req.body;
-
-  if (!newPassword || newPassword.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters long' });
-  }
-
   try {
+
+    if (!req.admin || (req.admin.role !== "Superadmin" && req.admin.role !== "Founder")) {
+      return res.status(403).json({
+        message: "Access denied: Only Superadmin or Founder can update passwords",
+      });
+    }
+
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+
     const account = await UserDepartment.findByPk(id);
     if (!account) {
       return res.status(404).json({ error: 'Account not found' });

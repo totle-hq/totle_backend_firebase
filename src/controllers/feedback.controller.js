@@ -333,6 +333,11 @@ console.log(qualifiedTopics);
 
 export const getAllFlaggedFeedbacks = async (req, res) => {
   try {
+
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     // Step 1: Get all flagged feedbacks
     const feedbacks = await Feedback.findAll({
       where: { flagged_issue: true },

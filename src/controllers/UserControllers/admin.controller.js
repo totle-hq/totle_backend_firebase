@@ -105,16 +105,15 @@ export const adminLogin = async (req, res) => {
     const userRole = isFromUserDept ? admin.roleName : admin.global_role;
 
     if (userStatus !== "active") {
-      return res
-        .status(403)
-        .json({ message: "Account is inactive. Contact Super Admin." });
+      return res.status(403).json({ message: "Account is inactive. Contact Super Admin." });
     }
     let isMatch = await bcrypt.compare(password, userPassword);
     console.log('Is match', isMatch)
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-console.log("[CPS] Skipped for Nucleus users — CPS applies only to app-side users (teachers/learners).");
+
+    console.log("[CPS] Skipped for Nucleus users — CPS applies only to app-side users (teachers/learners).");
 
 
     const token = jwt.sign(
@@ -138,6 +137,12 @@ console.log("[CPS] Skipped for Nucleus users — CPS applies only to app-side us
       departmentName = dept?.codename || null;
     }
 
+    res.cookie("admin_token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 60 * 60 * 1000, // 1 hour
+    });
     res.status(200).json({
       message: "Successfully Logged in!",
       token,
@@ -340,6 +345,9 @@ export const getAdminBlogs = async (req, res) => {
 // ✅ Update Blog
 export const updateBlog = async (req, res) => {
   try {
+    if (!req.admin || !req.admin.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     const { id } = req.params;
     const { title, slug, description, content, image } = req.body;
     const adminId = req.admin.id;
@@ -364,6 +372,9 @@ export const updateBlog = async (req, res) => {
 // ✅ Delete Blog
 export const deleteBlog = async (req, res) => {
   try {
+    if (!req.admin || !req.admin.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     const { id } = req.params;
     const adminId = req.admin.id;
 
@@ -1249,7 +1260,7 @@ export const getAdminActionLogs = async (req, res) => {
 
 export const getAdminProfile = async (req, res) => {
   try {
-    const adminId = req.user?.id;
+    const adminId = req.admin?.id;
     const context = await getAdminContext(adminId);
 
     return res.status(200).json({
@@ -1270,6 +1281,9 @@ export const getAdminProfile = async (req, res) => {
 export const superAdminCreationByFounder = async (req, res) =>{
   try {
       const { adminName, adminEmail, adminPassword, adminRole }  = req.body;
+      if (!req.admin || !req.admin.id) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
       const { id } = req.user;
       var admin = await Admin.findOne({ where: { id } })
 
@@ -1298,10 +1312,8 @@ export const superAdminCreationByFounder = async (req, res) =>{
 
 export const getAllSuperAdmins = async (req, res) => {
   try {
-    const { role } = req.user;
-    console.log(role)
-    if (role !== 'Founder') {
-      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    if (!req.admin || req.admin.role !== 'Founder') {
+      return res.status(403).json({ message: "Access denied: Only founders can view this list" });
     }
 
     const superAdmins = await Admin.findAll({
@@ -1324,13 +1336,13 @@ export const getAllSuperAdmins = async (req, res) => {
 export const DepartmentCreationByFounder = async(req,res)=>{
   try {
     const { name, code } = req.body;
-    const { role,id } = req.user;
-    console.log(name,code)
-     if (!role || !id) {
+    
+    if (!req.admin || !req.admin.role || !req.admin.id) {
       return res.status(401).json({ message: "Unauthorized: Invalid or missing token" });
     }
-    if (role !== 'Founder') {
-      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+
+    if (req.admin.role !== "Founder") {
+      return res.status(403).json({ message: "Access denied: Only Founders can create departments" });
     }
 
     if(!name||!code) return res.status(400).json({message: "Missing Department Name or Department Code"});
@@ -1355,30 +1367,28 @@ export const DepartmentCreationByFounder = async(req,res)=>{
   }
 }
 
-
 export const verifyAdminToken = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  // console.log("Admin Token:", authHeader);
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
-
-  const token = authHeader.split(' ')[1];
-
   try {
+    const token = req.cookies?.admin_token; // 👈 Expecting cookie named "admin_token"
+
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized - No token found" });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // console.log("Decoded Admin Token:", decoded);
-    req.user = decoded; // { email, role }
-    // console.log("Admin User:", req.user);
+    req.admin = decoded; // Attach decoded admin payload to request
     next();
-  } catch (err) {
-    return res.status(403).json({ message: 'Invalid token' });
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
 };
 
+
 export const activeSuperAdmins = async (req, res) => {
   try {
+    if (!req.admin || !req.admin.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     const superAdmins = await Admin.findAll({
       where: { global_role: 'Superadmin', status: 'active' },
       attributes: ['id', 'name', 'email', 'createdAt'],
@@ -1397,10 +1407,8 @@ export const activeSuperAdmins = async (req, res) => {
 
 export const getAllDepartments = async (req, res) => {
   try {
-    const { role } = req.user;
-    // console.log(role)
-    if (role !== 'Founder' && role !== "Superadmin") {
-      return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    if (!req.admin || (req.admin.role !== 'Founder' && req.admin.role !== 'Superadmin')) {
+      return res.status(403).json({ message: "Access denied: Only Founder or Superadmin can access this" });
     }
 
     const departments = await Department.findAll({
@@ -1426,6 +1434,11 @@ export const getAllDepartments = async (req, res) => {
 
 export const toggleSuperadminStatus  = async (req, res) => {
   try {
+
+    if (!req.admin || req.admin.role !== "Founder") {
+      return res.status(403).json({ message: "Access denied: Only Founders can perform this action" });
+    }
+
     const { superAdminId } = req.params;
     const superAdmin = await Admin.findByPk(superAdminId);
     console.log('role',superAdmin, superAdminId);
@@ -1450,6 +1463,13 @@ export const toggleSuperadminStatus  = async (req, res) => {
 
 export const deleteSuperAdmin = async (req, res) => {
   try {
+
+    if (!req.admin || req.admin.role !== "Founder") {
+      return res
+        .status(403)
+        .json({ message: "Access denied: Only Founders can delete Superadmins" });
+    }
+
     const { superAdminId } = req.params;
     const superAdmin = await Admin.findByPk(superAdminId);
 
@@ -1513,11 +1533,11 @@ export const subDepartmentCreation = async(req, res)=>{
 
 export const getSubDepartments = async(req,res)=>{
   try {
-    const {role} = req.user;
-    if (role !== 'Founder' && role!== "Superadmin") return res.status(403).json({ message: "Access denied: Invalid founder email" });
+    if (!req.admin || (req.admin.role !== "Founder" && req.admin.role !== "Superadmin")) {
+      return res.status(403).json({ message: "Access denied: Only Founder or Superadmin can view subdepartments" });
+    }
     const { parentId } = req.params;
-    if(!parentId) return res.status(400).json({message: "Missing parent Department Id"})
-    
+    if (!parentId) return res.status(400).json({ message: "Missing parent Department Id" });
     const subDepartments = await Department.findAll({
       where: { parentId },
       attributes: ['id', 'name', 'code'
@@ -1540,16 +1560,17 @@ export const getSubDepartments = async(req,res)=>{
 
 export const toggleSubDepartmentStatus = async(req,res)=>{
   try {
-    const { id } = req.user;
-    const superAdmin = await Admin.findByPk(id);
-    const { parentId } = req.params;
+    if (!req.admin || (req.admin.role !== "Superadmin" && req.admin.role !== "Founder")) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can change department status" });
+    }
 
-    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
-    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
+    const { parentId } = req.params;
+    if (!parentId) return res.status(400).json({ message: "Missing department ID" });
 
     const subDepartment = await Department.findByPk(parentId);
     if (!subDepartment) return res.status(404).json({ message: "Department not found" });
-    subDepartment.status = subDepartment.status === 'active' ? 'disabled' : 'active';
+
+    subDepartment.status = subDepartment.status === "active" ? "disabled" : "active";
     await subDepartment.save();
     console.log("subDepartment", subDepartment.status);
     return res.status(200).json({
@@ -1564,13 +1585,13 @@ export const toggleSubDepartmentStatus = async(req,res)=>{
 
 export const deleteSubDepartment = async(req,res)=>{
   try {
-    const { id } = req.user;
-    const superAdmin = await Admin.findByPk(id);
+    if (!req.admin || (req.admin.role !== "Superadmin" && req.admin.role !== "Founder")) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can delete subdepartments" });
+    }
     const { subdeptid } = req.params;
-
-    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
-    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
-
+    if (!subdeptid) {
+      return res.status(400).json({ message: "Missing subdepartment ID" });
+    }
     const subDepartment = await Department.findByPk(subdeptid);
     if (!subDepartment) return res.status(404).json({ message: "Sub Department not found" });
 
@@ -1584,13 +1605,11 @@ export const deleteSubDepartment = async(req,res)=>{
 
 export const updateDepartment = async (req, res) => {
   try {
-    const { id } = req.user;
-    const superAdmin = await Admin.findByPk(id);
+    if (!req.admin || (req.admin.role !== "Superadmin" && req.admin.role !== "Founder")) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can update departments" });
+    }
     const { departmentId } = req.params;
     const { name, code, status } = req.body;
-
-    if (!superAdmin) return res.status(404).json({ message: "Superadmin not found" });
-    if(superAdmin.global_role !== 'Superadmin'&& superAdmin.global_role !== 'Founder') return res.status(403).json({ message: "Access denied: Invalid superadmin" });
 
     const department = await Department.findByPk(departmentId);
     if (!department) return res.status(404).json({ message: "Department not found" });
@@ -1611,15 +1630,12 @@ export const updateDepartment = async (req, res) => {
 
 export const createRoleDeptwise = async (req, res) => {
   try {
-    const { id } = req.user;
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied: Only Superadmin or Founder can create roles" });
+    }
+
     const { name } = req.body;
     const { departmentId } = req.params;
-
-
-    const superAdmin = await Admin.findByPk(id);
-    if (!superAdmin || (superAdmin.global_role !== 'Superadmin' && superAdmin.global_role !== 'Founder')) {
-      return res.status(403).json({ message: "Access denied: Invalid superadmin" });
-    }
 
     if (!name || !departmentId) {
       return res.status(400).json({ message: "Role name and department ID are required" });
@@ -1657,6 +1673,9 @@ export const createRoleDeptwise = async (req, res) => {
 
 export const getRolesByDepartment = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const { departmentId } = req.params;
 
     const roles = await UserDepartment.findAll({
@@ -1677,6 +1696,9 @@ export const getRolesByDepartment = async (req, res) => {
 
 export const deleteDepartmentRole = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const { roleId } = req.params;
 
     if (!roleId) {
@@ -1700,6 +1722,11 @@ export const deleteDepartmentRole = async (req, res) => {
 
 export const toggleRoleStatus = async (req, res) => {
   try {
+
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     const { roleId } = req.params;
     const { status } = req.body;
 
@@ -1725,6 +1752,9 @@ export const toggleRoleStatus = async (req, res) => {
 
 export const addSubDepartmentRole = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const { subDepartmentId } = req.params;
     const { role, headId, tags, roleType } = req.body;
 
@@ -1752,6 +1782,10 @@ export const addSubDepartmentRole = async (req, res) => {
 
 export const getSubDepartmentRoles = async (req, res) => {
   try {
+
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
     const { subDepartmentId } = req.params;
 
     const roles = await UserDepartment.findAll({
@@ -1769,6 +1803,10 @@ export const getSubDepartmentRoles = async (req, res) => {
 
 export const editSuperadminPassword = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     const { id } = req.params;
     const { newPassword } = req.body;
 
@@ -1895,6 +1933,10 @@ const getYesterday = () => {
 
 export const getUsersSummary = async (req, res) => {
   try {
+    if (!req.admin || (req.admin.role !== 'Superadmin' && req.admin.role !== 'Founder')) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+    
     const yesterday = getYesterday();
 
     // Total across all levels

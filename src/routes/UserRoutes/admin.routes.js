@@ -24,7 +24,7 @@ const upload = multer({ storage });
 
 
 router.post("/login", adminLogin);
-router.get("/auth/me", getAdminProfile);
+router.get("/auth/me", authenticateAdmin ,getAdminProfile);
 router.post("/blogs", authenticateAdmin, createBlog);       // Create a blog (Admin only)
 router.get("/blogs", getAllBlogs);                          // Get all blogs (Public)
 router.get("/blogs/:id", getBlogById);                      // Get a single blog (Public)
