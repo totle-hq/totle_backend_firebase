@@ -145,7 +145,6 @@ export const adminLogin = async (req, res) => {
     });
     res.status(200).json({
       message: "Successfully Logged in!",
-      token,
       admin: {
         id: userId,
         name: userName,
@@ -162,6 +161,23 @@ export const adminLogin = async (req, res) => {
     res.status(500).json({ message: "Server error", error });
   }
 };
+
+// Route: POST /api/auth/logout
+export const adminLogout = async (req, res) => {
+  try {
+    res.clearCookie("admin_token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    res.status(200).json({ message: "Logout successful" });
+  } catch (err) {
+    console.error("Logout error:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 
 export const ensureAllCpsProfiles = async () => {
   try {

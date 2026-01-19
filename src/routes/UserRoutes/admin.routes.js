@@ -1,6 +1,6 @@
 import express from "express";
 
-import { activeSuperAdmins, addSubDepartmentRole, adminLogin, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, createRoleDeptwise, deleteBlog, deleteDepartmentRole, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, editSuperadminPassword, fetchChildrenWithStats, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllCooldownsForAllUsers, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getRolesByDepartment, getSubDepartmentRoles, getSubDepartments, getSurveyNames, getSurveyResults, getUsersSummary, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleRoleStatus, toggleSubDepartmentStatus, toggleSuperadminStatus, toggleSyncDb, unblockUserByAdmin, updateBlog, updateCoolDownPeriod, updateDepartment, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
+import { activeSuperAdmins, addSubDepartmentRole, adminLogin, adminLogout, assignRoleAndTags, blockUserByAdmin, createBlog, createOrUpdateSurvey, createRoleDeptwise, deleteBlog, deleteDepartmentRole, deleteSubDepartment, deleteSuperAdmin, deleteSurveyById, deleteUserByAdmin, DepartmentCreationByFounder, displayQuestionsBySurveyId, editSuperadminPassword, fetchChildrenWithStats, getAdminActionLogs, getAdminBlogs, getAdminDetails, getAdminProfile, getAllBlogs, getAllCooldownsForAllUsers, getAllDepartments, getAllSuggestionsForAdmin, getAllSuperAdmins, getAllSurveys, getAllUsers, getBlogById, getQuestionsBySurveyId, getResultsBySurveyId, getRolesByDepartment, getSubDepartmentRoles, getSubDepartments, getSurveyNames, getSurveyResults, getUsersSummary, revokeRoleAndTags, subDepartmentCreation, submitSurveyResponse, superAdminCreationByFounder, surveyResponsesAsJsonOrCsv, toggleRoleStatus, toggleSubDepartmentStatus, toggleSuperadminStatus, toggleSyncDb, unblockUserByAdmin, updateBlog, updateCoolDownPeriod, updateDepartment, uploadImage, verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
 import { authenticateAdmin } from "../../middlewares/adminMiddleware.js";
 import { loginLimiter } from "../../middlewares/rateLimiter.js";
 const router = express.Router();
@@ -74,7 +74,7 @@ router.get("/org/children/:parent_id", fetchChildrenWithStats);
 router.get("/analytics/summary",verifyAdminToken, getUsersSummary);
 router.post("/db-sync", toggleSyncDb);
 
-
+router.post("/logout", adminLogout)
 
 
 router.post(
