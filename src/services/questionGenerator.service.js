@@ -171,6 +171,48 @@ export async function generateQuestionsForDimension({
 }
 
 
+function getPrioritizedSubtopicSetPool(allSubtopics, totalBatches) {
+  const result = [];
+  const usedCombinations = new Set();
+  const usedSubtopics = new Set();
+
+  const generateKey = (arr) => arr.slice().sort().join("|");
+
+  const maxAttempts = totalBatches * 10;
+  let attempts = 0;
+
+  while (result.length < totalBatches && attempts < maxAttempts) {
+    attempts++;
+
+    const pickCount = Math.floor(Math.random() * 3) + 1;
+
+    // Prioritize unused subtopics
+    const unused = allSubtopics.filter(s => !usedSubtopics.has(s));
+    const pool = unused.length >= pickCount ? unused : allSubtopics;
+
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, pickCount);
+
+    const key = generateKey(picked);
+    if (usedCombinations.has(key)) continue;
+
+    result.push(picked);
+    picked.forEach(s => usedSubtopics.add(s));
+    usedCombinations.add(key);
+  }
+
+  // 🛑 Fallback: fill remaining with truly random batches
+  while (result.length < totalBatches) {
+    const pickCount = Math.floor(Math.random() * 3) + 1;
+    const shuffled = [...allSubtopics].sort(() => Math.random() - 0.5);
+    const picked = shuffled.slice(0, pickCount);
+    result.push(picked);
+  }
+
+  return result;
+}
+
+
 /* ----------------------- MAIN GENERATOR ---------------------- */
 export async function generateQuestions({
   subject,
@@ -285,14 +327,16 @@ export async function generateQuestions({
     }
     const batchSize = 4; // 5 parallel batches * 4 = 20
     const numBatches = Math.ceil(count / batchSize);
+    const chosenSubtopicGroups = getPrioritizedSubtopicSetPool(subtopics, numBatches);
 
     const prompts = Array.from({ length: numBatches }, (_, i) => {
       const idStart = i * batchSize + 1;
+      const subtopicsForBatch  = chosenSubtopicGroups[i];
       return buildPrompt({
         topicName,
         topicDescription,
         topicParams,
-        subtopics,
+        subtopics: subtopicsForBatch,
         learnerProfile,
         domain,
         domainDescription,
@@ -397,9 +441,10 @@ function buildPrompt({
       .join("\n");
 
   const formattedSubtopics =
-    Array.isArray(subtopics) && subtopics.length > 0
-      ? subtopics.map((s, i) => `${i + 1}. ${s}`).join("\n")
-      : "None specified";
+    Array.isArray(subtopics) && subtopics.length
+      ? subtopics.map((s) => `- ${s}`).join("\n")
+      : "- (No subtopics provided)";
+
 
   return `
     ROLE: You are a **senior assessment designer** specializing in teacher-qualification multiple-choice questions (MCQs) for advanced learners.
