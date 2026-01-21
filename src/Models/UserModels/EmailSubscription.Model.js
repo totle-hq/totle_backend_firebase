@@ -15,7 +15,7 @@ const EmailSubscription = sequelize1.define("EmailSubscription", {
         allowNull: false,
         unique: true,
         validate: {
-        isEmail: true,
+            isEmail: true,
         },
     },
     subscribedAt: {
@@ -31,6 +31,20 @@ const EmailSubscription = sequelize1.define("EmailSubscription", {
         isIn: [["subscribed", "unsubscribed"]],
         },
     },
+    userId: {
+        type: DataTypes.UUID,
+        allowNull: true,
+        references: {
+            model: "users", // must match User table name in lowercase
+            key: "id",
+        },
+        onDelete: "SET NULL",
+    },
+
+}, {
+  schema: 'user', // Private schema
+  tableName: 'emailSubscription', // Table name
+  timestamps: true,
 });
 
 export { EmailSubscription };

@@ -11,14 +11,18 @@ export const Subscribe = async (req, res) => {
   try {
     const [subscriber, created] = await EmailSubscription.findOrCreate({
       where: { email },
-      defaults: { subscriptionStatus: "subscribed" },
+      defaults: {
+        subscriptionStatus: "subscribed",
+      },
     });
 
     if (!created && subscriber.subscriptionStatus === "unsubscribed") {
       await subscriber.update({ subscriptionStatus: "subscribed" });
     }
 
+    // Set HttpOnly cookie
     // res.cookie(COOKIE_NAME, email, COOKIE_OPTIONS);
+
     return res.status(200).json({
       message: created ? "Subscribed successfully" : "Already subscribed",
     });
@@ -31,6 +35,7 @@ export const Subscribe = async (req, res) => {
 
 export const Unsubscribe = async (req, res) => {
   const email = req.cookies[COOKIE_NAME];
+
 
   if (!email) {
     return res.status(400).json({ message: "No email cookie found" });
