@@ -4,6 +4,7 @@ import upload from "../../middlewares/multer.js";
 import { loginLimiter, signupLimiter } from "../../middlewares/rateLimiter.js";
 import authMiddleware from "../../middlewares/authMiddleware.js";
 import { countQueriesByStatus, getQueriesList, getSupportQueries, SupportQueryForUser, updateQueryPriority, updateQueryStatus } from "../../controllers/SupportQueriesController/SupportQueryController.js";
+import { Subscribe, Unsubscribe } from "../../controllers/UserControllers/EmailSubscription.Controller.js";
 
 const router = express.Router();
 /**
@@ -55,6 +56,9 @@ router.patch("/queriesByPriority/:id", updateQueryPriority);
 router.get("/queries/summary", countQueriesByStatus);
 router.get("/summary/homepage", SummaryOfHomePage);
 router.patch("/updatePassword", authMiddleware, ChangeUserPassword);
-router.get("/refresh", refreshToken)
+router.get("/refresh", refreshToken);
+
+router.post("/subscribe", authMiddleware,Subscribe);
+router.post("/unsubscribe", authMiddleware, Unsubscribe);
 
 export default router;
