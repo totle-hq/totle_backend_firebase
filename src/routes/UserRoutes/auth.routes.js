@@ -58,7 +58,7 @@ router.get("/summary/homepage", SummaryOfHomePage);
 router.patch("/updatePassword", authMiddleware, ChangeUserPassword);
 router.get("/refresh", refreshToken);
 
-router.post("/subscribe", authMiddleware,Subscribe);
-router.post("/unsubscribe", authMiddleware, Unsubscribe);
+router.post("/subscribe", Subscribe);
+router.post("/unsubscribe", Unsubscribe);
 
 export default router;
