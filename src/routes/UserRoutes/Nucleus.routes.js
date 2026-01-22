@@ -1,6 +1,7 @@
 import express from "express";
 import { addSyncEmails, backfillTestScoresToggleAPI, changeAccountPassword, createAccountInDepartment, deleteInternRoleAccount, deleteSyncEmail, generateProfileBasedOnRole, getAccountsByDepartmentCode, getAllDepartments, getAllRoles, getAllUsersForRoles, getSyncEmails, getTestQuestionDetails, getTestsWithPaymentMode, sendOtpForProduction, testLogsOfUsers, toggleStatusForInterns, updateCatalogueNodePaymentStatus, updateSyncEmail, updateTestPaymentMode, updateUserDepartmentRolePassword, verifyOtpForProduction } from "../../controllers/UserControllers/Nucleus.controller.js";
 import { verifyAdminToken } from "../../controllers/UserControllers/admin.controller.js";
+import { getAllSubscriptions } from "../../controllers/UserControllers/EmailSubscription.Controller.js";
 
 const router = express.Router();
 router.get("/allDepartments", getAllDepartments);
@@ -38,4 +39,5 @@ router.get("/test-logs", testLogsOfUsers);
 router.post("/backfill-test-scores", backfillTestScoresToggleAPI);
 
 router.get("/test/:test_id/questions", getTestQuestionDetails);
+router.get("/subscriptions", getAllSubscriptions);
 export default router;

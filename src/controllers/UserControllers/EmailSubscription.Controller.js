@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import { EmailSubscription } from "../../Models/UserModels/EmailSubscription.Model.js";
 
 
@@ -51,6 +52,42 @@ export const Unsubscribe = async (req, res) => {
     return res.status(200).json({ message: "Unsubscribed successfully" });
   } catch (err) {
     console.error("Unsubscribe error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+export const getAllSubscriptions = async (req, res) => {
+  const {
+    search = "",
+    status = "",
+    sortBy = "subscribedAt",
+    order = "desc",
+    page = 1,
+    limit = 20,
+  } = req.query;
+
+  const whereClause = {};
+  if (search) {
+    whereClause.email = { [Op.iLike]: `%${search}%` };
+  }
+  if (status) {
+    whereClause.subscriptionStatus = status;
+  }
+
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const subscriptions = await EmailSubscription.findAll({
+      where: whereClause,
+      order: [[sortBy, order]],
+      limit: parseInt(limit),
+      offset,
+    });
+
+    return res.status(200).json(subscriptions);
+  } catch (err) {
+    console.error("Fetch subscriptions error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
