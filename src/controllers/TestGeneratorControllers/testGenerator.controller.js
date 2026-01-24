@@ -792,6 +792,44 @@ export async function getTestById(req, res) {
 
     if (!test) return res.status(404).json({ success: false, message: "Test not found" });
 
+  const submitted = !!test.submitted_at;
+  const cooldownDays = test.cooling_period ?? 0;
+  const cooldownEnd = submitted ? new Date(test.submitted_at) : null;
+
+  let formattedCooldownEnd = null;
+
+  if (cooldownEnd) {
+    // add cooldown days
+    cooldownEnd.setDate(cooldownEnd.getDate() + cooldownDays);
+
+    // format: 24 - Jan - 2026 - 03:45 PM
+    formattedCooldownEnd = cooldownEnd.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .replace(",", "") // remove comma between date and time
+    .replace(/(\d{2}) (\w{3}) (\d{4}) (\d{2}):(\d{2}) (AM|PM)/i, (_, dd, mmm, yyyy, hh, mm, ampm) => {
+      return `${dd} - ${mmm} - ${yyyy}, ${hh}:${mm} ${ampm.toLowerCase()}`;
+    });
+  }
+
+  // ❌ If test was submitted and cooldown is still active
+  if (submitted && cooldownEnd && new Date() < cooldownEnd) {
+    return res.status(403).json({
+      success: false,
+      test_status: "submitted",
+      submitted: true,
+      message: `Cooling period active. You can retake this test after ${formattedCooldownEnd}`,
+      cooling_period_end: cooldownEnd.toISOString(),     // machine readable
+      cooling_period_formatted: formattedCooldownEnd,    // UI readable
+    });
+  }
+
+
     console.log("🧪 Questions:", JSON.stringify(test.questions, null, 2));
     console.log("✅ Answers:", JSON.stringify(test.answers, null, 2));
 
