@@ -190,6 +190,43 @@ const parseIST = (dateStr, timeStr) => {
   return d;
 };
 
+function getAge(dob) {
+  if (!dob) return 0;
+  const ageDiff = Date.now() - new Date(dob).getTime();
+  return Math.floor(ageDiff / (1000 * 60 * 60 * 24 * 365.25));
+}
+
+function getLanguageTier(learner, teacher) {
+  const commonKnown = teacher.known_language_ids.filter(lang =>
+    learner.known_language_ids.includes(lang)
+  );
+
+  const hasCommonPreferred =
+    teacher.known_language_ids.includes(learner.preferred_language_id);
+
+  if (!hasCommonPreferred && commonKnown.length >= 2) return 10; // Tier 1
+  if (!hasCommonPreferred && commonKnown.length >= 1) return 7; // Tier 2
+  if (hasCommonPreferred && commonKnown.length >= 1) return 5; // Tier 3
+
+  return 0; // Disqualify
+}
+
+function isWithinBridgerBuffer(slotStart, bridgerSessions) {
+  const bufferMs = 30 * 60 * 1000;
+  for (const s of bridgerSessions) {
+    const sStart = new Date(s.scheduled_at).getTime();
+    const sEnd = new Date(s.completed_at).getTime();
+    const start = slotStart.getTime();
+    if (
+      (start >= sStart - bufferMs && start <= sStart + bufferMs) ||
+      (start >= sEnd - bufferMs && start <= sEnd + bufferMs)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 
 /** POST /api/session/book — auto-match FREE */
 
@@ -198,128 +235,137 @@ const SESSION_DURATION_MIN = 90;
 const BUFFER_MINUTES = 30;
 
 export const bookFreeSession = async (req, res) => {
-  console.log("\n================= 🧩 FreeBook START =================");
-  const t0 = Date.now();
+  console.log("\n🔁 Matching Free Session...");
 
   try {
     const learner_id = req.user?.id;
     const { topic_id } = req.body;
 
-    if (!learner_id || !topic_id) {
-      return res.status(400).json({
-        error: true,
-        message: "learner_id and topic_id are required",
-      });
-    }
+    if (!learner_id || !topic_id)
+      return res.status(400).json({ error: true, message: "Missing learner_id or topic_id" });
 
     const learner = await User.findByPk(learner_id, {
-      attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
+      attributes: ["id", "gender", "dob", "known_language_ids", "preferred_language_id", "latitude", "longitude"],
       raw: true,
     });
 
-    if (!learner) {
-      return res.status(404).json({ error: true, message: "Learner not found" });
-    }
-
-    const teacherIds = await getEligibleTeacherIds(topic_id, "free");
-    const filteredTeacherIds = teacherIds.filter((id) => id !== learner_id);
-
-    if (filteredTeacherIds.length === 0) {
-      return res.status(404).json({ error: true, message: "No teachers available." });
-    }
+    const teacherIds = await getEligibleTeacherIds(topic_id, "free", 4, learner_id);
+    if (teacherIds.length === 0)
+      return res.status(404).json({ error: true, message: "No eligible teachers found." });
 
     const now = new Date();
-    const minStart = new Date(now.getTime() + 30 * 60000);
+    const timeFrames = [0, 1]; // 0–24h, then 24–48h
+    const SESSION_DURATION_MIN = 90;
+    const BUFFER_MINUTES = 30;
+    const MIN_START = new Date(now.getTime() + BUFFER_MINUTES * 60 * 1000);
+
+    const bridgerSessions = await Session.findAll({
+      where: {
+        teacher_id: { [Op.in]: teacherIds },
+        session_level: "Bridger",
+        status: { [Op.in]: ["booked", "upcoming"] },
+      },
+      raw: true,
+    });
 
     const availabilities = await TeacherAvailability.findAll({
       where: {
-        teacher_id: { [Op.in]: filteredTeacherIds },
+        teacher_id: { [Op.in]: teacherIds },
         is_active: true,
       },
       raw: true,
     });
 
-    const slotCandidates = [];
+    let slotCandidates = [];
 
-    for (const avail of availabilities) {
-      const { teacher_id, start_time, end_time, is_recurring, available_date, day_of_week } = avail;
+    for (const frame of timeFrames) {
+      const frameStart = new Date(now.getTime() + frame * 24 * 60 * 60 * 1000);
+      const frameEnd = new Date(frameStart.getTime() + 24 * 60 * 60 * 1000);
 
-      const daysToCheck = is_recurring ? [...Array(7).keys()] : [0];
+      slotCandidates = [];
 
-      for (const offset of daysToCheck) {
-        const dateToCheck = is_recurring ? addDays(now, offset) : new Date(available_date);
-        const weekday = format(dateToCheck, "EEEE");
-        const dateStr = format(dateToCheck, "yyyy-MM-dd");
+      for (const avail of availabilities) {
+        const { teacher_id, start_time, end_time, is_recurring, available_date, day_of_week } = avail;
 
-        if (is_recurring && weekday !== day_of_week) continue;
+        const daysToCheck = is_recurring ? [...Array(7).keys()] : [0];
 
-        let availStart = parseIST(dateStr, start_time);
-        let availEnd = parseIST(dateStr, end_time);
+        for (const offset of daysToCheck) {
+          const dateToCheck = is_recurring ? addDays(now, offset) : new Date(available_date);
+          if (dateToCheck < frameStart || dateToCheck > frameEnd) continue;
 
-        if (availEnd <= availStart) availEnd.setDate(availEnd.getDate() + 1);
+          const weekday = format(dateToCheck, "EEEE");
+          if (is_recurring && weekday !== day_of_week) continue;
 
-        if (availEnd <= minStart) continue;
+          const dateStr = format(dateToCheck, "yyyy-MM-dd");
+          let availStart = parseIST(dateStr, start_time);
+          let availEnd = parseIST(dateStr, end_time);
+          if (availEnd <= availStart) availEnd.setDate(availEnd.getDate() + 1);
+          if (availEnd <= MIN_START) continue;
 
-        // Try every 15 minutes within the availability window
-        for (
-          let slotStart = new Date(Math.max(availStart.getTime(), minStart.getTime()));
-          slotStart.getTime() + SESSION_DURATION_MIN * 60000 <= availEnd.getTime();
-          slotStart = new Date(slotStart.getTime() + 15 * 60000)
-        ) {
-          const slotEnd = new Date(slotStart.getTime() + SESSION_DURATION_MIN * 60000);
-          const bufferStart = new Date(slotStart.getTime() - BUFFER_MINUTES * 60000);
-          const bufferEnd = new Date(slotEnd.getTime() + BUFFER_MINUTES * 60000);
+          for (
+            let slotStart = new Date(Math.max(availStart.getTime(), MIN_START.getTime()));
+            slotStart.getTime() + SESSION_DURATION_MIN * 60000 <= availEnd.getTime();
+            slotStart = new Date(slotStart.getTime() + 15 * 60000)
+          ) {
+            const slotEnd = new Date(slotStart.getTime() + SESSION_DURATION_MIN * 60000);
+            const bufferStart = new Date(slotStart.getTime() - BUFFER_MINUTES * 60000);
+            const bufferEnd = new Date(slotEnd.getTime() + BUFFER_MINUTES * 60000);
 
-          const overlappingSession = await Session.findOne({
-            where: {
-              teacher_id,
-              status: { [Op.in]: ["booked", "upcoming"] },
-              [Op.or]: [
-                { scheduled_at: { [Op.between]: [bufferStart, bufferEnd] } },
-                { completed_at: { [Op.between]: [bufferStart, bufferEnd] } },
-                {
-                  scheduled_at: { [Op.lte]: bufferStart },
-                  completed_at: { [Op.gte]: bufferEnd },
-                },
-              ],
-            },
-          });
-
-          if (!overlappingSession) {
-            slotCandidates.push({
-              teacher_id,
-              scheduled_at: slotStart,
-              completed_at: slotEnd,
-              duration_minutes: SESSION_DURATION_MIN,
+            const overlapping = await Session.findOne({
+              where: {
+                teacher_id,
+                status: { [Op.in]: ["booked", "upcoming"] },
+                [Op.or]: [
+                  { scheduled_at: { [Op.between]: [bufferStart, bufferEnd] } },
+                  { completed_at: { [Op.between]: [bufferStart, bufferEnd] } },
+                ],
+              },
             });
-            break; // Only one valid slot per availability
+
+            if (!overlapping && !isWithinBridgerBuffer(slotStart, bridgerSessions)) {
+              slotCandidates.push({ teacher_id, scheduled_at: slotStart, completed_at: slotEnd });
+              break;
+            }
           }
         }
       }
+
+      if (slotCandidates.length >= 2) break;
     }
 
-    if (slotCandidates.length === 0) {
-      return res.status(400).json({ error: true, message: "No valid 90-minute slots available." });
+    if (slotCandidates.length < 2) {
+      return res.status(404).json({ error: true, message: "We couldn’t find a match in the next 48 hours." });
     }
 
-    // Score candidates
+    // Score and rank all
     const scored = [];
     for (const slot of slotCandidates) {
       const teacher = await User.findByPk(slot.teacher_id, {
-        attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
+        attributes: ["id", "gender", "dob", "known_language_ids", "preferred_language_id", "latitude", "longitude"],
         raw: true,
       });
 
-      const mismatch = calculateMismatchPercentage(
-        learner.known_language_ids,
-        teacher.known_language_ids
-      );
-      const dist = getDistance(learner.location, teacher.location);
-      const score = scoreTeacher(learner, teacher, mismatch, dist);
+      const langScore = getLanguageTier(learner, teacher);
+      if (langScore === 0) continue;
 
-      scored.push({ ...slot, score });
+      const genderScore = learner.gender === teacher.gender ? 2 : 0;
+      const distKm = getDistance(
+        { lat: learner.latitude, lon: learner.longitude },
+        { lat: teacher.latitude, lon: teacher.longitude }
+      );
+      const distanceScore = Math.min(10, distKm / 100); // Normalize
+      const ageScore = Math.min(5, getAge(teacher.dob) / 10); // Normalize
+
+      const totalScore = langScore + genderScore + distanceScore + ageScore;
+
+      scored.push({ ...slot, score: totalScore });
     }
 
+    if (!scored.length) {
+      return res.status(404).json({ error: true, message: "No suitable teacher found for this learner." });
+    }
+
+    // Select top teacher slot
     scored.sort((a, b) => b.score - a.score);
     const selected = scored[0];
 
@@ -329,68 +375,21 @@ export const bookFreeSession = async (req, res) => {
       student_id: learner_id,
       scheduled_at: selected.scheduled_at,
       completed_at: selected.completed_at,
-      duration_minutes: selected.duration_minutes,
+      duration_minutes: SESSION_DURATION_MIN,
       session_tier: "free",
+      session_level: "Bridger",
       status: "upcoming",
     });
 
-    const topic = await CatalogueNode.findByPk(topic_id, {
-      attributes: ["name"],
-      raw: true,
-    });
-
-    const learnerUser = await User.findByPk(learner_id, {
-      attributes: ["email", "firstName"],
-    });
-
-    const teacherUser = await User.findByPk(selected.teacher_id, {
-      attributes: ["email", "firstName"],
-    });
-
-    // 🔔 Fire and forget (do NOT await both)
-    // 🔔 Fire-and-forget but SAFE
-    Promise.allSettled([
-      sendSessionBookedEmail({
-        to: learnerUser.email,
-        role: "learner",
-        otherUserName: teacherUser.firstName,
-        topicName: topic?.name || "Unknown Topic",
-        scheduledAt: formatInTz(
-          selected.scheduled_at,
-          req.userTz || "UTC",
-          "dd MMM yyyy, HH:mm"
-        ),
-      }),
-      sendSessionBookedEmail({
-        to: teacherUser.email,
-        role: "teacher",
-        otherUserName: learnerUser.firstName,
-        topicName: topic?.name || "Unknown Topic",
-        scheduledAt: formatInTz(
-          selected.scheduled_at,
-          req.userTz || "UTC",
-          "dd MMM yyyy, HH:mm"
-        ),
-      }),
-    ]).catch(err => {
-      console.error("📧 Session email failed:", err);
-    });
-
     await updateAvailabilityAfterBooking(session);
-
-    const teacher = await User.findByPk(selected.teacher_id, {
-      attributes: ["firstName", "lastName"],
-      raw: true,
-    });
 
     return res.status(200).json({
       success: true,
       message: "Free-tier session booked successfully",
       data: {
         sessionId: session.session_id,
-        teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
-        topicName: topic?.name || "Unknown",
-scheduledAt: formatInTz(selected.scheduled_at, (req.userTz || "UTC"), "dd MMM yyyy, HH:mm"),
+        scheduledAt: session.scheduled_at,
+        teacherId: session.teacher_id,
       },
     });
   } catch (err) {
@@ -398,6 +397,7 @@ scheduledAt: formatInTz(selected.scheduled_at, (req.userTz || "UTC"), "dd MMM yy
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
 
 const INCLUDE_BUFFER_IN_TRIM = true; // or false
 
