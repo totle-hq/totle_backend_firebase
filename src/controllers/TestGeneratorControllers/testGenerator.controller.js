@@ -150,7 +150,8 @@ paymentMode = paymentMode === "LIVE" ? "LIVE" : "DEMO";
       });
     }
     // const amount = 9900; // ₹99 in paise
-    const amount = 100; // ₹1 in paise
+    const amount = topic.topic_price * 100;
+    // const amount = 100; // ₹1 in paise
     const currency = "INR";
 
     // ✅ FIXED: Generate short receipt (≤40 characters)
