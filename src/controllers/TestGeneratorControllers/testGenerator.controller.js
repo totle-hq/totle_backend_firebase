@@ -168,17 +168,22 @@ export const initiateTestPayment = async (req, res) => {
       if (promo.min_order_value && originalAmount < promo.min_order_value)
         return res.status(400).json({ success: false, message: "Order value too low for this promo" });
 
-      // Apply discount
+      // Apply discount (SAFE VERSION)
       if (promo.type === "percentage") {
-        const percentage = Math.min(Math.max(promo.discount, 0), 100);
-        const rawDiscount = (percentage / 100) * originalAmount;
-        const discountInRupees = rawDiscount / 100;
-        discountAmount = Math.ceil(discountInRupees) * 100; // rounded UP to ₹
-      } else if (promo.type === "amount") {
-        discountAmount = Math.ceil(promo.discount) * 100; // force ₹ only, no paise
+        const percentage = Math.min(Math.max(promo.discount, 0), 100); // cap 0–100%
+        const rawDiscount = (percentage / 100) * originalAmount; // paise
+        discountAmount = Math.min(Math.ceil(rawDiscount), originalAmount); // cap to price
+      } 
+      else if (promo.type === "amount") {
+        discountAmount = Math.min(Math.ceil(promo.discount * 100), originalAmount); // ₹ → paise, cap to price
       }
 
-      finalPrice = Math.max(100, originalAmount - discountAmount); // ₹1 = 100 paise
+      // Final price calculation
+      finalPrice = originalAmount - discountAmount;
+
+      // Razorpay minimum ₹1 safeguard
+      if (finalPrice < 100) finalPrice = 100; // 100 paise = ₹1
+
       console.log(`✅ Promo ${promoCode} applied. Discount: ₹${(discountAmount / 100).toFixed(2)}. Final amount: ₹${(finalPrice / 100).toFixed(2)}`);
     }
 

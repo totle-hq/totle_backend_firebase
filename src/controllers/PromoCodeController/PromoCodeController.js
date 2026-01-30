@@ -27,11 +27,64 @@ export const CreatePromoCode = async (req, res) => {
       tags = [],
     } = req.body;
 
-    const finalCode = code || generatePromoCode();
+    const finalCode = (code || generatePromoCode()).toUpperCase();
     
     const existing = await PromoCode.findOne({ where: { code: finalCode } });
     if (existing) {
       return res.status(409).json({ error: "Promo code already exists" });
+    }
+
+    // -------- SAFE VALIDATION --------
+    let safeDiscount = Number(discount);
+
+    if (!safeDiscount || isNaN(safeDiscount)) {
+      return res.status(400).json({ error: "Invalid discount value" });
+    }
+
+    if (!["percentage", "amount"].includes(type)) {
+      return res.status(400).json({ error: "Invalid promo type" });
+    }
+
+    // % discount rules
+    if (type === "percentage") {
+      if (safeDiscount < 1 || safeDiscount > 98) {
+        return res.status(400).json({
+          error: "Percentage discount must be between 1 and 98",
+        });
+      }
+      safeDiscount = Math.round(safeDiscount);
+    }
+
+    // ₹ discount rules
+    if (type === "amount") {
+      if (safeDiscount < 1) {
+        return res.status(400).json({
+          error: "Flat discount must be at least ₹1",
+        });
+      }
+
+      // Hard safety cap (anti-mistake / anti-abuse)
+      if (safeDiscount > 100000) { // ₹1 lakh cap
+        return res.status(400).json({
+          error: "Flat discount is too large",
+        });
+      }
+
+      safeDiscount = Math.ceil(safeDiscount);
+    }
+
+    // Min order validation
+    if (min_order_value !== null && Number(min_order_value) < 1) {
+      return res.status(400).json({
+        error: "Minimum order value must be at least ₹1",
+      });
+    }
+
+    // Usage limit validation
+    if (usage_limit !== null && usage_limit < 1) {
+      return res.status(400).json({
+        error: "Usage limit must be at least 1",
+      });
     }
 
     const promo = await PromoCode.create({
