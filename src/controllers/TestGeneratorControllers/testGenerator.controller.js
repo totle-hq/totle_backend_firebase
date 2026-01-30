@@ -234,7 +234,7 @@ export const initiateTestPayment = async (req, res) => {
 
 export const verifyTestPayment = async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, topicId } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, topicId,promo_code } = req.body;
 
     const userId = req.user.id;
 
@@ -246,7 +246,7 @@ export const verifyTestPayment = async (req, res) => {
         entity_id: topicId,
         order_id: razorpay_order_id,
       },
-      attributes: [...PAYMENT_ATTRS, "payment_mode","notes"],
+      attributes: [...PAYMENT_ATTRS, "payment_mode"],
     });
 
     if (!payment) {
@@ -275,45 +275,50 @@ export const verifyTestPayment = async (req, res) => {
       });
     }
 
-    payment.razorpay_payment_id = razorpay_payment_id;
-    payment.razorpay_signature = razorpay_signature;
-    payment.status = "success";
-    await payment.save();
-    // After payment is verified and confirmed
-    if (payment.notes?.promo_code) {
-      const promoCode = payment.notes.promo_code;
+    // ✅ Start DB transaction
+    await sequelize1.transaction(async (t) => {
+      // Step 1: Update payment
+      payment.razorpay_payment_id = razorpay_payment_id;
+      payment.razorpay_signature = razorpay_signature;
+      payment.status = "success";
+      await payment.save({ transaction: t });
 
-      await sequelize1.transaction(async (t) => {
-        // Lock the promo row for update
+      // Step 2: Handle promo redemption
+      if (promo_code) {
         const promo = await PromoCode.findOne({
-          where: { code: promoCode },
-          lock: t.LOCK.UPDATE,
+          where: { code: promo_code },
+          transaction: t,
+          lock: t.LOCK.UPDATE, // row-level lock
+        });
+
+        if (!promo) {
+          throw new Error("Promo code not found");
+        }
+
+        // Check redemption (enforced at DB too)
+        const alreadyRedeemed = await PromoCodeRedemption.findOne({
+          where: {
+            promo_code: promo.code,
+            user_id: userId,
+          },
           transaction: t,
         });
 
-        if (promo) {
-          // Check if already redeemed (within transaction)
-          const alreadyRedeemed = await PromoCodeRedemption.findOne({
-            where: {
+        if (!alreadyRedeemed) {
+          await PromoCodeRedemption.create(
+            {
               promo_code: promo.code,
-              user_id: payment.user_id,
+              user_id: userId,
             },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-          });
+            { transaction: t }
+          );
 
-          if (!alreadyRedeemed) {
-            await PromoCodeRedemption.create({
-              promo_code: promo.code,
-              user_id: payment.user_id,
-            }, { transaction: t });
-
-            promo.used_count += 1;
-            await promo.save({ transaction: t });
-          }
+          promo.used_count += 1;
+          await promo.save({ transaction: t });
         }
-      });
-    }
+      }
+    });
+
     return res.status(200).json({
       success: true,
       message: "Payment verified successfully",
