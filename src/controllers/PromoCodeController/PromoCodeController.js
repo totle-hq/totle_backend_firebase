@@ -86,13 +86,32 @@ export const CreatePromoCode = async (req, res) => {
         error: "Usage limit must be at least 1",
       });
     }
+    // Validate expiry date
+    let safeExpiry = null;
+
+    if (expires_at === "" || expires_at === undefined || expires_at === null) {
+      safeExpiry = null;
+    } 
+    else {
+      const expiry = new Date(expires_at);
+
+      if (isNaN(expiry.getTime())) {
+        return res.status(400).json({ error: "Invalid expiry date format" });
+      }
+
+      if (expiry <= new Date()) {
+        return res.status(400).json({ error: "Expiry date must be in the future" });
+      }
+
+      safeExpiry = expiry;
+    }
 
     const promo = await PromoCode.create({
       code: finalCode,
-      discount,
+      discount: safeDiscount,
       type,
       usage_limit,
-      expires_at,
+      expires_at: safeExpiry,
       audience,
       user_id,
       min_order_value,
