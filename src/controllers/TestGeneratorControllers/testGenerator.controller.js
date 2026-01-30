@@ -143,7 +143,7 @@ export const initiateTestPayment = async (req, res) => {
 
     const originalAmount = Math.round(topic.topic_price * 100); // ₹ → paise
     let discountAmount = 0;
-    let finalPrice = 0;
+    let finalPrice = originalAmount;
 
     // ✅ Validate promo code if provided
     if (promoCode) {
@@ -163,7 +163,7 @@ export const initiateTestPayment = async (req, res) => {
 
       const alreadyUsed = await PromoCodeRedemption.findOne({ where: { promo_code: promoCode, user_id: userId } });
       if (alreadyUsed)
-        return res.status(409).json({ success: false, message: "Promo already used by user" });
+        return res.status(409).json({ success: false, message: "Promocode already used by user" });
 
       if (promo.min_order_value && originalAmount < promo.min_order_value)
         return res.status(400).json({ success: false, message: "Order value too low for this promo" });

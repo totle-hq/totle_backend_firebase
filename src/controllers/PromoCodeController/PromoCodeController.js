@@ -87,7 +87,7 @@ export const ValidatePromoCode = async (req, res) => {
     });
 
     if (alreadyUsed)
-      return res.status(409).json({ error: "Promo already used by user" });
+      return res.status(409).json({ error: "Promocode already used by user" });
 
     res.json({
       valid: true,
@@ -136,7 +136,7 @@ export const RedeemPromoCode = async (req, res) => {
     await transaction.rollback();
 
     if (err.name === "SequelizeUniqueConstraintError") {
-      return res.status(409).json({ error: "Promo already redeemed by user" });
+      return res.status(409).json({ error: "Promocode already redeemed by user" });
     }
 
     console.error("Redemption failed:", err);
