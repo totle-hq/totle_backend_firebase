@@ -2,6 +2,7 @@
 import { Op } from "sequelize";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 import { redisClient } from "../../config/redis.js";
+import { Teachertopicstats } from "../../Models/TeachertopicstatsModel.js";
 
 /* ------------------------------------------------------------------
    Cache helpers (same pattern you already had)
@@ -401,14 +402,20 @@ export const getNodeByIdForUser = async (req, res) => {
   const key = `catalogue:node:user:${req.params.id}`;
   const cached = await cacheGet(key);
   if (cached) return res.json(cached);
-  
+
   try {
     const node = await CatalogueNode.findOne({
       where: { node_id: req.params.id, status: "active" }, // ✅ status filter added
     });
 
     if (!node || !(await isActiveThroughTree(node))) return res.status(404).json({ error: "Node not found" });
-
+    const teacherCount = await Teachertopicstats.count({
+          where: { node_id: node.node_id },
+          distinct: true,
+          col: "teacherId",
+        });
+    const plain = node.toJSON();          // ✅ convert to plain object
+    plain.teacher_count = teacherCount;
     await cacheSet(key, node);
     return res.json(node);
   } catch (err) {
@@ -458,6 +465,7 @@ export const getChildren = async (req, res) => {
 /* ---------- Children OR domains list For User ---------- */
 export const getChildrenForUser = async (req, res) => {
   const { parent_id: parentIdRaw, is_domain, type } = req.query;
+  console.log("en")
 
   // explicit domains list:
   if (String(is_domain).toLowerCase() === "true" || String(type).toLowerCase() === "domain") {
@@ -473,11 +481,21 @@ export const getChildrenForUser = async (req, res) => {
       const filtered = [];
       for (const node of rows) {
         if (await isActiveThroughTree(node)) {
-          filtered.push(node);
+          const teacherCount = await Teachertopicstats.count({
+            where: { node_id: node.node_id },
+            distinct: true,
+            col: "teacherId",
+          });
+
+          const plain = node.toJSON();
+          plain.teacher_count = teacherCount;
+          filtered.push(plain);
         }
       }
 
+
       await cacheSet(key, filtered);
+      console.log(filtered)
       return res.json(filtered);
     } catch (err) {
       return res.status(500).json({ error: err.message });
@@ -497,11 +515,21 @@ export const getChildrenForUser = async (req, res) => {
     const filtered = [];
     for (const node of children) {
       if (await isActiveThroughTree(node)) {
-        filtered.push(node);
+        const teacherCount = await Teachertopicstats.count({
+          where: { node_id: node.node_id },
+          distinct: true,
+          col: "teacherId",
+        });
+
+        const plain = node.toJSON();
+        plain.teacher_count = teacherCount;
+        filtered.push(plain);
       }
     }
 
+
     await cacheSet(key, filtered);
+    console.log(filtered)
     return res.json(filtered);
   } catch (err) {
     return res.status(500).json({ error: err.message });

@@ -654,7 +654,13 @@ export const evaluateTest = async (req, res) => {
     const percentage = Math.round((totalScore / maxScore) * 100);
 
     // ✅ Pass rule: ≥90% always passes (ignore gates)
-    const passed = percentage >= 90;
+
+
+    //original
+    // const passed = percentage >= 90;
+
+    // Pilot case
+    const passed = percentage >= 75;
 
     /* ------------------ 2) Apply rubrics (option impacts) ------------------ */
     let deltas = {};
@@ -701,10 +707,22 @@ export const evaluateTest = async (req, res) => {
     test.evaluated_result_status = gatedPass ? "Pass" : "Fail";
 
 
-    /* ------------------ 4) Cooling period ------------------ */
+    /* ------------------ 4) Original Cooling period ------------------ */
+    // let cooling_period_days = 0;
+    // if (percentage >= 80 && percentage < 90) cooling_period_days = 7;
+    // else if (percentage < 80) cooling_period_days = 14;
+
+    // test.cooling_period = cooling_period_days;
+    // let cooling_period_end = null;
+    // if (cooling_period_days > 0) {
+    //   const submittedAt = test.submitted_at ? new Date(test.submitted_at) : new Date();
+    //   cooling_period_end = new Date(submittedAt.getTime() + cooling_period_days * 86400000);
+    // }
+
+    //------------------ 4) TEST PILOT --------------------------- */
     let cooling_period_days = 0;
-    if (percentage >= 80 && percentage < 90) cooling_period_days = 7;
-    else if (percentage < 80) cooling_period_days = 14;
+    if (percentage >= 60 && percentage < 75) cooling_period_days = 7;
+    else if (percentage < 60) cooling_period_days = 14;
 
     test.cooling_period = cooling_period_days;
     let cooling_period_end = null;
