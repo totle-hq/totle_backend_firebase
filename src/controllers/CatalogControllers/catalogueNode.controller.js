@@ -350,6 +350,40 @@ export const patchAllTopicTeacherScores = async (_req, res) => {
   }
 };
 
+async function getDescendantNodes(node) {
+  const nodes = [node];
+
+  const children = await CatalogueNode.findAll({
+    where: { parent_id: node.node_id, status: "active" },
+  });
+
+  for (const child of children) {
+    nodes.push(...(await getDescendantNodes(child)));
+  }
+
+  return nodes;
+}
+
+async function attachTeacherCount(node) {
+  const descendantNodes = await getDescendantNodes(node);
+
+  const allowedNodeIds = descendantNodes
+    .filter(n => n.node_level >= node.node_level)
+    .map(n => n.node_id);
+
+  const teacherCount = await Teachertopicstats.count({
+    where: { node_id: allowedNodeIds },
+    distinct: true,
+    col: "teacherId",
+  });
+
+  const plain = node.toJSON();
+  plain.teacher_count = teacherCount;
+
+  return plain;
+}
+
+
 export const getAllTopicWeights = async (_req, res) => {
   try {
     const topics = await CatalogueNode.findAll({
@@ -390,8 +424,9 @@ export const getNodeById = async (req, res) => {
   try {
     const node = await CatalogueNode.findByPk(req.params.id);
     if (!node) return res.status(404).json({ error: "Node not found" });
-    await cacheSet(key, node);
-    return res.json(node);
+    const plain = await attachTeacherCount(node)
+    await cacheSet(key, plain);
+    return res.json(plain);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -409,15 +444,24 @@ export const getNodeByIdForUser = async (req, res) => {
     });
 
     if (!node || !(await isActiveThroughTree(node))) return res.status(404).json({ error: "Node not found" });
+    const descendantNodes = await getDescendantNodes(node);
+
+    const allowedNodeIds = descendantNodes
+      .filter(n => n.node_level >= node.node_level)
+      .map(n => n.node_id);
+
     const teacherCount = await Teachertopicstats.count({
-          where: { node_id: node.node_id },
-          distinct: true,
-          col: "teacherId",
-        });
+      where: {
+        node_id: allowedNodeIds, // 👈 IMPORTANT
+      },
+      distinct: true,
+      col: "teacherId",
+    });
+
     const plain = node.toJSON();          // ✅ convert to plain object
     plain.teacher_count = teacherCount;
-    await cacheSet(key, node);
-    return res.json(node);
+    await cacheSet(key, plain);
+    return res.json(plain);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -435,11 +479,16 @@ export const getChildren = async (req, res) => {
     if (cached) return res.json(cached);
     try {
       const rows = await CatalogueNode.findAll({
-        where: { is_domain: true },
+        where: { is_domain: true, status: "active" },
         order: [["created_at", "ASC"]],
       });
-      await cacheSet(key, rows);
-      return res.json(rows);
+      const enriched = [];
+      for (const node of rows) {
+        enriched.push(await attachTeacherCount(node));
+      }
+
+      await cacheSet(key, enriched);
+      return res.json(enriched);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -452,11 +501,16 @@ export const getChildren = async (req, res) => {
 
   try {
     const children = await CatalogueNode.findAll({
-      where: { parent_id: parentId },
+      where: { parent_id: parentId, status: "active" },
       order: [["created_at", "ASC"]],
     });
-    await cacheSet(key, children);
-    return res.json(children);
+    const enriched = [];
+    for (const node of children) {
+      enriched.push(await attachTeacherCount(node));
+    }
+
+    await cacheSet(key, enriched);
+    return res.json(enriched);
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
@@ -480,17 +534,23 @@ export const getChildrenForUser = async (req, res) => {
       
       const filtered = [];
       for (const node of rows) {
-        if (await isActiveThroughTree(node)) {
-          const teacherCount = await Teachertopicstats.count({
-            where: { node_id: node.node_id },
-            distinct: true,
-            col: "teacherId",
-          });
+        if (!(await isActiveThroughTree(node))) continue;
+        const plain = node.toJSON();
 
-          const plain = node.toJSON();
-          plain.teacher_count = teacherCount;
-          filtered.push(plain);
-        }
+        const descendantNodes = await getDescendantNodes(node);
+        const allowedNodeIds = descendantNodes
+          .filter(n => n.node_level >= node.node_level) // 👈 SAME OR BELOW
+          .map(n => n.node_id);
+
+        const teacher_count = await Teachertopicstats.count({
+          where: { node_id: allowedNodeIds },
+          distinct: true,
+          col: "teacherId",
+        });
+
+        plain.teacher_count = teacher_count;
+        filtered.push(plain);
+
       }
 
 
@@ -514,17 +574,21 @@ export const getChildrenForUser = async (req, res) => {
     });
     const filtered = [];
     for (const node of children) {
-      if (await isActiveThroughTree(node)) {
-        const teacherCount = await Teachertopicstats.count({
-          where: { node_id: node.node_id },
-          distinct: true,
-          col: "teacherId",
-        });
+      if (!(await isActiveThroughTree(node))) continue;
+      const descendantNodes = await getDescendantNodes(node);
+      const allowedNodeIds = descendantNodes
+        .filter(n => n.node_level >= node.node_level)
+        .map(n => n.node_id);
 
-        const plain = node.toJSON();
-        plain.teacher_count = teacherCount;
-        filtered.push(plain);
-      }
+      const teacherCount = await Teachertopicstats.count({
+        where: { node_id: allowedNodeIds },
+        distinct: true,
+        col: "teacherId",
+      });
+
+      const plain = node.toJSON();
+      plain.teacher_count = teacherCount;
+      filtered.push(plain);
     }
 
 
