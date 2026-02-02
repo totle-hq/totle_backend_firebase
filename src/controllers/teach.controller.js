@@ -191,12 +191,20 @@ export const bookFreeSession = async (req, res) => {
 
     const teacherIds = await getEligibleTeacherIds(topic_id, "free");
     const filteredTeacherIds = teacherIds.filter(id => id !== learner_id);
-    if (filteredTeacherIds.length < 2) {
+    // test PILOT 
+    if (filteredTeacherIds.length < 1) {
       return res.status(400).json({
         error: true,
         message: "Awesome pick! Our mentors are getting ready — check back soon to grab your free session.",
       });
     }
+    // ORIGINAL
+    // if (filteredTeacherIds.length < 2) {
+    //   return res.status(400).json({
+    //     error: true,
+    //     message: "Awesome pick! Our mentors are getting ready — check back soon to grab your free session.",
+    //   });
+    // }
     const now = new Date();
     const minStart = new Date(now.getTime() + 30 * 60000);
     const MIN_DURATION = 90;
