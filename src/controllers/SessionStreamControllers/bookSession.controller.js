@@ -240,7 +240,7 @@ export const bookFreeSession = async (req, res) => {
   try {
     const learner_id = req.user?.id;
     const { topic_id } = req.body;
-
+    console.log(req.body)
     if (!learner_id || !topic_id)
       return res.status(400).json({ error: true, message: "Missing learner_id or topic_id" });
 
@@ -250,6 +250,7 @@ export const bookFreeSession = async (req, res) => {
     });
 
     const teacherIds = await getEligibleTeacherIds(topic_id, "free", 4, learner_id);
+    console.log(teacherIds)
     if (teacherIds.length === 0)
       return res.status(404).json({ error: true, message: "No eligible teachers found." });
 
@@ -330,12 +331,20 @@ export const bookFreeSession = async (req, res) => {
         }
       }
 
-      if (slotCandidates.length >= 2) break;
+      // PILOT 
+      if (slotCandidates.length >= 1) break;
+      // ORIGINAL
+      // if (slotCandidates.length >= 2) break;
     }
 
-    if (slotCandidates.length < 2) {
+    // PILOT
+    if (slotCandidates.length < 1) {
       return res.status(404).json({ error: true, message: "We couldn’t find a match in the next 48 hours." });
     }
+    // ORIGINAL
+    // if (slotCandidates.length < 1) {
+    //   return res.status(404).json({ error: true, message: "We couldn’t find a match in the next 48 hours." });
+    // }
 
     // Score and rank all
     const scored = [];
@@ -682,7 +691,9 @@ export const getTeacherUpcomingSessions = async (req, res) => {
       raw: true,
     });
 
+    console.log("sessions length",sessions.length)
     if (!sessions.length) {
+      res.set("Cache-Control", "no-store");
       return res.status(200).json({
         success: true,
         sessions: [],
@@ -731,6 +742,8 @@ export const getTeacherUpcomingSessions = async (req, res) => {
       scheduled_at: s.scheduled_at, // RAW UTC - frontend handles tz
       duration_minutes: s.duration_minutes ?? 90,
     }));
+
+    res.set("Cache-Control", "no-store");
 
     return res.status(200).json({
       success: true,

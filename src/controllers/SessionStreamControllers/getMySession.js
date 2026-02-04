@@ -2,7 +2,7 @@ import { Session } from "../../Models/SessionModel.js";
 import { User } from "../../Models/UserModels/UserModel.js";
 import { CatalogueNode } from "../../Models/CatalogModels/catalogueNode.model.js";
 // import { BookedSession } from "../../Models/BookedSession.js";
-import { literal, Op } from "sequelize";
+import { fn, literal, Op, where } from "sequelize";
 import Feedback from "../../Models/feedbackModels.js";
 
 // controllers/session.controller.js
@@ -45,6 +45,7 @@ export const getFirstUpcomingStudentSession = async (req, res) => {
       console.warn("⚠️ No upcoming session found for this student");
       return res.status(404).json({ error: true, message: "No upcoming session found" });
     }
+    res.set("Cache-Control", "no-store");
 
     return res.status(200).json({
       success: true,
@@ -120,9 +121,8 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
     const session = await Session.findOne({
       where: {
         teacher_id: id,
-        status: { [Op.in]: ["upcoming", "booked"] },
-        ...upcomingOrOngoingFilter()
-
+        status: { [Op.notIn]: ["cancelled"] },
+        [Op.and]: [upcomingOrOngoingFilter()],
       },
       include: [
         { model: User, as: "student", attributes: ["firstName", "lastName"] },
@@ -139,6 +139,23 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
     if (!session)
       return res.status(404).json({ error: true, message: "No upcoming session found" });
 
+      /* ---------------- Derive real-time status ---------------- */
+
+    const start = new Date(session.scheduled_at);
+    const end = new Date(start.getTime() + session.duration_minutes * 60000);
+
+    let derivedStatus;
+    if (session.completed_at || now > end) {
+      derivedStatus = "completed";
+    } else if (now >= start && now <= end) {
+      derivedStatus = "live"; // live / joinable
+    } else {
+      derivedStatus = "upcoming"; // future
+    }
+
+    /* ---------------- No-cache (prevents 304 confusion) ---------------- */
+    res.set("Cache-Control", "no-store");
+
     return res.status(200).json({
       success: true,
       session: {
@@ -149,6 +166,7 @@ export const getFirstUpcomingTeacherSession = async (req, res) => {
         topicName: session.topic?.name || "Unknown",
         subject: session.topic?.subject?.name || "Unknown",
         scheduled_at: session.scheduled_at,
+        status: derivedStatus,
       },
     });
   } catch (err) {
@@ -164,13 +182,10 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
       return res.status(400).json({ error: true, message: "Teacher ID is required" });
     }
 
-    const now = new Date();
-
-    const sessions = await Session.findAll({
+     const sessions = await Session.findAll({
       where: {
         teacher_id: id,
-        status: { [Op.in]: ["upcoming", "booked"] },
-        ...upcomingOrOngoingFilter()
+        ...upcomingOrOngoingFilter(), // ✅ use this instead of status filter
       },
       include: [
         {
@@ -192,19 +207,46 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
         },
       ],
       order: [["scheduled_at", "ASC"]],
+
     });
 
+    console.log("Sessions length:", sessions.length);
     if (!sessions.length) {
       return res.status(200).json({ success: true, sessions: [] });
     }
 
-    const formatted = sessions.map((s) => ({
-      session_id: s.session_id,
-      studentName: s.student ? `${s.student.firstName}`.trim() : "Unassigned",
-      topicName: s.topic?.name || "Unknown",
-      subject: s.topic?.subject?.name || "Unknown",
-      scheduled_at: s.scheduled_at,
-    }));
+    /* ---------------- Shape response with derived status ---------------- */
+
+    const now = new Date();
+
+    const formatted = sessions.map((s) => {
+      const start = new Date(s.scheduled_at);
+      const end = new Date(start.getTime() + s.duration_minutes * 60000);
+
+      let derivedStatus;
+      if (s.completed_at || now > end) {
+        derivedStatus = "completed";
+      } else if (now >= start && now <= end) {
+        derivedStatus = "live";
+      } else {
+        derivedStatus = "upcoming";
+      }
+      return {
+        session_id: s.session_id,
+        scheduled_at: s.scheduled_at,
+        duration: s.duration_minutes,
+        status: derivedStatus,
+        studentName: s.student
+          ? `${s.student.firstName ?? ""} ${s.student.lastName ?? ""}`.trim()
+          : "Unassigned",
+        topicName: s.topic?.name || "Unknown",
+        subject: s.topic?.subject?.name || "General",
+        session_level: s.session_level,
+        session_tier: s.session_tier,
+      };
+    });
+
+    res.set("Cache-Control", "no-store");
 
     return res.status(200).json({ success: true, sessions: formatted });
   } catch (err) {
@@ -216,9 +258,18 @@ export const getAllUpcomingTeacherSessions = async (req, res) => {
 
 export const upcomingOrOngoingFilter = () => ({
   [Op.or]: [
-    { scheduled_at: { [Op.gte]: new Date() } },
-    {
-      [Op.and]: literal(`scheduled_at + (duration_minutes || ' minutes')::interval >= NOW()`)
-    }
-  ]
+    // Future sessions
+    where(
+      literal("scheduled_at"),
+      Op.gte,
+      literal("NOW()")
+    ),
+
+    // Ongoing sessions
+    where(
+      literal(`scheduled_at + (duration_minutes || ' minutes')::interval`),
+      Op.gte,
+      fn("NOW")
+    ),
+  ],
 });
