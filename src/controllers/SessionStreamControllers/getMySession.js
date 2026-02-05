@@ -101,7 +101,7 @@ export const getStudentSessions = async (req, res) => {
       feedbackSubmitted: session.feedbacks?.length > 0,
     }));
     
-    console.log("sessions:", formatted);
+    // console.log("sessions:", formatted);
     
     return res.status(200).json({ success: true, sessions: formatted });
 

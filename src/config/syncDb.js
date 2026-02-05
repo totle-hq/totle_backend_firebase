@@ -31,8 +31,12 @@ import { Department } from '../Models/UserModels/Department.js';
 import { FeatureRoadmap } from '../Models/Strategy/FeatureRoadmap.model.js';
 import { ProjectBoard } from "../Models/ProjectModels/ProjectBoard.model.js";
 import { ProjectTask } from "../Models/ProjectModels/ProjectTask.model.js";
+import { Notification } from '../Models/NotificationModel.js'; // ✅ ADDED
 import { UserDevice } from "../Models/UserModels/userDevice.model.js";
-
+import { SessionToken } from "../Models/SessionTokenModel.js";
+import TeacherAvailability from "../Models/TeacherAvailability.js";
+import url from "url";
+import path from "path";
 dotenv.config();
 
 /* -------------------------------------------------
@@ -159,17 +163,17 @@ async function safeSync(model, { name, allowAlter = true } = {}) {
    Main Sync
 -------------------------------------------------- */
 export async function syncDatabase() {
-    console.log("🟡 syncDatabase() invoked"); // 👈 add this at the top
+    console.log("🟡 syncDatabase() invoked");
 
   try {
     const dbName1 = process.env.DB_NAME || 'totle';
-    console.log("🟡 creating DB if needed:", dbName1); // 👈
+    console.log("🟡 creating DB if needed:", dbName1);
 
     await createDatabaseIfNeeded(dbName1);
-    console.log("🟢 Database check done"); // 👈 add this
+    console.log("🟢 Database check done");
 
     await createSchemas(sequelize1); // ✅ now includes 'cps'
-initCpsModels();
+    initCpsModels();
 
     // associations
     const defineRelationships = await import('../config/associations.js');
@@ -189,6 +193,10 @@ initCpsModels();
     console.log(" User Device synced successfully!");
     await safeSync(SessionToken, {name: 'SessionToken'});
     console.log('✅ Session Token table synced successfully!');
+    
+    // ✅ ADDED NOTIFICATION SYNC - Right after User sync
+    await safeSync(Notification, { name: 'Notification' });
+    console.log('✅ Notification table synced successfully!');
 
     const { Blog } = await import('../Models/SurveyModels/BlogModel.js');
     await safeSync(Blog, { name: 'Blog' });
@@ -306,10 +314,7 @@ export const runDbSync = async (isSyncNeeded = false) => {
   }
 };
 
-import path from "path";
-import url from "url";
-import TeacherAvailability from "../Models/TeacherAvailability.js";
-import { SessionToken } from "../Models/SessionTokenModel.js";
+
 
 const thisFile = url.fileURLToPath(import.meta.url);
 const entryFile = path.resolve(process.argv[1] || "");

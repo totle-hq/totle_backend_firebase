@@ -1,5 +1,6 @@
 // src/controllers/SessionStreamControllers/updateSessionTiming.controller.js
 import { Session } from "../../Models/SessionModel.js";
+import NotificationService from "../../services/notificationService.js";
 
 /**
  * POST /api/session/update-timing
@@ -101,7 +102,28 @@ export const updateSessionTiming = async (req, res) => {
     console.log("🧩 [8c] Database Save Complete ✓");
 
     /* ---------------------------------------------------------------
-       STEP 5. Respond to Client
+        STEP 5. Create Notifications (Reschedule)
+    ---------------------------------------------------------------- */
+    console.log("🔔 Creating reschedule notifications...");
+
+    try {
+      await NotificationService.createSessionRescheduleNotification({
+        sessionId: session.id, // ✅ IMPORTANT: use session.id
+        learnerId: session.student_id,
+        teacherId: session.teacher_id,
+        oldTime,
+        newTime: parsedTime,
+      });
+
+      console.log("✅ Reschedule notifications created successfully");
+    } catch (notificationError) {
+      console.error("❌ Failed to create reschedule notifications:", notificationError);
+      // ❗ Do NOT fail the request if notifications fail
+    }
+
+
+    /* ---------------------------------------------------------------
+       STEP 6. Respond to Client
     ---------------------------------------------------------------- */
     const responseData = {
       success: true,

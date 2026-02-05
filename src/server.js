@@ -12,6 +12,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { registerChatHandlers } from "./socket/chat.socket.js";
 import timezoneMiddleware from "./middlewares/timezone.js";
+import notificationRoutes from "./routes/notification.routes.js";
 
 // --- CPS Generator infrastructure ---
 import { registerCpsGeneratorNamespace } from "./events/cpsGeneratorEvents.js";
@@ -345,6 +346,7 @@ app.use("/admin", adminRoutes);
 app.use("/api", ctaRoutes);
 app.use("/api", platformCtaRoutes);
 app.use("/api/newsfeed", newsfeedRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 app.use("/api/catalogue", catalogueRoutes);
 app.use("/api/promo-codes", promocodes);
@@ -490,6 +492,20 @@ console.log(`🔌 Preferred start PORT=${START_PORT}`);
     });
 
     global.io = io;
+    global.emitUserNotification = (userId, notification) => {
+      if (!global.io || !userId) return;
+
+      try {
+        global.io
+          .to(`user:${userId}`)
+          .emit("notification:new", notification);
+
+        console.log(`📨 Notification emitted to user:${userId}`);
+      } catch (err) {
+        console.error("❌ Notification emit failed:", err.message);
+      }
+    };
+
 
     // Register chat handlers once (for all connections)
     registerChatHandlers(io);
@@ -526,7 +542,14 @@ console.log(`🔌 Preferred start PORT=${START_PORT}`);
 
     io.on("connection", (socket) => {
       console.log("🔌 WebSocket connected:", socket.id);
+      const userId =
+          socket.handshake.auth?.userId ||
+          socket.handshake.query?.userId;
 
+      if (userId) {
+        socket.join(`user:${userId}`);
+        console.log(`🔔 User ${userId} joined notification room`);
+      }
       // Join signaling room
       socket.on("join", ({ sessionId, userId, role }) => {
         if (!sessionId) return;

@@ -39,6 +39,8 @@ import { updateCpsProfileFromTest } from "../../services/cps/cpsEma.service.js";
 import { getRazorpayInstance } from "../PaymentControllers/paymentController.js";
 import { PromoCode } from "../../Models/PromoCodeModels/PromoCode.Model.js";
 import { PromoCodeRedemption } from "../../Models/PromoCodeModels/PromoCodeRedemption.Model.js";
+import { transporter } from "../../config/mailer.js";
+import NotificationService from "../../services/notificationService.js";
 
 /**
  * POST /api/tests/generate
@@ -768,6 +770,60 @@ export const evaluateTest = async (req, res) => {
 
     await test.save();
 
+    try {
+      const user = await User.findByPk(test.user_id, {
+        attributes: ["email", "firstName"],
+      });
+
+      if (user?.email) {
+        await sendTestResultEmail({
+          to: user.email,
+          name: user.firstName,
+          testName: test.title || "Assessment Result",
+          percentage,
+          passed: gatedPass,
+          coolingPeriodDays: test.cooling_period || 0,
+        });
+      }
+    } catch (mailErr) {
+      console.error("⚠️ Failed to send result email:", mailErr.message);
+    }
+
+    /* ------------------ 10) Create In-App Notification ------------------ */
+try {
+  const isPass = gatedPass;
+
+  const title = isPass
+    ? "🎉 Test Passed!"
+    : "📊 Test Result Available";
+
+  const message = isPass
+    ? `Congratulations! You passed your test with ${percentage}%.`
+    : `Your test has been evaluated. Score: ${percentage}%. Please review and retry after the cooling period.`;
+
+    await NotificationService.createTestNotification(test.user_id, {
+      title: gatedPass ? "🎉 Test Passed!" : "📊 Test Result",
+      message: gatedPass
+        ? `Congratulations! You passed with ${percentage}%.`
+        : `You scored ${percentage}%. Please retry after cooling period.`,
+      priority: gatedPass ? "medium" : "high",
+      data: {
+        test_id: test.test_id,
+        percentage,
+        result: gatedPass ? "Pass" : "Fail",
+        cooling_period_days: test.cooling_period,
+        action: {
+          callback: `/learn/tests/${test.test_id}`,
+        },
+      },
+    });
+
+
+  } catch (notifErr) {
+    console.error("⚠️ Notification creation failed:", notifErr.message);
+  }
+
+
     /* ------------------ 7) Update CPS profile via EMA ------------------ */
     try {
       await updateCpsProfileFromTest({
@@ -796,6 +852,63 @@ export const evaluateTest = async (req, res) => {
   }
 };
 
+export const sendTestResultEmail = async ({
+  to,
+  name,
+  testName,
+  percentage,
+  passed,
+  coolingPeriodDays,
+}) => {
+  const subject = passed
+    ? "🎉 Congratulations! You Passed Your Test"
+    : "📊 Test Evaluation Result";
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2>Hello ${name},</h2>
+      <p>Your test <strong>${testName}</strong> has been evaluated.</p>
+
+      <table style="border-collapse: collapse;">
+        <tr>
+          <td><strong>Score</strong></td>
+          <td style="padding-left:10px;">${percentage}%</td>
+        </tr>
+        <tr>
+          <td><strong>Result</strong></td>
+          <td style="padding-left:10px; color:${passed ? "green" : "red"};">
+            ${passed ? "Pass ✅" : "Fail ❌"}
+          </td>
+        </tr>
+        ${
+          !passed && coolingPeriodDays > 0
+            ? `<tr>
+                <td><strong>Cooling Period</strong></td>
+                <td style="padding-left:10px;">${coolingPeriodDays} days</td>
+              </tr>`
+            : ""
+        }
+      </table>
+
+      <p>
+        ${
+          passed
+            ? "You are now eligible to proceed further on the platform."
+            : "You may retake the test after the cooling period."
+        }
+      </p>
+
+      <p>Best of luck,<br/><strong>The Team</strong></p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: `"Assessment Result" <${process.env.SMTP_FROM}>`,
+    to,
+    subject,
+    html,
+  });
+};
 
 export const checkUserTestEligibility = async (req, res) => {
   try {
