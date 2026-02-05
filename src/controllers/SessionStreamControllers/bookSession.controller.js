@@ -277,6 +277,7 @@ export const bookFreeSession = async (req, res) => {
       raw: true,
     });
 
+    const onlyDate = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
     let slotCandidates = [];
 
     for (const frame of timeFrames) {
@@ -292,7 +293,15 @@ export const bookFreeSession = async (req, res) => {
 
         for (const offset of daysToCheck) {
           const dateToCheck = is_recurring ? addDays(now, offset) : new Date(available_date);
-          if (dateToCheck < frameStart || dateToCheck > frameEnd) continue;
+
+          // ✅ Normalize all dates to compare only "yyyy-MM-dd"
+          const normalizedDate = onlyDate(dateToCheck);
+          const normalizedStart = onlyDate(frameStart);
+          const normalizedEnd = onlyDate(frameEnd);
+
+          if (normalizedDate < normalizedStart || normalizedDate > normalizedEnd) {
+            continue;
+          }
 
           const weekday = format(dateToCheck, "EEEE");
           if (is_recurring && weekday !== day_of_week) continue;

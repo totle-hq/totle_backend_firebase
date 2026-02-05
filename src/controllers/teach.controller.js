@@ -375,6 +375,7 @@ export const updateAvailabilitySlot = async (req, res) => {
     const teacher_id = req.user.id;
     const availabilityId = req.params.id;
     const { date, timeRange } = req.body;
+    console.log(availabilityId);
 
     // Basic input validation
     if (!date || !timeRange || !timeRange.includes("-")) {
@@ -408,7 +409,6 @@ export const updateAvailabilitySlot = async (req, res) => {
       where: {
         availability_id: availabilityId,
         teacher_id,
-        day_of_week: dayOfWeek,
       },
     });
 
