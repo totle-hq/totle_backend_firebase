@@ -779,7 +779,7 @@ export const evaluateTest = async (req, res) => {
         await sendTestResultEmail({
           to: user.email,
           name: user.firstName,
-          testName: test.title || "Assessment Result",
+          testName: test.title || "TOTLE Assessment Result",
           percentage,
           passed: gatedPass,
           coolingPeriodDays: test.cooling_period || 0,
@@ -898,7 +898,7 @@ export const sendTestResultEmail = async ({
         }
       </p>
 
-      <p>Best of luck,<br/><strong>The Team</strong></p>
+      <p>Best of luck,<br/><strong>The TOTLE Team</strong></p>
     </div>
   `;
 

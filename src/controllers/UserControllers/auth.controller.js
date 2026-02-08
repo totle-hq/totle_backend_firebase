@@ -1210,7 +1210,7 @@ export const SummaryOfHomePage = async (req, res) => {
       users: userCount,
       sessions: attendedSessionCount,
       minutes: totalMinutes,
-      mentors: totalMentorCount,
+      active_teachers: totalMentorCount,
       topics: topics,
       domains: domains,
     });

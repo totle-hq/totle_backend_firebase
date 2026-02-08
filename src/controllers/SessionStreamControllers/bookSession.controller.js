@@ -20,6 +20,7 @@ import { sendSessionBookedEmail } from "../../utils/otpService.js";
 
 // ✅ ADD THIS IMPORT
 import NotificationService from "../../services/notificationService.js";
+import { transporter } from "../../config/mailer.js";
 
 /* ============================================================================
    Utilities
@@ -287,6 +288,12 @@ export const updateAvailabilityAfterBooking = async (session) => {
       { is_active: false },
       { where: { availability_id: availability.availability_id } }
     );
+    console.log("🟧 Availability trimmed at start", {
+      availabilityId: availability.availability_id,
+      oldStart: availability.start_time,
+      newStart,
+    });
+
     return;
   }
 
@@ -297,6 +304,10 @@ export const updateAvailabilityAfterBooking = async (session) => {
       { start_time: newStart },
       { where: { availability_id: availability.availability_id } }
     );
+    console.log("🟦 Availability trimmed at end", {
+      availabilityId: availability.availability_id,
+      newStart
+    });
     return;
   }
 
@@ -307,6 +318,12 @@ export const updateAvailabilityAfterBooking = async (session) => {
       { end_time: newEnd },
       { where: { availability_id: availability.availability_id } }
     );
+    console.log("🟩 Availability split", {
+      originalAvailabilityId: availability.availability_id,
+      newAvailabilityId: newAvailability.availability_id,
+      firstPartEnd: newEnd,
+      secondPartStart: newStart,
+    });
     return;
   }
 
@@ -536,6 +553,38 @@ export const bookFreeSession = async (req, res) => {
       // Don't fail the booking if notifications fail
     }
 
+    const teacherFull = await User.findByPk(selected.teacher_id, {
+      attributes: ["firstName", "lastName", "email"],
+      raw: true,
+    });
+
+    const learnerFull = await User.findByPk(learner_id, {
+      attributes: ["firstName", "lastName", "email"],
+      raw: true,
+    });
+
+
+    const scheduledAtFormatted = formatInTz(
+      selected.scheduled_at,
+      req.userTz || "UTC",
+      "dd MMM yyyy, HH:mm"
+    );
+
+    try {
+      await sendSessionBookedEmails({
+        learner: learnerFull,
+        teacher: teacherFull,
+        topicName: topic?.name || "Unknown",
+        scheduledAtFormatted,
+        durationMinutes: SESSION_DURATION_MIN,
+      });
+      console.log("📧 Session booking emails sent successfully");
+    } catch (emailErr) {
+      console.error("❌ Failed to send session booking emails:", emailErr);
+      // Do NOT fail booking if email fails
+    }
+
+
     return res.status(200).json({
       success: true,
       message: "Free-tier session booked successfully",
@@ -622,6 +671,38 @@ export const bookPaidSession = async (req, res) => {
       // Don't fail the booking if notifications fail
     }
 
+    const [teacher, learner] = await Promise.all([
+      User.findByPk(s.teacher_id, {
+        attributes: ["firstName", "lastName", "email"],
+        raw: true,
+      }),
+      User.findByPk(learner_id, {
+        attributes: ["firstName", "lastName", "email"],
+        raw: true,
+      }),
+    ]);
+
+    try {
+      await sendSessionBookedEmails({
+        learner,
+        teacher,
+        topicName: topic?.name || "Unknown",
+        scheduledAtFormatted: formatInTz(
+          s.scheduled_at,
+          req.userTz || "UTC",
+          "dd MMM yyyy, HH:mm"
+        ),
+        durationMinutes: 90, // paid sessions are also 90 mins here
+      });
+
+      console.log("📧 Paid session booking emails sent");
+    } catch (emailError) {
+      console.error("❌ Failed to send paid session booking emails:", emailError);
+      // Do NOT fail booking if email fails
+    }
+
+
+
     return res.status(200).json({
       success: true,
       message: "Paid session booked successfully",
@@ -637,6 +718,134 @@ export const bookPaidSession = async (req, res) => {
     return res.status(500).json({ error: true, message: "Internal server error" });
   }
 };
+
+export const sessionBookedEmail = ({
+  recipientName,
+  role, // "learner" | "teacher"
+  topicName,
+  scheduledAt,
+  durationMinutes,
+  otherPartyName,
+}) => {
+  const roleLine =
+    role === "teacher"
+      ? `You have a new learner booked for your free session.`
+      : `Your free learning session has been successfully booked.`;
+
+  return {
+    subject: `📘 Free Session Booked – ${topicName}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2>Hello ${recipientName},</h2>
+
+        <p>${roleLine}</p>
+
+        <h3>📅 Session Details</h3>
+        <ul>
+          <li><strong>Topic:</strong> ${topicName}</li>
+          <li><strong>Date & Time:</strong> ${scheduledAt}</li>
+          <li><strong>Duration:</strong> ${durationMinutes} minutes</li>
+          <li><strong>${role === "teacher" ? "Learner" : "Teacher"}:</strong> ${otherPartyName}</li>
+        </ul>
+
+        <p>Please make sure you are available on time.</p>
+
+        <p>Best regards,<br/>
+        <strong>TOTLE Team</strong></p>
+      </div>
+    `,
+    text: `
+Hello ${recipientName},
+
+${roleLine}
+
+Session Details:
+- Topic: ${topicName}
+- Date & Time: ${scheduledAt}
+- Duration: ${durationMinutes} minutes
+- ${role === "teacher" ? "Learner" : "Teacher"}: ${otherPartyName}
+
+Regards,
+TOTLE Team
+    `,
+  };
+};
+
+
+export const sendSessionBookedEmails = async ({
+  learner,
+  teacher,
+  topicName,
+  scheduledAtFormatted,
+  durationMinutes,
+}) => {
+  console.log("📧 [Email] Preparing session booking emails", {
+    topicName,
+    scheduledAt: scheduledAtFormatted,
+    learnerId: learner?.id,
+    teacherId: teacher?.id,
+  });
+
+  try {
+    const learnerEmail = sessionBookedEmail({
+      recipientName: learner.firstName,
+      role: "learner",
+      topicName,
+      scheduledAt: scheduledAtFormatted,
+      durationMinutes,
+      otherPartyName: `${teacher.firstName} ${teacher.lastName ?? ""}`.trim(),
+    });
+
+    const teacherEmail = sessionBookedEmail({
+      recipientName: teacher.firstName,
+      role: "teacher",
+      topicName,
+      scheduledAt: scheduledAtFormatted,
+      durationMinutes,
+      otherPartyName: `${learner.firstName} ${learner.lastName ?? ""}`.trim(),
+    });
+
+    console.log("📤 [Email] Sending emails", {
+      learnerEmail: learner.email,
+      teacherEmail: teacher.email,
+    });
+
+    const results = await Promise.all([
+      transporter.sendMail({
+        from: `"TOTLE" <${process.env.EMAIL_USER}>`,
+        to: learner.email,
+        subject: learnerEmail.subject,
+        html: learnerEmail.html,
+        text: learnerEmail.text,
+      }),
+      transporter.sendMail({
+        from: `"TOTLE" <${process.env.EMAIL_USER}>`,
+        to: teacher.email,
+        subject: teacherEmail.subject,
+        html: teacherEmail.html,
+        text: teacherEmail.text,
+      }),
+    ]);
+
+    console.log("✅ [Email] Session booking emails sent successfully", {
+      learnerMessageId: results[0]?.messageId,
+      teacherMessageId: results[1]?.messageId,
+    });
+
+    return true;
+  } catch (error) {
+    console.error("❌ [Email] Failed to send session booking emails", {
+      error: error.message,
+      stack: error.stack,
+      learnerEmail: learner?.email,
+      teacherEmail: teacher?.email,
+    });
+
+    throw error; // caller decides whether to swallow or handle
+  }
+};
+
+
 
 /** POST /api/session/book/custom
  *  Allows a learner to choose any 90-minute window inside a teacher's available slot.
@@ -716,6 +925,40 @@ export const bookCustomSlot = async (req, res) => {
     } catch (notificationError) {
       console.error('❌ Failed to create notifications:', notificationError);
       // Don't fail the booking if notifications fail
+    }
+
+    const [topic, teacher, learner] = await Promise.all([
+      CatalogueNode.findByPk(topic_id, {
+        attributes: ["name"],
+        raw: true,
+      }),
+      User.findByPk(teacher_id, {
+        attributes: ["firstName", "lastName", "email"],
+        raw: true,
+      }),
+      User.findByPk(learner_id, {
+        attributes: ["firstName", "lastName", "email"],
+        raw: true,
+      }),
+    ]);
+
+    try {
+      await sendSessionBookedEmails({
+        learner,
+        teacher,
+        topicName: topic?.name || "Unknown",
+        scheduledAtFormatted: formatInTz(
+          booked.scheduled_at,
+          req.userTz || "UTC",
+          "dd MMM yyyy, HH:mm"
+        ),
+        durationMinutes: 90,
+      });
+
+      console.log("📧 Custom slot booking emails sent");
+    } catch (emailError) {
+      console.error("❌ Failed to send custom slot booking emails:", emailError);
+      // Do NOT fail booking if email fails
     }
 
     return res.status(201).json({
