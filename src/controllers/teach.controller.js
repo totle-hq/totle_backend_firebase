@@ -514,6 +514,9 @@ export const getAvailabilityChart = async (req, res) => {
     // Compute start of local day
     const todayLocal = utcToZoned(new Date(), tz);
     const todayISO = format(todayLocal, "yyyy-MM-dd");
+    const nowLocal = utcToZoned(new Date(), tz);
+    const todayKey = format(nowLocal, "yyyy-MM-dd");
+
 
     // Get UTC window: start and end of this 7-day period
     const { utcStart, utcEnd } = weekRangeUtcFromLocalStartDay(todayISO, tz);
@@ -555,10 +558,20 @@ export const getAvailabilityChart = async (req, res) => {
           (!slot.is_recurring && slot.available_date === dayKey);
         if (!match) continue;
 
-        const startLocal = new Date(`${dayKey}T${slot.start_time}`);
+        let startLocal = new Date(`${dayKey}T${slot.start_time}`);
         let endLocal = new Date(`${dayKey}T${slot.end_time}`);
+        
+        // Handle overnight availability
         if (endLocal <= startLocal) {
-          endLocal = new Date(endLocal.getTime() + 86400000); // handles overnight slots
+          endLocal = new Date(endLocal.getTime() + 86400000);
+        }
+
+        // ❌ Skip slots fully in the past
+        if (endLocal <= nowLocal) continue;
+
+        // ✂️ Trim past portion for today
+        if (dayKey === todayKey && startLocal < nowLocal) {
+          startLocal = new Date(nowLocal);
         }
 
         const topic_ids = slot.catalogueNode?.map(t => t.node_id) || [];
@@ -575,6 +588,7 @@ export const getAvailabilityChart = async (req, res) => {
         });
       }
     }
+
 
     return res.status(200).json({ tz, availability: result });
   } catch (err) {

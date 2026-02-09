@@ -236,7 +236,7 @@ function isWithinBridgerBuffer(slotStart, bridgerSessions) {
 
 const SESSION_DURATION_MIN = 90;
 const BUFFER_MINUTES = 30;
-const INCLUDE_BUFFER_IN_TRIM = true; // or false
+const INCLUDE_BUFFER_IN_TRIM = true;
 
 export const updateAvailabilityAfterBooking = async (session) => {
   const { teacher_id, scheduled_at, completed_at } = session;
@@ -252,7 +252,6 @@ export const updateAvailabilityAfterBooking = async (session) => {
   const dayOfWeek = format(trimStart, "EEEE");
   const dateKey = format(trimStart, "yyyy-MM-dd");
 
-  //1️⃣ Find matching availability
   const availability = await TeacherAvailability.findOne({
     where: {
       teacher_id,
@@ -266,78 +265,86 @@ export const updateAvailabilityAfterBooking = async (session) => {
   });
 
   if (!availability) {
-    console.warn("⚠️ No availability found for teacher to update.");
+    console.warn("⚠️ No availability found for teacher");
     return;
   }
 
-  const [availStartH, availStartM] = availability.start_time.split(":").map(Number);
-  const [availEndH, availEndM] = availability.end_time.split(":").map(Number);
+  // Build availability Date objects
+  const [startH, startM] = availability.start_time.split(":").map(Number);
+  const [endH, endM] = availability.end_time.split(":").map(Number);
 
-  const availStartMin = availStartH * 60 + availStartM;
-  const availEndMin = availEndH * 60 + availEndM;
+  const availStart = new Date(trimStart);
+  availStart.setHours(startH, startM, 0, 0);
 
-  const slotStartMin = trimStart.getHours() * 60 + trimStart.getMinutes();
-  const slotEndMin = trimEnd.getHours() * 60 + trimEnd.getMinutes();
+  const availEnd = new Date(trimStart);
+  availEnd.setHours(endH, endM, 0, 0);
+  if (availEnd <= availStart) {
+    availEnd.setDate(availEnd.getDate() + 1); // overnight availability
+  }
 
-  const toTimeStr = (min) =>
-    `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}:00`;
+  const toTimeStr = (d) =>
+    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:00`;
 
-  // 🟢 Scenario 1: Fully consumed
-  if (slotStartMin <= availStartMin && slotEndMin >= availEndMin) {
+  /**
+   * SCENARIOS (ordered carefully)
+   */
+
+  // 🟥 Fully consumed
+  if (trimStart <= availStart && trimEnd >= availEnd) {
     await TeacherAvailability.update(
       { is_active: false },
       { where: { availability_id: availability.availability_id } }
     );
-    console.log("🟧 Availability trimmed at start", {
-      availabilityId: availability.availability_id,
-      oldStart: availability.start_time,
-      newStart,
-    });
 
+    console.log("🟥 Availability fully consumed → deactivated", {
+      availabilityId: availability.availability_id,
+    });
     return;
   }
 
-  // 🟢 Scenario 2: Booking at start (allowing buffer overlap)
-  if (slotStartMin <= availStartMin && slotEndMin < availEndMin) {
-    const newStart = toTimeStr(slotEndMin);
+  // 🟧 Trim START (booking eats the beginning)
+  if (trimStart <= availStart && trimEnd > availStart && trimEnd < availEnd) {
+    const newStart = toTimeStr(trimEnd);
+
     await TeacherAvailability.update(
       { start_time: newStart },
       { where: { availability_id: availability.availability_id } }
     );
+
+    console.log("🟧 Availability trimmed at start", {
+      availabilityId: availability.availability_id,
+      newStart,
+    });
+    return;
+  }
+
+  // 🟦 Trim END (booking eats the end)
+  if (trimStart > availStart && trimStart < availEnd && trimEnd >= availEnd) {
+    const newEnd = toTimeStr(trimStart);
+
+    await TeacherAvailability.update(
+      { end_time: newEnd },
+      { where: { availability_id: availability.availability_id } }
+    );
+
     console.log("🟦 Availability trimmed at end", {
       availabilityId: availability.availability_id,
-      newStart
+      newEnd,
     });
     return;
   }
 
-  // 🟢 Scenario 3: Booking at end
-  if (slotStartMin > availStartMin && slotEndMin === availEndMin) {
-    const newEnd = toTimeStr(slotStartMin);
-    await TeacherAvailability.update(
-      { end_time: newEnd },
-      { where: { availability_id: availability.availability_id } }
-    );
-    console.log("🟩 Availability split", {
-      originalAvailabilityId: availability.availability_id,
-      newAvailabilityId: newAvailability.availability_id,
-      firstPartEnd: newEnd,
-      secondPartStart: newStart,
-    });
-    return;
-  }
-
-  // 🟢 Scenario 4: Booking in the middle
-  if (slotStartMin > availStartMin && slotEndMin < availEndMin) {
-    const newEnd = toTimeStr(slotStartMin);
-    const newStart = toTimeStr(slotEndMin);
+  // 🟩 Split availability (booking in the middle)
+  if (trimStart > availStart && trimEnd < availEnd) {
+    const newEnd = toTimeStr(trimStart);
+    const newStart = toTimeStr(trimEnd);
 
     await TeacherAvailability.update(
       { end_time: newEnd },
       { where: { availability_id: availability.availability_id } }
     );
 
-    await TeacherAvailability.create({
+    const newAvailability = await TeacherAvailability.create({
       teacher_id,
       day_of_week: availability.day_of_week,
       start_time: newStart,
@@ -346,10 +353,22 @@ export const updateAvailabilityAfterBooking = async (session) => {
       available_date: availability.available_date || null,
       is_active: true,
     });
+
+    console.log("🟩 Availability split", {
+      originalAvailabilityId: availability.availability_id,
+      newAvailabilityId: newAvailability.availability_id,
+    });
     return;
   }
 
-  console.warn("❌ Booking doesn't match any known trimming pattern. Skipping update.");
+  // ❌ Should never happen now
+  console.warn("❌ Unhandled availability trimming case", {
+    availabilityId: availability.availability_id,
+    trimStart,
+    trimEnd,
+    availStart,
+    availEnd,
+  });
 };
 
 /** POST /api/session/book — auto-match FREE */
@@ -358,7 +377,7 @@ export const bookFreeSession = async (req, res) => {
 
   try {
     const learner_id = req.user?.id;
-    const { topic_id } = req.body;
+    const { topic_id, booking_reason, booking_reason_other } = req.body;
     console.log(req.body)
     if (!learner_id || !topic_id)
       return res.status(400).json({ error: true, message: "Missing learner_id or topic_id" });
@@ -570,6 +589,9 @@ export const bookFreeSession = async (req, res) => {
       "dd MMM yyyy, HH:mm"
     );
 
+    const finalBookingReason =  booking_reason === "other" ? booking_reason_other?.trim() : booking_reason?.trim();
+
+
     try {
       await sendSessionBookedEmails({
         learner: learnerFull,
@@ -577,6 +599,8 @@ export const bookFreeSession = async (req, res) => {
         topicName: topic?.name || "Unknown",
         scheduledAtFormatted,
         durationMinutes: SESSION_DURATION_MIN,
+        bookingReason: finalBookingReason, // ✅ optional
+
       });
       console.log("📧 Session booking emails sent successfully");
     } catch (emailErr) {
@@ -726,11 +750,20 @@ export const sessionBookedEmail = ({
   scheduledAt,
   durationMinutes,
   otherPartyName,
+  bookingReason
 }) => {
   const roleLine =
     role === "teacher"
       ? `You have a new learner booked for your free session.`
       : `Your free learning session has been successfully booked.`;
+
+   const reasonHtml = bookingReason
+    ? `<li><strong>Reason:</strong> ${bookingReason}</li>`
+    : "";
+
+  const reasonText = bookingReason
+    ? `\n- Reason: ${bookingReason}`
+    : "";
 
   return {
     subject: `📘 Free Session Booked – ${topicName}`,
@@ -746,6 +779,7 @@ export const sessionBookedEmail = ({
           <li><strong>Date & Time:</strong> ${scheduledAt}</li>
           <li><strong>Duration:</strong> ${durationMinutes} minutes</li>
           <li><strong>${role === "teacher" ? "Learner" : "Teacher"}:</strong> ${otherPartyName}</li>
+          ${reasonHtml}
         </ul>
 
         <p>Please make sure you are available on time.</p>
@@ -763,7 +797,7 @@ Session Details:
 - Topic: ${topicName}
 - Date & Time: ${scheduledAt}
 - Duration: ${durationMinutes} minutes
-- ${role === "teacher" ? "Learner" : "Teacher"}: ${otherPartyName}
+- ${role === "teacher" ? "Learner" : "Teacher"}: ${otherPartyName}${reasonText}
 
 Regards,
 TOTLE Team
@@ -778,6 +812,7 @@ export const sendSessionBookedEmails = async ({
   topicName,
   scheduledAtFormatted,
   durationMinutes,
+  bookingReason
 }) => {
   console.log("📧 [Email] Preparing session booking emails", {
     topicName,
@@ -794,6 +829,7 @@ export const sendSessionBookedEmails = async ({
       scheduledAt: scheduledAtFormatted,
       durationMinutes,
       otherPartyName: `${teacher.firstName} ${teacher.lastName ?? ""}`.trim(),
+      bookingReason
     });
 
     const teacherEmail = sessionBookedEmail({
@@ -803,6 +839,7 @@ export const sendSessionBookedEmails = async ({
       scheduledAt: scheduledAtFormatted,
       durationMinutes,
       otherPartyName: `${learner.firstName} ${learner.lastName ?? ""}`.trim(),
+      bookingReason
     });
 
     console.log("📤 [Email] Sending emails", {
