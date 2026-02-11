@@ -493,6 +493,31 @@ class NotificationService {
     }
   }
 
+  // CLEAR ALL NOTIFICATIONS
+  static async clearAllNotifications(userId) {
+    try {
+      if (!userId) return false;
+
+      const [affected] = await Notification.update(
+        {
+          dismissed_at: new Date(),
+          read: true,
+        },
+        {
+          where: {
+            user_id: userId,
+            dismissed_at: null,
+          },
+        }
+      );
+
+      return affected > 0;
+    } catch (error) {
+      console.error("❌ Error clearing all notifications:", error);
+      return false;
+    }
+  }
+
 }
 
 export default NotificationService;

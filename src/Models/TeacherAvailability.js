@@ -50,6 +50,16 @@ export const TeacherAvailability = sequelize1.define(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    status: {
+      type: DataTypes.ENUM("available", "booked"),
+      defaultValue: "available",
+    },
+
+    session_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+
   },
   {
     schema: "user",

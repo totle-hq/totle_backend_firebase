@@ -174,6 +174,31 @@ export const setTeacherAvailability = async (req, res) => {
 // Returns next 7 days; groups multiple topics under the same time window.
 // IMPORTANT: returns the REAL PK (`session_id`) so the frontend can PUT.
 
+function buildAvailabilityWindow(availability, tz = "Asia/Kolkata") {
+  if (!availability?.available_date) {
+    throw new Error("availability.available_date is required for midnight-safe windows");
+  }
+
+  const start = zonedTimeToUtc(
+    `${availability.available_date} ${availability.start_time.slice(0, 5)}`,
+    tz
+  );
+
+  let end = zonedTimeToUtc(
+    `${availability.available_date} ${availability.end_time.slice(0, 5)}`,
+    tz
+  );
+
+  // ⏭️ Midnight crossover (end is next day)
+  if (end <= start) {
+    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return { start, end };
+}
+
+
+
 export const bookFreeSession = async (req, res) => {
   try {
     const learner_id = req.user?.id;
@@ -295,47 +320,87 @@ export const bookFreeSession = async (req, res) => {
 
     // ✅ Reduce availability
     const scheduledDate = new Date(nextSlot.scheduled_at);
-    const sessionStartMin = scheduledDate.getHours() * 60 + scheduledDate.getMinutes();
-    const sessionEndMin = sessionStartMin + nextSlot.duration_minutes;
+    const TZ = req.userTz || "Asia/Kolkata";
+    const dayOfWeek = formatInTimeZone(scheduledDate, TZ, "EEEE");
 
-    const dayOfWeek = format(scheduledDate, "EEEE");
-    const availability = await TeacherAvailability.findOne({
+    let availability = await TeacherAvailability.findOne({
       where: {
         teacher_id: nextSlot.teacher_id,
         day_of_week: dayOfWeek,
-        start_time: { [Op.lte]: `${String(Math.floor(sessionEndMin / 60)).padStart(2, "0")}:${String(sessionEndMin % 60).padStart(2, "0")}` },
-        end_time: { [Op.gte]: `${String(Math.floor(sessionStartMin / 60)).padStart(2, "0")}:${String(sessionStartMin % 60).padStart(2, "0")}` },
+        is_active: true,
       },
     });
 
+    // ⏮️ Fallback for midnight availability
+    if (!availability) {
+      const prevDay = format(
+        new Date(scheduledDate.getTime() - 24 * 60 * 60 * 1000),
+        "EEEE"
+      );
+
+      availability = await TeacherAvailability.findOne({
+        where: {
+          teacher_id: nextSlot.teacher_id,
+          day_of_week: prevDay,
+          is_active: true,
+        },
+      });
+    }
+
     if (availability) {
-      const [startH, startM] = availability.start_time.split(":").map(Number);
-      const [endH, endM] = availability.end_time.split(":").map(Number);
-      const availStartMin = startH * 60 + startM;
-      const availEndMin = endH * 60 + endM;
+      const sessionStart = new Date(nextSlot.scheduled_at);
+      const sessionEnd = new Date(
+        sessionStart.getTime() + nextSlot.duration_minutes * 60000
+      );
 
-      let newStart = availability.start_time;
-      let newEnd = availability.end_time;
+      let TZ = req.userTz || "Asia/Kolkata";
 
-      if (sessionStartMin <= availStartMin && sessionEndMin < availEndMin) {
-        newStart = `${String(Math.floor(sessionEndMin / 60)).padStart(2, "0")}:${String(sessionEndMin % 60).padStart(2, "0")}`;
-      } else if (sessionEndMin >= availEndMin && sessionStartMin > availStartMin) {
-        newEnd = `${String(Math.floor(sessionStartMin / 60)).padStart(2, "0")}:${String(sessionStartMin % 60).padStart(2, "0")}`;
-      } else if (sessionStartMin <= availStartMin && sessionEndMin >= availEndMin) {
-        newStart = newEnd; // fully consumed
+      const { start: availStart, end: availEnd } = buildAvailabilityWindow(availability, TZ);
+      // ❌ session does NOT fit availability
+      if (sessionStart < availStart || sessionEnd > availEnd) {
+        console.warn("Session outside availability window");
+        return res.status(409).json({
+          error: true,
+          message: "Teacher availability mismatch",
+        });
       }
 
-      if (newStart !== availability.start_time || newEnd !== availability.end_time) {
-        await TeacherAvailability.update(
-          { start_time: newStart, end_time: newEnd },
-          {
-            where: {
-              teacher_id: nextSlot.teacher_id,
-              day_of_week: dayOfWeek,
-            },
-          }
-        );
+      let newStart = availStart;
+      let newEnd = availEnd;
+      
+      // session eats from the start
+      if (sessionStart <= availStart && sessionEnd < availEnd) {
+        newStart = sessionEnd;
       }
+
+      // session eats from the end
+      else if (sessionEnd >= availEnd && sessionStart > availStart) {
+        newEnd = sessionStart;
+      }
+
+      // session fully consumes availability
+      else if (sessionStart <= availStart && sessionEnd >= availEnd) {
+        newStart = newEnd;
+      }
+
+      // Persist back to DB
+      const TimeZone = req.userTz || "Asia/Kolkata";
+
+      const newDayOfWeek = formatInTimeZone(newStart, TimeZone, "EEEE");
+      const newAvailableDate = formatInTimeZone(newStart, TimeZone, "yyyy-MM-dd");
+
+      const newStartTime = formatInTimeZone(newStart, TZ, "HH:mm");
+      const newEndTime = formatInTimeZone(newEnd, TZ, "HH:mm");
+
+      await TeacherAvailability.update(
+        {
+          start_time: newStartTime,
+          end_time: newEndTime,
+          day_of_week: formatInTimeZone(newStart, TZ, "EEEE"),
+          available_date: formatInTimeZone(newStart, TZ, "yyyy-MM-dd"),
+        },
+        { where: { availability_id: availability.availability_id } }
+      );
     }
 
     const teacher = await User.findByPk(nextSlot.teacher_id, {

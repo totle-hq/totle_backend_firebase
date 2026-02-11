@@ -454,6 +454,29 @@ const defineRelationships = () => {
     });
   }
 
+  /* =========================
+  * Session ↔ TeacherAvailability (NEW)
+  * ========================= */
+
+  if (!TeacherAvailability.associations?.session) {
+    TeacherAvailability.belongsTo(Session, {
+      foreignKey: "session_id",
+      as: "session",
+      onDelete: "SET NULL", // important for cancellation
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!Session.associations?.availabilityBlocks) {
+    Session.hasMany(TeacherAvailability, {
+      foreignKey: "session_id",
+      as: "availabilityBlocks",
+      onDelete: "SET NULL",
+      onUpdate: "CASCADE",
+    });
+  }
+
+
   if (!Teachertopicstats.associations?.feedbacks) {
     Teachertopicstats.hasMany(Feedback, {
       foreignKey: "bridger_id",

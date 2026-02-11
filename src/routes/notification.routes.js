@@ -2,6 +2,8 @@
 import express from "express";
 import authMiddleware from "../middlewares/authMiddleware.js";
 import NotificationService from "../services/notificationService.js";
+// const { Notification } = await import("../Models/NotificationModel.js");
+
 
 const router = express.Router();
 
@@ -59,7 +61,6 @@ router.patch("/read-all", authMiddleware, async (req, res) => {
 // Delete notification
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
-    const { Notification } = await import("../Models/NotificationModel.js");
     const result = await Notification.destroy({
       where: { id: req.params.id, user_id: req.user.id }
     });
@@ -95,6 +96,24 @@ router.patch("/:id/dismiss", authMiddleware, async (req, res) => {
     res.status(500).json({ success: false });
   }
 });
+
+// Clear all notifications (soft dismiss)
+router.patch("/clearall", authMiddleware, async (req, res) => {
+  try {
+    const success = await NotificationService.clearAllNotifications(
+      req.user.id
+    );
+
+    res.json({
+      success: true,
+      cleared: success,
+    });
+  } catch (error) {
+    console.error("❌ Clear all notifications error:", error);
+    res.status(500).json({ success: false });
+  }
+});
+
 
 
 export default router;

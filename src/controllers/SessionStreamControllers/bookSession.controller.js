@@ -592,21 +592,21 @@ export const bookFreeSession = async (req, res) => {
     const finalBookingReason =  booking_reason === "other" ? booking_reason_other?.trim() : booking_reason?.trim();
 
 
-    try {
-      await sendSessionBookedEmails({
-        learner: learnerFull,
-        teacher: teacherFull,
-        topicName: topic?.name || "Unknown",
-        scheduledAtFormatted,
-        durationMinutes: SESSION_DURATION_MIN,
-        bookingReason: finalBookingReason, // ✅ optional
+    // try {
+    //   await sendSessionBookedEmails({
+    //     learner: learnerFull,
+    //     teacher: teacherFull,
+    //     topicName: topic?.name || "Unknown",
+    //     scheduledAtFormatted,
+    //     durationMinutes: SESSION_DURATION_MIN,
+    //     bookingReason: finalBookingReason, // ✅ optional
 
-      });
-      console.log("📧 Session booking emails sent successfully");
-    } catch (emailErr) {
-      console.error("❌ Failed to send session booking emails:", emailErr);
-      // Do NOT fail booking if email fails
-    }
+    //   });
+    //   console.log("📧 Session booking emails sent successfully");
+    // } catch (emailErr) {
+    //   console.error("❌ Failed to send session booking emails:", emailErr);
+    //   // Do NOT fail booking if email fails
+    // }
 
 
     return res.status(200).json({
