@@ -17,7 +17,7 @@ import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { findSubjectAndDomain } from "../utils/getsubject.js";
 import { assertTeacherBuffer, calculateMismatchPercentage, getDistance, getEligibleTeacherIds, scoreTeacher } from "../utils/sessionUtils.js";
 import TeacherAvailability from "../Models/TeacherAvailability.js";
-import { format, addDays, getDay, startOfDay } from "date-fns";
+import { format, addDays, getDay, startOfDay, parse } from "date-fns";
 import {Test} from '../Models/test.model.js';
 import {FeedbackSummary} from "../Models/feedbacksummary.js";
 import dateFnsTz from "date-fns-tz";
@@ -110,13 +110,20 @@ export const setTeacherAvailability = async (req, res) => {
       .map(s => s.trim());
 
     // Create local datetime strings
-    const startLocalStr = `${date}T${startTimeStr}:00`;
-    const endLocalStr = `${date}T${endTimeStr}:00`;
+    const startLocalDate = parse(
+      `${date} ${startTimeStr}`,
+      "yyyy-MM-dd HH:mm",
+      new Date()
+    );
 
+    const endLocalDate = parse(
+      `${date} ${endTimeStr}`,
+      "yyyy-MM-dd HH:mm",
+      new Date()
+    );
 
-    // Convert to UTC
-    let start_at = zonedTimeToUtc(startLocalStr, tz);
-    let end_at = zonedTimeToUtc(endLocalStr, tz);
+    let start_at = zonedTimeToUtc(startLocalDate, tz);
+    let end_at = zonedTimeToUtc(endLocalDate, tz);
 
     // Handle midnight crossover
     if (end_at <= start_at) {
