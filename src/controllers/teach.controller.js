@@ -91,13 +91,6 @@ export const setTeacherAvailability = async (req, res) => {
     const teacher_id = req.user.id;
     const tz = req.userTz || "UTC";
     const { date, timeRange } = req.body;
-    console.log("Incoming values:", {
-      date,
-      timeRange,
-      tz
-    });
-
-
     const user = await User.findByPk(teacher_id);
     if (!user?.location) {
       return res.status(400).json({
@@ -656,29 +649,45 @@ export const getAvailabilityChart = async (req, res) => {
 
     // 🔹 Map availability blocks into local days
     for (const slot of availabilities) {
-      let startLocal = utcToZoned(slot.start_at, tz);
-      let endLocal = utcToZoned(slot.end_at, tz);
+      const startLocal = utcToZoned(slot.start_at, tz);
+      const endLocal = utcToZoned(slot.end_at, tz);
 
-      const dayKey = format(startLocal, "yyyy-MM-dd");
-
-      if (!result[dayKey]) continue;
-
-      // ❌ Skip if fully in past
+      // Skip fully past
       if (endLocal <= nowLocal) continue;
 
-      // ✂️ Trim past part for today
-      if (dayKey === todayISO && startLocal < nowLocal) {
-        startLocal = nowLocal;
-      }
+      for (const dayKey of Object.keys(result)) {
+        const dayStart = new Date(`${dayKey}T00:00:00`);
+        const dayEnd = new Date(`${dayKey}T23:59:59`);
 
-      result[dayKey].push({
-        id: slot.availability_id,
-        start_at: slot.start_at,
-        end_at: slot.end_at,
-        start_time: format(startLocal, "HH:mm"),
-        end_time: format(endLocal, "HH:mm"),
-        status: "available",
-      });
+        // Check overlap with this local day
+        const overlaps =
+          startLocal <= dayEnd && endLocal >= dayStart;
+
+        if (!overlaps) continue;
+
+        // Clip slot to this day
+        let clippedStart =
+          startLocal < dayStart ? dayStart : startLocal;
+
+        let clippedEnd =
+          endLocal > dayEnd ? dayEnd : endLocal;
+
+        // Trim past portion for today
+        if (dayKey === todayISO && clippedEnd <= nowLocal) continue;
+
+        if (dayKey === todayISO && clippedStart < nowLocal) {
+          clippedStart = nowLocal;
+        }
+
+        result[dayKey].push({
+          id: slot.availability_id,
+          start_at: slot.start_at,
+          end_at: slot.end_at,
+          start_time: format(clippedStart, "HH:mm"),
+          end_time: format(clippedEnd, "HH:mm"),
+          status: "available",
+        });
+      }
     }
 
     return res.status(200).json({
