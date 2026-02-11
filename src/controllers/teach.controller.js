@@ -91,6 +91,12 @@ export const setTeacherAvailability = async (req, res) => {
     const teacher_id = req.user.id;
     const tz = req.userTz || "UTC";
     const { date, timeRange } = req.body;
+    console.log("Incoming values:", {
+      date,
+      timeRange,
+      tz
+    });
+
 
     const user = await User.findByPk(teacher_id);
     if (!user?.location) {
