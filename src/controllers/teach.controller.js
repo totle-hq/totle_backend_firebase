@@ -110,8 +110,9 @@ export const setTeacherAvailability = async (req, res) => {
       .map(s => s.trim());
 
     // Create local datetime strings
-    const startLocalStr = `${date} ${startTimeStr}`;
-    const endLocalStr = `${date} ${endTimeStr}`;
+    const startLocalStr = `${date}T${startTimeStr}:00`;
+    const endLocalStr = `${date}T${endTimeStr}:00`;
+
 
     // Convert to UTC
     let start_at = zonedTimeToUtc(startLocalStr, tz);
