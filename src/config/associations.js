@@ -436,24 +436,6 @@ const defineRelationships = () => {
     TestItemRubric.belongsTo(Test, { foreignKey: "test_id", as: "test", onDelete: "CASCADE", onUpdate: "CASCADE" });
   }
 
-  if (!TeacherAvailability.associations?.catalogueNode) {
-    TeacherAvailability.belongsToMany(CatalogueNode, {
-      through: "user.teacher_availability_topics", // or your defined join model
-      foreignKey: "availability_id",
-      otherKey: "topic_id",
-      as: "catalogueNode",
-    });
-  }
-
-  if (!CatalogueNode.associations?.teacherAvailability) {
-    CatalogueNode.belongsToMany(TeacherAvailability, {
-      through: "user.teacher_availability_topics",
-      foreignKey: "topic_id",
-      otherKey: "availability_id",
-      as: "teacherAvailability",
-    });
-  }
-
   /* =========================
   * Session ↔ TeacherAvailability (NEW)
   * ========================= */

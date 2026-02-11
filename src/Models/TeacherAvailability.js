@@ -1,11 +1,8 @@
 // src/Models/TeacherAvailability.js
+
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
-import { CatalogueNode } from "./CatalogModels/catalogueNode.model.js";
 
-/* ---------------------------------------------------------------------------
-   TeacherAvailability
---------------------------------------------------------------------------- */
 export const TeacherAvailability = sequelize1.define(
   "TeacherAvailability",
   {
@@ -18,100 +15,38 @@ export const TeacherAvailability = sequelize1.define(
       type: DataTypes.UUID,
       allowNull: false,
     },
-    day_of_week: {
-      type: DataTypes.ENUM(
-        "Sunday",
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday"
-      ),
+
+    start_at: {
+      type: DataTypes.DATE,
       allowNull: false,
     },
-    start_time: {
-      type: DataTypes.TIME,
+
+    end_at: {
+      type: DataTypes.DATE,
       allowNull: false,
+      validate: {
+        isAfterStart(value) {
+          if (new Date(value) <= new Date(this.start_at)) {
+            throw new Error("end_at must be greater than start_at");
+          }
+        },
+      },
     },
-    end_time: {
-      type: DataTypes.TIME,
-      allowNull: false,
-    },
-    is_recurring: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
-    },
-    available_date: {
-      type: DataTypes.DATEONLY,
-      allowNull: true,
-    },
+
     is_active: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
-    status: {
-      type: DataTypes.ENUM("available", "booked"),
-      defaultValue: "available",
-    },
-
-    session_id: {
-      type: DataTypes.UUID,
-      allowNull: true,
-    },
-
   },
   {
     schema: "user",
     tableName: "teacher_availabilities",
     timestamps: true,
+    indexes: [
+      { fields: ["teacher_id", "start_at"] },
+      { fields: ["teacher_id", "end_at"] },
+    ],
   }
 );
-
-/* ---------------------------------------------------------------------------
-   TeacherAvailabilityTopic (Join Table)
---------------------------------------------------------------------------- */
-export const TeacherAvailabilityTopic = sequelize1.define(
-  "TeacherAvailabilityTopic",
-  {
-    id: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      primaryKey: true,
-    },
-    availability_id: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      references: { model: "teacher_availabilities", key: "availability_id" },
-    },
-    topic_id: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      references: { model: "catalogue_nodes", key: "node_id" },
-    },
-  },
-  {
-    schema: "user",
-    tableName: "teacher_availability_topics",
-    timestamps: true,     // ✅ FIXED — MUST BE TRUE
-  }
-);
-
-/* ---------------------------------------------------------------------------
-   Associations
---------------------------------------------------------------------------- */
-TeacherAvailability.belongsToMany(CatalogueNode, {
-  through: TeacherAvailabilityTopic,
-  foreignKey: "availability_id",
-  otherKey: "topic_id",
-  as: "catalogueNode",
-});
-
-CatalogueNode.belongsToMany(TeacherAvailability, {
-  through: TeacherAvailabilityTopic,
-  foreignKey: "topic_id",
-  otherKey: "availability_id",
-  as: "teacherAvailability",
-});
 
 export default TeacherAvailability;
