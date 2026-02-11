@@ -73,8 +73,7 @@ class NotificationService {
       return { learnerNotif, teacherNotif };
     } catch (error) {
       console.error('❌ Error creating session booking notifications:', error);
-      throw error;
-    }
+      return null;    }
   }
 
   // Get notifications for user with formatting - UPDATED to handle field names correctly

@@ -593,8 +593,8 @@ export const deactivatePastAvailability = async (teacher_id, transaction = null)
     {
       where: {
         teacher_id,
-        end_at: { [Op.gt]: new Date() },   // only future blocks
-        start_at: { [Op.lt]: utcEnd },     // within 7-day window
+        is_active: true,
+        end_at: { [Op.lte]: now }, // fully finished
       },
       transaction,
     }

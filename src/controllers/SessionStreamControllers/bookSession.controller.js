@@ -322,7 +322,7 @@ export const bookFreeSession = async (req, res) => {
 
   try {
     const learner_id = req.user?.id;
-    const { topic_id } = req.body;
+    const { topic_id,booking_reason } = req.body;
 
     if (!learner_id || !topic_id) {
       await transaction.rollback();
@@ -518,10 +518,16 @@ export const bookFreeSession = async (req, res) => {
       await TeacherAvailability.create(nb, { transaction });
     }
 
- // ✅ Fetch teacher & topic names (inside transaction for consistency)
-    const [teacher, topic] = await Promise.all([
+
+    // ✅ Fetch full learner, teacher & topic (NEED EMAILS)
+    const [teacherFull, learnerFull, topic] = await Promise.all([
       User.findByPk(selected.teacher_id, {
-        attributes: ["firstName", "lastName"],
+        attributes: ["id", "firstName", "lastName", "email"],
+        transaction,
+        raw: true,
+      }),
+      User.findByPk(learner_id, {
+        attributes: ["id", "firstName", "lastName", "email"],
         transaction,
         raw: true,
       }),
@@ -534,13 +540,51 @@ export const bookFreeSession = async (req, res) => {
 
     await transaction.commit();
 
+    // ✅ Format time (important for email readability)
+    const scheduledAtFormatted = selected.scheduled_at.toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+
+    // ✅ Send emails (DO NOT BREAK BOOKING IF FAILS)
+    try {
+      await sendSessionBookedEmails({
+        learner: learnerFull,
+        teacher: teacherFull,
+        topicName: topic?.name || "Unknown",
+        scheduledAtFormatted,
+        durationMinutes: SESSION_DURATION_MIN,
+        bookingReason: booking_reason?.trim() || null,
+      });
+
+      console.log("📧 Session booking emails sent");
+    } catch (emailErr) {
+      console.error("❌ Email sending failed (booking still successful):", emailErr);
+    }
+
+    // ✅ Create Notifications (DO NOT BREAK BOOKING)
+    try {
+      await NotificationService.createSessionBookingNotification({
+        sessionId: session.session_id,
+        learnerId: learner_id,
+        teacherId: selected.teacher_id,
+        topicName: topic?.name || "Unknown",
+        scheduledAt: scheduledAtFormatted,
+        sessionType: "free",
+      });
+
+      console.log("🔔 Session booking notifications created");
+    } catch (notifErr) {
+      console.error("❌ Notification failed (booking still success):", notifErr);
+    }
+
     return res.status(200).json({
       success: true,
       message: "Free-tier session booked successfully",
       data: {
         sessionId: session.session_id,
         scheduledAt: selected.scheduled_at,
-        teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
+        teacherName: `${teacherFull?.firstName ?? ""} ${teacherFull?.lastName ?? ""}`.trim(),
         topicName: topic?.name || "Unknown",
       },
     });
