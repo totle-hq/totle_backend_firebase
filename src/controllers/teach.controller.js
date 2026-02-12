@@ -108,21 +108,19 @@ export const setTeacherAvailability = async (req, res) => {
       .split("-")
       .map(s => s.trim());
 
-    // Create local datetime strings
-    const startLocalDate = parse(
-      `${date} ${startTimeStr}`,
-      "yyyy-MM-dd HH:mm",
-      new Date()
+    const start_at = zonedTimeToUtc(
+      `${date}T${startTimeStr}:00`,
+      tz
     );
 
-    const endLocalDate = parse(
-      `${date} ${endTimeStr}`,
-      "yyyy-MM-dd HH:mm",
-      new Date()
+    const end_at = zonedTimeToUtc(
+      `${date}T${endTimeStr}:00`,
+      tz
     );
 
-    let start_at = zonedTimeToUtc(startLocalDate, tz);
-    let end_at = zonedTimeToUtc(endLocalDate, tz);
+    console.log("TZ:", tz);
+    console.log("Start local string:", `${date} ${startTimeStr}`);
+    console.log("Start UTC:", start_at.toISOString());
 
     // Handle midnight crossover
     if (end_at <= start_at) {
