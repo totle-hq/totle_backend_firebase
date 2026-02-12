@@ -108,12 +108,12 @@ export const setTeacherAvailability = async (req, res) => {
       .split("-")
       .map(s => s.trim());
 
-    const start_at = zonedTimeToUtc(
+    let start_at = zonedTimeToUtc(
       `${date}T${startTimeStr}:00`,
       tz
     );
 
-    const end_at = zonedTimeToUtc(
+    let end_at = zonedTimeToUtc(
       `${date}T${endTimeStr}:00`,
       tz
     );
