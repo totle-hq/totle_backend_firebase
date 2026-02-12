@@ -1,7 +1,5 @@
 import { DataTypes } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
-import { User } from "./UserModels/UserModel.js";
-import { CatalogueNode } from "./CatalogueNode.model.js";
 
 export const TeacherTopicQualification = sequelize1.define(
   "TeacherTopicQualification",
