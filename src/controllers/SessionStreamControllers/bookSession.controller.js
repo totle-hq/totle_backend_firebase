@@ -21,13 +21,15 @@ import { sendSessionBookedEmail } from "../../utils/otpService.js";
 // ✅ ADD THIS IMPORT
 import NotificationService from "../../services/notificationService.js";
 import { transporter } from "../../config/mailer.js";
+import dateFnsTz from "date-fns-tz";
+const { formatInTimeZone } = dateFnsTz;
 
 /* ============================================================================
    Utilities
    ============================================================================ */
-function zonedTimeToUtc(date) {
-  return new Date(date);
-}
+// function zonedTimeToUtc(date) {
+//   return new Date(date);
+// }
 
 function calculateMismatchPercentage(learnerLangs = [], teacherLangs = []) {
   const matches = teacherLangs.filter((l) => learnerLangs.includes(l)).length;
@@ -541,26 +543,38 @@ export const bookFreeSession = async (req, res) => {
     await transaction.commit();
 
     // ✅ Format time (important for email readability)
-    const scheduledAtFormatted = selected.scheduled_at.toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    const teacherTz = teacherFull?.timezone || "UTC";
+    const learnerTz = learnerFull?.timezone || "UTC";
+
+    const scheduledAtTeacher = formatInTimeZone(
+      selected.scheduled_at,
+      teacherTz,
+      "dd MMM yyyy, hh:mm a"
+    );
+
+    const scheduledAtLearner = formatInTimeZone(
+      selected.scheduled_at,
+      learnerTz,
+      "dd MMM yyyy, hh:mm a"
+    );
+
 
     // ✅ Send emails (DO NOT BREAK BOOKING IF FAILS)
-    try {
-      await sendSessionBookedEmails({
-        learner: learnerFull,
-        teacher: teacherFull,
-        topicName: topic?.name || "Unknown",
-        scheduledAtFormatted,
-        durationMinutes: SESSION_DURATION_MIN,
-        bookingReason: booking_reason?.trim() || null,
-      });
+    // try {
+    //   await sendSessionBookedEmails({
+    //     learner: learnerFull,
+    //     teacher: teacherFull,
+    //     topicName: topic?.name || "Unknown",
+    //     scheduledAtTeacher,
+    //     scheduledAtLearner,
+    //     durationMinutes: SESSION_DURATION_MIN,
+    //     bookingReason: booking_reason?.trim() || null,
+    //   });
 
-      console.log("📧 Session booking emails sent");
-    } catch (emailErr) {
-      console.error("❌ Email sending failed (booking still successful):", emailErr);
-    }
+    //   console.log("📧 Session booking emails sent");
+    // } catch (emailErr) {
+    //   console.error("❌ Email sending failed (booking still successful):", emailErr);
+    // }
 
     // ✅ Create Notifications (DO NOT BREAK BOOKING)
     try {
@@ -781,7 +795,7 @@ export const sendSessionBookedEmails = async ({
   learner,
   teacher,
   topicName,
-  scheduledAtFormatted,
+  scheduledAtUtc,
   durationMinutes,
   bookingReason
 }) => {
@@ -793,11 +807,26 @@ export const sendSessionBookedEmails = async ({
   });
 
   try {
+    const learnerTz = learner.timezone || "UTC";
+    const teacherTz = teacher.timezone || "UTC";
+
+    const learnerTime = formatInTimeZone(
+      scheduledAtUtc,
+      learnerTz,
+      "dd MMM yyyy, hh:mm a (zzz)"
+    );
+
+    const teacherTime = formatInTimeZone(
+      scheduledAtUtc,
+      teacherTz,
+      "dd MMM yyyy, hh:mm a (zzz)"
+    );
+
     const learnerEmail = sessionBookedEmail({
       recipientName: learner.firstName,
       role: "learner",
       topicName,
-      scheduledAt: scheduledAtFormatted,
+      scheduledAt: learnerTime,
       durationMinutes,
       otherPartyName: `${teacher.firstName} ${teacher.lastName ?? ""}`.trim(),
       bookingReason
@@ -807,7 +836,7 @@ export const sendSessionBookedEmails = async ({
       recipientName: teacher.firstName,
       role: "teacher",
       topicName,
-      scheduledAt: scheduledAtFormatted,
+      scheduledAt: teacherTime,
       durationMinutes,
       otherPartyName: `${learner.firstName} ${learner.lastName ?? ""}`.trim(),
       bookingReason

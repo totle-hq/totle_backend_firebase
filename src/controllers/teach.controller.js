@@ -21,7 +21,10 @@ import { format, addDays, getDay, startOfDay, parse } from "date-fns";
 import {Test} from '../Models/test.model.js';
 import {FeedbackSummary} from "../Models/feedbacksummary.js";
 import dateFnsTz from "date-fns-tz";
-const { formatInTimeZone } = dateFnsTz;
+// const { formatInTimeZone } = dateFnsTz;
+
+const { zonedTimeToUtc, utcToZonedTime, formatInTimeZone } = dateFnsTz;
+
 
 // ⬇️ timezone + range helpers (date-fns-tz v3)
 import {
@@ -35,9 +38,9 @@ import Feedback from "../Models/feedbackModels.js";
 import { sequelize1 } from "../config/sequelize.js";
 
 // We pass +05:30 in ISO strings, so a plain Date ctor suffices.
-function zonedTimeToUtc(dateString /*, tzIgnored */) {
-  return new Date(dateString);
-}
+// function zonedTimeToUtc(dateString /*, tzIgnored */) {
+//   return new Date(dateString);
+// }
 
 /* ------------------------------- Report Session ---------------------------- */
 
@@ -107,16 +110,17 @@ export const setTeacherAvailability = async (req, res) => {
     const [startTimeStr, endTimeStr] = timeRange
       .split("-")
       .map(s => s.trim());
-
+          
     let start_at = zonedTimeToUtc(
-      `${date}T${startTimeStr}:00`,
+      `${date} ${startTimeStr}`,
       tz
     );
 
     let end_at = zonedTimeToUtc(
-      `${date}T${endTimeStr}:00`,
+      `${date} ${endTimeStr}`,
       tz
     );
+
 
     console.log("TZ:", tz);
     console.log("Start local string:", `${date} ${startTimeStr}`);
@@ -198,239 +202,239 @@ export const setTeacherAvailability = async (req, res) => {
 // IMPORTANT: returns the REAL PK (`session_id`) so the frontend can PUT.
 
 
-export const bookFreeSession = async (req, res) => {
-  try {
-    const learner_id = req.user?.id;
-    const { topic_id } = req.body;
+// export const bookFreeSession = async (req, res) => {
+//   try {
+//     const learner_id = req.user?.id;
+//     const { topic_id } = req.body;
 
-    if (!learner_id || !topic_id) {
-      return res.status(400).json({
-        error: true,
-        message: "learner_id and topic_id are required",
-      });
-    }
+//     if (!learner_id || !topic_id) {
+//       return res.status(400).json({
+//         error: true,
+//         message: "learner_id and topic_id are required",
+//       });
+//     }
 
-    const learner = await User.findByPk(learner_id, {
-      attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
-      raw: true,
-    });
+//     const learner = await User.findByPk(learner_id, {
+//       attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
+//       raw: true,
+//     });
 
-    if (!learner) {
-      return res.status(404).json({ error: true, message: "Learner not found" });
-    }
+//     if (!learner) {
+//       return res.status(404).json({ error: true, message: "Learner not found" });
+//     }
 
-    // 1️⃣ Get eligible teachers
-    const teacherIds = await getEligibleTeacherIds(topic_id, "free");
-    const filteredTeacherIds = teacherIds.filter(id => id !== learner_id);
+//     // 1️⃣ Get eligible teachers
+//     const teacherIds = await getEligibleTeacherIds(topic_id, "free");
+//     const filteredTeacherIds = teacherIds.filter(id => id !== learner_id);
 
-    if (filteredTeacherIds.length < 1) {
-      return res.status(400).json({
-        error: true,
-        message: "Awesome pick! Our mentors are getting ready — check back soon to grab your free session.",
-      });
-    }
+//     if (filteredTeacherIds.length < 1) {
+//       return res.status(400).json({
+//         error: true,
+//         message: "Awesome pick! Our mentors are getting ready — check back soon to grab your free session.",
+//       });
+//     }
 
-    // 2️⃣ Find candidate sessions
-    const now = new Date();
-    const minStart = new Date(now.getTime() + 30 * 60000);
-    const MIN_DURATION = 90;
+//     // 2️⃣ Find candidate sessions
+//     const now = new Date();
+//     const minStart = new Date(now.getTime() + 30 * 60000);
+//     const MIN_DURATION = 90;
 
-    const candidates = await Session.findAll({
-      where: {
-        topic_id,
-        status: "available",
-        session_tier: "free",
-        teacher_id: { [Op.in]: filteredTeacherIds },
-        scheduled_at: { [Op.gt]: minStart },
-        duration_minutes: { [Op.gte]: MIN_DURATION },
-      },
-      attributes: ["session_id", "teacher_id", "scheduled_at", "duration_minutes"],
-      order: [["scheduled_at", "ASC"]],
-      raw: true,
-    });
+//     const candidates = await Session.findAll({
+//       where: {
+//         topic_id,
+//         status: "available",
+//         session_tier: "free",
+//         teacher_id: { [Op.in]: filteredTeacherIds },
+//         scheduled_at: { [Op.gt]: minStart },
+//         duration_minutes: { [Op.gte]: MIN_DURATION },
+//       },
+//       attributes: ["session_id", "teacher_id", "scheduled_at", "duration_minutes"],
+//       order: [["scheduled_at", "ASC"]],
+//       raw: true,
+//     });
 
-    const uniqueTeacherIds = [
-      ...new Set(candidates.map(c => c.teacher_id))
-    ];
+//     const uniqueTeacherIds = [
+//       ...new Set(candidates.map(c => c.teacher_id))
+//     ];
 
-    const teachers = await User.findAll({
-      where: { id: { [Op.in]: uniqueTeacherIds } },
-      attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
-      raw: true,
-    });
+//     const teachers = await User.findAll({
+//       where: { id: { [Op.in]: uniqueTeacherIds } },
+//       attributes: ["id", "firstName", "gender", "known_language_ids", "location"],
+//       raw: true,
+//     });
 
-    const teacherMap = new Map();
-    teachers.forEach(t => teacherMap.set(t.id, t));
+//     const teacherMap = new Map();
+//     teachers.forEach(t => teacherMap.set(t.id, t));
 
 
-    // 3️⃣ Score teachers
-    const scored = [];
-    for (const s of candidates) {
-      const teacher = teacherMap.get(s.teacher_id);
-      if (!teacher) continue;
+//     // 3️⃣ Score teachers
+//     const scored = [];
+//     for (const s of candidates) {
+//       const teacher = teacherMap.get(s.teacher_id);
+//       if (!teacher) continue;
 
-      const mismatch = calculateMismatchPercentage(
-        learner.known_language_ids,
-        teacher.known_language_ids
-      );
+//       const mismatch = calculateMismatchPercentage(
+//         learner.known_language_ids,
+//         teacher.known_language_ids
+//       );
 
-      const dist = getDistance(
-        learner.location,
-        teacher.location
-      );
+//       const dist = getDistance(
+//         learner.location,
+//         teacher.location
+//       );
 
-      scored.push({
-        ...s,
-        score: scoreTeacher(learner, teacher, mismatch, dist),
-      });
-    }
+//       scored.push({
+//         ...s,
+//         score: scoreTeacher(learner, teacher, mismatch, dist),
+//       });
+//     }
 
-    scored.sort((a, b) => b.score - a.score);
+//     scored.sort((a, b) => b.score - a.score);
 
-    let chosen = null;
+//     let chosen = null;
 
-    for (const s of scored) {
-      try {
-        const proposedStart = new Date(s.scheduled_at);
+//     for (const s of scored) {
+//       try {
+//         const proposedStart = new Date(s.scheduled_at);
 
-        await assertTeacherBuffer({
-          teacherId: s.teacher_id,
-          startAt: proposedStart,
-          durationMinutes: s.duration_minutes,
-          level: "Bridger",
-          excludeSessionId: s.session_id,
-        });
+//         await assertTeacherBuffer({
+//           teacherId: s.teacher_id,
+//           startAt: proposedStart,
+//           durationMinutes: s.duration_minutes,
+//           level: "Bridger",
+//           excludeSessionId: s.session_id,
+//         });
 
-        chosen = s;
-        break;
-      } catch {
-        continue;
-      }
-    }
+//         chosen = s;
+//         break;
+//       } catch {
+//         continue;
+//       }
+//     }
 
-    if (!chosen) {
-      return res.status(404).json({
-        error: true,
-        message: "No valid upcoming slot available.",
-      });
-    }
+//     if (!chosen) {
+//       return res.status(404).json({
+//         error: true,
+//         message: "No valid upcoming slot available.",
+//       });
+//     }
 
-    // ====================================================
-    // 🔒 ATOMIC BOOKING STARTS HERE
-    // ====================================================
+//     // ====================================================
+//     // 🔒 ATOMIC BOOKING STARTS HERE
+//     // ====================================================
 
-    const transaction = await sequelize1.transaction();
+//     const transaction = await sequelize1.transaction();
 
-    try {
-      // Lock session row
-      const nextSlot = await Session.findOne({
-        where: { session_id: chosen.session_id },
-        lock: transaction.LOCK.UPDATE,
-        transaction,
-      });
+//     try {
+//       // Lock session row
+//       const nextSlot = await Session.findOne({
+//         where: { session_id: chosen.session_id },
+//         lock: transaction.LOCK.UPDATE,
+//         transaction,
+//       });
 
-      if (!nextSlot || nextSlot.status !== "available") {
-        throw new Error("Session already booked");
-      }
+//       if (!nextSlot || nextSlot.status !== "available") {
+//         throw new Error("Session already booked");
+//       }
 
-      const sessionStart = new Date(nextSlot.scheduled_at);
-      const sessionEnd = new Date(
-        sessionStart.getTime() + nextSlot.duration_minutes * 60000
-      );
+//       const sessionStart = new Date(nextSlot.scheduled_at);
+//       const sessionEnd = new Date(
+//         sessionStart.getTime() + nextSlot.duration_minutes * 60000
+//       );
 
-      // Lock matching availability block
-      const availability = await TeacherAvailability.findOne({
-        where: {
-          teacher_id: nextSlot.teacher_id,
-          start_at: { [Op.lte]: sessionStart },
-          end_at: { [Op.gte]: sessionEnd },
-          is_active: true,
-        },
-        lock: transaction.LOCK.UPDATE,
-        transaction,
-      });
+//       // Lock matching availability block
+//       const availability = await TeacherAvailability.findOne({
+//         where: {
+//           teacher_id: nextSlot.teacher_id,
+//           start_at: { [Op.lte]: sessionStart },
+//           end_at: { [Op.gte]: sessionEnd },
+//           is_active: true,
+//         },
+//         lock: transaction.LOCK.UPDATE,
+//         transaction,
+//       });
 
-      if (!availability) {
-        throw new Error("No availability found for this session time");
-      }
+//       if (!availability) {
+//         throw new Error("No availability found for this session time");
+//       }
 
-      // Update session
-      nextSlot.student_id = learner_id;
-      nextSlot.status = "upcoming";
-      await nextSlot.save({ transaction });
+//       // Update session
+//       nextSlot.student_id = learner_id;
+//       nextSlot.status = "upcoming";
+//       await nextSlot.save({ transaction });
 
-      // Split availability
-      const availStart = new Date(availability.start_at);
-      const availEnd = new Date(availability.end_at);
+//       // Split availability
+//       const availStart = new Date(availability.start_at);
+//       const availEnd = new Date(availability.end_at);
 
-      const newBlocks = [];
+//       const newBlocks = [];
 
-      if (sessionStart > availStart) {
-        newBlocks.push({
-          teacher_id: availability.teacher_id,
-          start_at: availStart,
-          end_at: sessionStart,
-        });
-      }
+//       if (sessionStart > availStart) {
+//         newBlocks.push({
+//           teacher_id: availability.teacher_id,
+//           start_at: availStart,
+//           end_at: sessionStart,
+//         });
+//       }
 
-      if (sessionEnd < availEnd) {
-        newBlocks.push({
-          teacher_id: availability.teacher_id,
-          start_at: sessionEnd,
-          end_at: availEnd,
-        });
-      }
+//       if (sessionEnd < availEnd) {
+//         newBlocks.push({
+//           teacher_id: availability.teacher_id,
+//           start_at: sessionEnd,
+//           end_at: availEnd,
+//         });
+//       }
 
-      await availability.destroy({ transaction });
+//       await availability.destroy({ transaction });
 
-      for (const block of newBlocks) {
-        await TeacherAvailability.create(block, { transaction });
-      }
+//       for (const block of newBlocks) {
+//         await TeacherAvailability.create(block, { transaction });
+//       }
 
-      await transaction.commit();
+//       await transaction.commit();
 
-    } catch (err) {
-      await transaction.rollback();
-      throw err;
-    }
+//     } catch (err) {
+//       await transaction.rollback();
+//       throw err;
+//     }
 
-    // ====================================================
-    // 🔓 ATOMIC BOOKING ENDS HERE
-    // ====================================================
+//     // ====================================================
+//     // 🔓 ATOMIC BOOKING ENDS HERE
+//     // ====================================================
 
-    const topic = await CatalogueNode.findByPk(topic_id, {
-      attributes: ["name"],
-      raw: true,
-    });
+//     const topic = await CatalogueNode.findByPk(topic_id, {
+//       attributes: ["name"],
+//       raw: true,
+//     });
 
-    const teacher = await User.findByPk(chosen.teacher_id, {
-      attributes: ["firstName", "lastName"],
-      raw: true,
-    });
+//     const teacher = await User.findByPk(chosen.teacher_id, {
+//       attributes: ["firstName", "lastName"],
+//       raw: true,
+//     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Free-tier session booked successfully",
-      data: {
-        sessionId: chosen.session_id,
-        teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
-        topicName: topic?.name || "Unknown",
-        scheduledAt: formatInTz(
-          chosen.scheduled_at,
-          req.userTz || "UTC",
-          "dd MMM yyyy, HH:mm"
-        ),
-      },
-    });
+//     return res.status(200).json({
+//       success: true,
+//       message: "Free-tier session booked successfully",
+//       data: {
+//         sessionId: chosen.session_id,
+//         teacherName: `${teacher?.firstName ?? ""} ${teacher?.lastName ?? ""}`.trim(),
+//         topicName: topic?.name || "Unknown",
+//         scheduledAt: formatInTz(
+//           chosen.scheduled_at,
+//           req.userTz || "UTC",
+//           "dd MMM yyyy, HH:mm"
+//         ),
+//       },
+//     });
 
-  } catch (err) {
-    console.error("❌ bookFreeSession:", err);
-    return res.status(500).json({
-      error: true,
-      message: "Internal server error",
-    });
-  }
-};
+//   } catch (err) {
+//     console.error("❌ bookFreeSession:", err);
+//     return res.status(500).json({
+//       error: true,
+//       message: "Internal server error",
+//     });
+//   }
+// };
 
 
 
