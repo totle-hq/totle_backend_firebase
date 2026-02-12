@@ -93,8 +93,11 @@ export const setTeacherAvailability = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const tz = req.userTz || "UTC";
-    const { date, timeRange } = req.body;
-    const user = await User.findByPk(teacher_id);
+    const { date, timeRange, topic_id} = req.body;
+    const user = await User.findByPk(teacher_id, {
+      attributes: ["location"],
+    });
+
     if (!user?.location) {
       return res.status(400).json({
         message: "Please fill in your location in profile to offer a slot.",
@@ -106,6 +109,13 @@ export const setTeacherAvailability = async (req, res) => {
         message: "Missing date or timeRange.",
       });
     }
+
+    if (!topic_id) {
+      return res.status(400).json({
+        message: "Missing topic.",
+      });
+    }
+
 
     const [startTimeStr, endTimeStr] = timeRange
       .split("-")
@@ -149,6 +159,46 @@ export const setTeacherAvailability = async (req, res) => {
     const transaction = await sequelize1.transaction();
 
     try {
+      
+      // 🔎 Validate topic exists
+      const topic = await CatalogueNode.findOne({
+        where: {
+          node_id: topic_id,
+          is_topic: true,
+          status: "active",
+        },
+        attributes: ["node_id"],
+        transaction,
+      });
+
+      if (!topic) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message: "Invalid or inactive topic.",
+        });
+      }
+
+      // 🔎 Validate teacher qualification (JOIN TABLE)
+      const qualification = await TeacherTopicQualification.findOne({
+        where: {
+          teacher_id,
+          topic_id,
+          passed: true,
+          [Op.or]: [
+            { expires_at: null },
+            { expires_at: { [Op.gt]: new Date() } },
+          ],
+        },
+        transaction,
+      });
+
+      if (!qualification) {
+        await transaction.rollback();
+        return res.status(403).json({
+          message: "You are not qualified to offer availability for this topic.",
+        });
+      }
+
       // 🔒 Prevent overlapping availability
       const overlap = await TeacherAvailability.findOne({
         where: {
@@ -157,19 +207,25 @@ export const setTeacherAvailability = async (req, res) => {
           end_at: { [Op.gt]: start_at },
           is_active: true,
         },
-        lock: transaction.LOCK.UPDATE,
+        lock: true,
         transaction,
+        skipLocked: true
       });
 
       if (overlap) {
-        throw new Error("This availability overlaps with an existing slot.");
+        await transaction.rollback();
+        return res.status(400).json({
+          message: "This availability overlaps with an existing slot."
+        });
       }
+
 
       const availability = await TeacherAvailability.create(
         {
           teacher_id,
           start_at,
           end_at,
+          topic_id,
           is_active: true,
         },
         { transaction }
@@ -536,6 +592,28 @@ export const updateAvailabilitySlot = async (req, res) => {
       });
     }
 
+    // 🔒 Prevent overlap with OTHER availability slots (exclude current one)
+    const overlapAvailability = await TeacherAvailability.findOne({
+      where: {
+        teacher_id,
+        availability_id: { [Op.ne]: availabilityId }, // exclude this slot
+        is_active: true,
+        start_at: { [Op.lt]: endDate },
+        end_at: { [Op.gt]: startDate },
+      },
+      transaction,
+      lock: true,
+      skipLocked: true,
+    });
+
+    if (overlapAvailability) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: "Updated time overlaps with another availability slot.",
+      });
+    }
+
+
     // ✅ Update time block
     await existing.update(
       {
@@ -562,6 +640,8 @@ export const updateAvailabilitySlot = async (req, res) => {
 // Deletes the whole grouped window (all topics) at that start/end.
 
 export const deleteAvailabilitySlot = async (req, res) => {
+  const transaction = await sequelize1.transaction();
+
   try {
     const teacher_id = req.user.id;
     const availabilityId = req.params.id;
@@ -571,24 +651,46 @@ export const deleteAvailabilitySlot = async (req, res) => {
         availability_id: availabilityId,
         teacher_id,
       },
+      transaction,
+      lock: transaction.LOCK.UPDATE,
     });
 
     if (!slot) {
-      return res.status(404).json({ error: "Slot not found or unauthorized" });
+      await transaction.rollback();
+      return res.status(404).json({
+        error: "Slot not found or unauthorized",
+      });
     }
 
-    await TeacherAvailability.destroy({
+    // 🔥 Prevent deleting slot with booked sessions
+    const conflictSession = await Session.findOne({
       where: {
-        availability_id: availabilityId,
         teacher_id,
+        status: { [Op.in]: ["booked", "upcoming"] },
+        scheduled_at: { [Op.lt]: slot.end_at },
+        completed_at: { [Op.gt]: slot.start_at },
       },
+      transaction,
     });
+
+    if (conflictSession) {
+      await transaction.rollback();
+      return res.status(409).json({
+        error: "Cannot delete availability with booked sessions inside it.",
+      });
+    }
+
+    await slot.destroy({ transaction });
+
+    await transaction.commit();
 
     return res.status(200).json({
       message: "Availability slot deleted successfully",
       deleted_availability_id: availabilityId,
     });
+
   } catch (err) {
+    await transaction.rollback();
     console.error("Delete availability slot error:", err);
     return res.status(500).json({ error: "SERVER_ERROR" });
   }

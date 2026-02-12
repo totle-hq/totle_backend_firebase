@@ -34,6 +34,7 @@ import { SessionToken } from "../Models/SessionTokenModel.js";
 import SessionParticipant from "../Models/SessionParticipant.js";
 import { PromoCode } from "../Models/PromoCodeModels/PromoCode.Model.js";
 import { PromoCodeRedemption } from "../Models/PromoCodeModels/PromoCodeRedemption.Model.js";
+import { TeacherTopicQualification } from "../Models/TeacherTopicQualification.model.js";
 
 const defineRelationships = () => {
   console.log('🔄 Setting up model associations...');
@@ -246,6 +247,48 @@ const defineRelationships = () => {
   }
   if (!CatalogueNode.associations?.teacherStats) {
     CatalogueNode.hasMany(Teachertopicstats, { foreignKey: "node_id", as: "teacherStats", onDelete: "CASCADE" });
+  }
+
+  /* =========================
+  * Teacher ↔ Topic Qualification (NEW)
+  * ========================= */
+
+  // User (Teacher) → Qualifications
+  if (!User.associations?.topicQualifications) {
+    User.hasMany(TeacherTopicQualification, {
+      foreignKey: "teacher_id",
+      as: "topicQualifications",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!TeacherTopicQualification.associations?.teacher) {
+    TeacherTopicQualification.belongsTo(User, {
+      foreignKey: "teacher_id",
+      as: "teacher",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  // Topic → Qualifications
+  if (!CatalogueNode.associations?.teacherQualifications) {
+    CatalogueNode.hasMany(TeacherTopicQualification, {
+      foreignKey: "topic_id",
+      as: "teacherQualifications",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!TeacherTopicQualification.associations?.topic) {
+    TeacherTopicQualification.belongsTo(CatalogueNode, {
+      foreignKey: "topic_id",
+      as: "topic",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
   }
 
   /* =========================

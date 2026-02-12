@@ -365,12 +365,14 @@ export const bookFreeSession = async (req, res) => {
     const availabilityBlocks = await TeacherAvailability.findAll({
       where: {
         teacher_id: { [Op.in]: teacherIds },
-        // is_active: true,
+        topic_id,
+        is_active: true,
         end_at: { [Op.gt]: MIN_START },
         start_at: { [Op.lt]: MAX_WINDOW },
       },
       order: [["start_at", "ASC"]],
-      lock: transaction.LOCK.UPDATE,
+      lock: true,
+      skipLocked: true,
       transaction,
     });
 
@@ -379,47 +381,87 @@ export const bookFreeSession = async (req, res) => {
       return res.status(404).json({ error: true, message: "No availability in next 48 hours." });
     }
 
+    // 🔎 Fetch all existing sessions in the 48h window (ONE QUERY)
+    const existingSessions = await Session.findAll({
+      where: {
+        teacher_id: { [Op.in]: teacherIds },
+        status: { [Op.in]: ["booked", "upcoming"] },
+        scheduled_at: { [Op.lt]: MAX_WINDOW },
+        completed_at: { [Op.gt]: MIN_START },
+      },
+      transaction,
+      raw: true,
+    });
+
+    const sessionsByTeacher = new Map();
+
+    for (const session of existingSessions) {
+      if (!sessionsByTeacher.has(session.teacher_id)) {
+        sessionsByTeacher.set(session.teacher_id, []);
+      }
+      sessionsByTeacher.get(session.teacher_id).push(session);
+    }
+
+
+
     const slotCandidates = [];
+
+    const SLOT_STEP_MINUTES = 15; // or 30 if you prefer
 
     for (const block of availabilityBlocks) {
       const teacher_id = block.teacher_id;
 
-      const start = new Date(Math.max(block.start_at, MIN_START));
-      const end = new Date(block.end_at);
+      const blockStart = new Date(Math.max(block.start_at, MIN_START));
+      const blockEnd = new Date(block.end_at);
 
-      if (end - start < SESSION_DURATION_MIN * 60000) continue;
+      const teacherSessions = sessionsByTeacher.get(teacher_id) || [];
 
-      const slotStart = start;
-      const slotEnd = new Date(slotStart.getTime() + SESSION_DURATION_MIN * 60000);
+      // Slide through block
+      let currentStart = new Date(blockStart);
 
-      // 🔒 Check overlapping sessions with buffer
-      const overlapping = await Session.findOne({
-        where: {
-          teacher_id,
-          status: { [Op.in]: ["booked", "upcoming"] },
-          [Op.or]: [
-            {
-              scheduled_at: {
-                [Op.between]: [
-                  new Date(slotStart.getTime() - BUFFER_MINUTES * 60000),
-                  new Date(slotEnd.getTime() + BUFFER_MINUTES * 60000),
-                ],
-              },
-            },
-          ],
-        },
-        transaction,
-      });
+      while (
+        currentStart.getTime() + SESSION_DURATION_MIN * 60000 <= blockEnd.getTime()
+      ) {
+        const currentEnd = new Date(
+          currentStart.getTime() + SESSION_DURATION_MIN * 60000
+        );
 
-      if (!overlapping) {
-        slotCandidates.push({
-          teacher_id,
-          scheduled_at: slotStart,
-          completed_at: slotEnd,
-          availabilityBlock: block,
+        const slotStartWithBuffer = new Date(
+          currentStart.getTime() - BUFFER_MINUTES * 60000
+        );
+
+        const slotEndWithBuffer = new Date(
+          currentEnd.getTime() + BUFFER_MINUTES * 60000
+        );
+
+        const overlapping = teacherSessions.some(session => {
+          const sessionStart = new Date(session.scheduled_at);
+          const sessionEnd = new Date(session.completed_at);
+
+          return (
+            sessionStart < slotEndWithBuffer &&
+            sessionEnd > slotStartWithBuffer
+          );
         });
+
+        if (!overlapping) {
+          slotCandidates.push({
+            teacher_id,
+            scheduled_at: new Date(currentStart),
+            completed_at: new Date(currentEnd),
+            availabilityBlock: block,
+          });
+
+          break; // Stop after first valid slot for this block
+        }
+
+        // Move forward by step size
+        currentStart = new Date(
+          currentStart.getTime() + SLOT_STEP_MINUTES * 60000
+        );
       }
     }
+
 
     if (!slotCandidates.length) {
       await transaction.rollback();
@@ -499,6 +541,7 @@ export const bookFreeSession = async (req, res) => {
     if (block.start_at < selected.scheduled_at) {
       newBlocks.push({
         teacher_id: block.teacher_id,
+        topic_id: block.topic_id, // ✅ REQUIRED
         start_at: block.start_at,
         end_at: selected.scheduled_at,
         is_active: true,
@@ -509,6 +552,7 @@ export const bookFreeSession = async (req, res) => {
       newBlocks.push({
         teacher_id: block.teacher_id,
         start_at: selected.completed_at,
+        topic_id: block.topic_id, // ✅ REQUIRED
         end_at: block.end_at,
         is_active: true,
       });
@@ -524,12 +568,12 @@ export const bookFreeSession = async (req, res) => {
     // ✅ Fetch full learner, teacher & topic (NEED EMAILS)
     const [teacherFull, learnerFull, topic] = await Promise.all([
       User.findByPk(selected.teacher_id, {
-        attributes: ["id", "firstName", "lastName", "email"],
+        attributes: ["id", "firstName", "lastName", "email", "profileTimezone"],
         transaction,
         raw: true,
       }),
       User.findByPk(learner_id, {
-        attributes: ["id", "firstName", "lastName", "email"],
+        attributes: ["id", "firstName", "lastName", "email", "profileTimezone"],
         transaction,
         raw: true,
       }),
@@ -543,8 +587,8 @@ export const bookFreeSession = async (req, res) => {
     await transaction.commit();
 
     // ✅ Format time (important for email readability)
-    const teacherTz = teacherFull?.timezone || "UTC";
-    const learnerTz = learnerFull?.timezone || "UTC";
+    const teacherTz = teacherFull?.profileTimezone || "UTC";
+    const learnerTz = learnerFull?.profileTimezone || "UTC";
 
     const scheduledAtTeacher = formatInTimeZone(
       selected.scheduled_at,
@@ -583,7 +627,7 @@ export const bookFreeSession = async (req, res) => {
         learnerId: learner_id,
         teacherId: selected.teacher_id,
         topicName: topic?.name || "Unknown",
-        scheduledAt: scheduledAtFormatted,
+        scheduledAt: selected.scheduled_at,
         sessionType: "free",
       });
 

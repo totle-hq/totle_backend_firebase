@@ -739,7 +739,6 @@ export const evaluateTest = async (req, res) => {
     if (gatedPass) {
       test.eligible_for_bridger = true;
       const topicId = test.topic_uuid;
-      const topic = await CatalogueNode.findByPk(topicId);
       const teacherId = test.user_id;
 
       const statExists = await Teachertopicstats.findOne({ where: { teacherId, node_id: topicId } });
@@ -754,18 +753,14 @@ export const evaluateTest = async (req, res) => {
         });
       }
 
-      if (topic) {
-        const currentTeacherIds = Array.isArray(topic.qualified_teacher_ids) ? topic.qualified_teacher_ids : [];
-        const currentTeacherNames = Array.isArray(topic.qualified_teacher_names) ? topic.qualified_teacher_names : [];
-        if (!currentTeacherIds.includes(test.user_id)) {
-          const user = await User.findByPk(test.user_id, { attributes: ["id", "firstName"] });
-          if (user) {
-            topic.set("qualified_teacher_ids", [...currentTeacherIds, test.user_id]);
-            topic.set("qualified_teacher_names", [...currentTeacherNames, user.firstName]);
-            await topic.save();
-          }
-        }
-      }
+      // ✅ Create or update TeacherTopicQualification (JOIN TABLE)
+      await TeacherTopicQualification.upsert({
+        teacher_id: teacherId,
+        topic_id: topicId,
+        passed: true,
+        passed_at: new Date(),
+        expires_at: null, // optional if you use expiry
+      });
     }
 
     await test.save();

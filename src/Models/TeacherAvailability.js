@@ -1,6 +1,6 @@
 // src/Models/TeacherAvailability.js
 
-import { DataTypes } from "sequelize";
+import { DataTypes, Op } from "sequelize";
 import { sequelize1 } from "../config/sequelize.js";
 
 export const TeacherAvailability = sequelize1.define(
@@ -11,7 +11,13 @@ export const TeacherAvailability = sequelize1.define(
       defaultValue: DataTypes.UUIDV4,
       primaryKey: true,
     },
+
     teacher_id: {
+      type: DataTypes.UUID,
+      allowNull: false,
+    },
+
+    topic_id: {
       type: DataTypes.UUID,
       allowNull: false,
     },
@@ -26,7 +32,12 @@ export const TeacherAvailability = sequelize1.define(
       allowNull: false,
       validate: {
         isAfterStart(value) {
-          if (new Date(value) <= new Date(this.start_at)) {
+          if (!this.start_at) return;
+
+          const start = new Date(this.start_at);
+          const end = new Date(value);
+
+          if (end <= start) {
             throw new Error("end_at must be greater than start_at");
           }
         },
@@ -42,11 +53,64 @@ export const TeacherAvailability = sequelize1.define(
     schema: "user",
     tableName: "teacher_availabilities",
     timestamps: true,
+
     indexes: [
-      { fields: ["teacher_id", "start_at"] },
-      { fields: ["teacher_id", "end_at"] },
+      {
+        name: "idx_teacher_time",
+        fields: ["teacher_id", "start_at", "end_at"],
+      },
+      {
+        name: "idx_teacher_topic",
+        fields: ["teacher_id", "topic_id"],
+      },
     ],
+
+    hooks: {
+      async beforeCreate(instance) {
+        await validateAvailabilityOverlap(instance);
+      },
+
+      async beforeUpdate(instance) {
+        await validateAvailabilityOverlap(instance);
+      },
+    },
   }
 );
+
+/**
+ * Prevent overlapping availability for the same teacher,
+ * even across different topics.
+ */
+async function validateAvailabilityOverlap(instance) {
+  const TeacherAvailabilityModel =
+    sequelize1.models.TeacherAvailability;
+
+  const overlapping = await TeacherAvailabilityModel.findOne({
+    where: {
+      teacher_id: instance.teacher_id,
+
+      // Exclude current record during update
+      availability_id: {
+        [Op.ne]: instance.availability_id,
+      },
+
+      is_active: true,
+
+      // Overlap condition
+      start_at: {
+        [Op.lt]: instance.end_at,
+      },
+      end_at: {
+        [Op.gt]: instance.start_at,
+      },
+    },
+  });
+
+  if (overlapping) {
+    throw new Error(
+      "Teacher already has availability during this time range"
+    );
+  }
+}
 
 export default TeacherAvailability;
