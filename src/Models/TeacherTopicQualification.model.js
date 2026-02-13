@@ -42,8 +42,8 @@ export const TeacherTopicQualification = sequelize1.define(
     },
 
     certification_level: {
-      type: DataTypes.ENUM("basic", "advanced", "expert"),
-      allowNull: true,
+        type: DataTypes.ENUM("Bridger", "Expert", "Master", "Legend"),
+        allowNull: true,
     },
 
     passed_at: {

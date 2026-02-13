@@ -41,6 +41,7 @@ import { PromoCode } from "../../Models/PromoCodeModels/PromoCode.Model.js";
 import { PromoCodeRedemption } from "../../Models/PromoCodeModels/PromoCodeRedemption.Model.js";
 import { transporter } from "../../config/mailer.js";
 import NotificationService from "../../services/notificationService.js";
+import { TeacherTopicQualification } from "../../Models/TeacherTopicQualification.model.js";
 
 /**
  * POST /api/tests/generate
@@ -755,12 +756,14 @@ export const evaluateTest = async (req, res) => {
 
       // ✅ Create or update TeacherTopicQualification (JOIN TABLE)
       await TeacherTopicQualification.upsert({
-        teacher_id: teacherId,
-        topic_id: topicId,
+        teacher_id: test.user_id,
+        topic_id: test.topic_uuid,
+        exam_score: percentage,
         passed: true,
         passed_at: new Date(),
-        expires_at: null, // optional if you use expiry
+        certification_level:"Bridger"
       });
+
     }
 
     await test.save();
