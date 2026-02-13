@@ -805,6 +805,7 @@ try {
         ? `Congratulations! You passed with ${percentage}%.`
         : `You scored ${percentage}%. Please retry after cooling period.`,
       priority: gatedPass ? "medium" : "high",
+      category:"teach",
       data: {
         test_id: test.test_id,
         percentage,

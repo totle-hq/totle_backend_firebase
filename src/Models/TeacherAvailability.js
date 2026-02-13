@@ -66,12 +66,12 @@ export const TeacherAvailability = sequelize1.define(
     ],
 
     hooks: {
-      async beforeCreate(instance) {
-        await validateAvailabilityOverlap(instance);
+      async beforeCreate(instance, options) {
+        await validateAvailabilityOverlap(instance, options);
       },
 
-      async beforeUpdate(instance) {
-        await validateAvailabilityOverlap(instance);
+      async beforeUpdate(instance, options) {
+        await validateAvailabilityOverlap(instance, options);
       },
     },
   }
@@ -81,7 +81,7 @@ export const TeacherAvailability = sequelize1.define(
  * Prevent overlapping availability for the same teacher,
  * even across different topics.
  */
-async function validateAvailabilityOverlap(instance) {
+async function validateAvailabilityOverlap(instance, options) {
   const TeacherAvailabilityModel =
     sequelize1.models.TeacherAvailability;
 
@@ -104,6 +104,7 @@ async function validateAvailabilityOverlap(instance) {
         [Op.gt]: instance.start_at,
       },
     },
+    transaction: options?.transaction,   // ✅ IMPORTANT
   });
 
   if (overlapping) {

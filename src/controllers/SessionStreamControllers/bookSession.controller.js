@@ -22,6 +22,7 @@ import { sendSessionBookedEmail } from "../../utils/otpService.js";
 import NotificationService from "../../services/notificationService.js";
 import { transporter } from "../../config/mailer.js";
 import dateFnsTz from "date-fns-tz";
+import { TeacherAvailabilityTopic } from "../../Models/TeacherAvailabilityTopics.model.js";
 const { formatInTimeZone } = dateFnsTz;
 
 /* ============================================================================
@@ -365,16 +366,30 @@ export const bookFreeSession = async (req, res) => {
     const availabilityBlocks = await TeacherAvailability.findAll({
       where: {
         teacher_id: { [Op.in]: teacherIds },
-        topic_id,
         is_active: true,
         end_at: { [Op.gt]: MIN_START },
         start_at: { [Op.lt]: MAX_WINDOW },
       },
+      include: [
+        {
+          model: CatalogueNode,
+          as: "topics",
+          where: {
+            node_id: topic_id,
+          },
+          through: { attributes: [] }, // remove junction fields from result
+          required: true, // IMPORTANT → inner join
+        },
+      ],
       order: [["start_at", "ASC"]],
-      lock: true,
+      lock: {
+        level: transaction.LOCK.UPDATE,
+        of: TeacherAvailability,
+      },
       skipLocked: true,
       transaction,
     });
+
 
     if (!availabilityBlocks.length) {
       await transaction.rollback();
@@ -536,12 +551,19 @@ export const bookFreeSession = async (req, res) => {
 
     // 🔥 SPLIT AVAILABILITY BLOCK
     const block = selected.availabilityBlock;
+
+    // 1️⃣ Get existing topic mappings
+    const existingTopics = await TeacherAvailabilityTopic.findAll({
+      where: { availability_id: block.availability_id },
+      transaction,
+      raw: true,
+    });
+
     const newBlocks = [];
 
     if (block.start_at < selected.scheduled_at) {
       newBlocks.push({
         teacher_id: block.teacher_id,
-        topic_id: block.topic_id, // ✅ REQUIRED
         start_at: block.start_at,
         end_at: selected.scheduled_at,
         is_active: true,
@@ -552,16 +574,27 @@ export const bookFreeSession = async (req, res) => {
       newBlocks.push({
         teacher_id: block.teacher_id,
         start_at: selected.completed_at,
-        topic_id: block.topic_id, // ✅ REQUIRED
         end_at: block.end_at,
         is_active: true,
       });
     }
 
+    // 2️⃣ Delete original block (topics auto-delete if CASCADE is set)
     await block.destroy({ transaction });
 
+    // 3️⃣ Create new blocks + reattach topics
     for (const nb of newBlocks) {
-      await TeacherAvailability.create(nb, { transaction });
+      const createdBlock = await TeacherAvailability.create(nb, { transaction });
+
+      for (const topic of existingTopics) {
+        await TeacherAvailabilityTopic.create(
+          {
+            availability_id: createdBlock.availability_id,
+            topic_id: topic.topic_id,
+          },
+          { transaction }
+        );
+      }
     }
 
 

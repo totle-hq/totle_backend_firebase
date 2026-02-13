@@ -181,6 +181,10 @@ export const setTeacherAvailability = async (req, res) => {
       }
 
       // 🔎 Validate teacher qualification (JOIN TABLE)
+      console.log("🟡 Checking qualifications...");
+      console.log("Teacher:", teacher_id);
+      console.log("Requested Topics:", topic_ids);
+
       const qualifications = await TeacherTopicQualification.findAll({
         where: {
           teacher_id,
@@ -192,15 +196,28 @@ export const setTeacherAvailability = async (req, res) => {
           ],
         },
         transaction,
+        raw: true,
       });
 
-      if (qualifications.length !== topic_ids.length) {
+      console.log("✅ Found qualifications:", qualifications);
+
+      const qualifiedTopicIds = qualifications.map(q => q.topic_id);
+
+      const missingTopics = topic_ids.filter(
+        id => !qualifiedTopicIds.includes(id)
+      );
+
+      if (missingTopics.length > 0) {
+        console.log("❌ Missing qualifications for topics:", missingTopics);
+
         await transaction.rollback();
         return res.status(403).json({
           message:
             "You are not qualified to offer availability for one or more selected topics.",
+          missingTopics, // optional but VERY helpful during debugging
         });
       }
+
 
       // 🔒 Prevent overlapping availability
       const overlap = await TeacherAvailability.findOne({

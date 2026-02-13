@@ -9,6 +9,7 @@ import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { handleAllFeedbackSummaries } from "../utils/updatefeedbacksummary.js";
 import jwt from 'jsonwebtoken';
+import { transporter } from "../config/mailer.js";
 
 export const verifyFeedbackToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -135,6 +136,62 @@ export const postFeedBack = async (req, res) => {
         confidence_gain_yn,
       },
     });
+
+    // ================================
+    // 📧 SEND EMAIL TO TEACHER
+    // ================================
+
+    try {
+      const teacher = await User.findByPk(bridger_id);
+      const learner = await User.findByPk(learner_id);
+
+      if (teacher?.email) {
+        await transporter.sendMail({
+          from: `"Your Platform Name" <${process.env.EMAIL_USER}>`,
+          to: teacher.email,
+          subject: "📢 New Session Feedback Received",
+          html: `
+            <div style="font-family: Arial, sans-serif; padding:20px;">
+              <h2>New Feedback Received</h2>
+              
+              <p><strong>Learner:</strong> ${learner?.firstName || "Student"}</p>
+              <p><strong>Topic:</strong> ${topic.name}</p>
+              <p><strong>Subject:</strong> ${subject.name}</p>
+              <p><strong>Domain:</strong> ${domain.name}</p>
+              
+              <hr/>
+              
+              <p><strong>⭐ Star Rating:</strong> ${star_rating}/5</p>
+              <p><strong>Helpfulness:</strong> ${helpfulness_rating || "N/A"}</p>
+              <p><strong>Clarity:</strong> ${clarity_rating || "N/A"}</p>
+              <p><strong>Pace:</strong> ${pace_feedback || "N/A"}</p>
+              <p><strong>Engaging:</strong> ${engagement_yn ? "Yes" : "No"}</p>
+              <p><strong>Confidence Gained:</strong> ${confidence_gain_yn ? "Yes" : "No"}</p>
+              
+              ${
+                text_feedback
+                  ? `<p><strong>Feedback Comment:</strong><br/>${text_feedback}</p>`
+                  : ""
+              }
+
+              ${
+                flagged_issue
+                  ? `<p style="color:red;"><strong>⚠ Flagged Issue:</strong><br/>${flag_reason}</p>`
+                  : ""
+              }
+
+              <hr/>
+              <p>Keep up the great work! 💪</p>
+            </div>
+          `,
+        });
+
+        console.log("📧 Feedback email sent to teacher");
+      }
+    } catch (emailError) {
+      console.error("❌ Email sending failed:", emailError.message);
+      // DO NOT break main flow
+    }
 
     console.timeEnd("Total Feedback Request");
 

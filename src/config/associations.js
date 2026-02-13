@@ -526,6 +526,30 @@ const defineRelationships = () => {
     });
   }
 
+  // MANY-TO-MANY (REQUIRED for include: { as: "topics" })
+  if (!TeacherAvailability.associations?.topics) {
+    TeacherAvailability.belongsToMany(CatalogueNode, {
+      through: TeacherAvailabilityTopic,
+      foreignKey: "availability_id",
+      otherKey: "topic_id",
+      as: "topics",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!CatalogueNode.associations?.availabilities) {
+    CatalogueNode.belongsToMany(TeacherAvailability, {
+      through: TeacherAvailabilityTopic,
+      foreignKey: "topic_id",
+      otherKey: "availability_id",
+      as: "availabilities",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+
   // Topic → AvailabilityTopics
   if (!CatalogueNode.associations?.availabilityTopics) {
     CatalogueNode.hasMany(TeacherAvailabilityTopic, {
