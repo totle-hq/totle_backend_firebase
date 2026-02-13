@@ -35,6 +35,7 @@ import SessionParticipant from "../Models/SessionParticipant.js";
 import { PromoCode } from "../Models/PromoCodeModels/PromoCode.Model.js";
 import { PromoCodeRedemption } from "../Models/PromoCodeModels/PromoCodeRedemption.Model.js";
 import { TeacherTopicQualification } from "../Models/TeacherTopicQualification.model.js";
+import { TeacherAvailabilityTopic } from "../Models/TeacherAvailabilityTopics.model.js";
 
 const defineRelationships = () => {
   console.log('🔄 Setting up model associations...');
@@ -497,6 +498,49 @@ const defineRelationships = () => {
       foreignKey: "session_id",
       as: "availabilityBlocks",
       onDelete: "SET NULL",
+      onUpdate: "CASCADE",
+    });
+  }
+
+
+  /* =========================
+  * TeacherAvailability ↔ Topics (JOIN TABLE)
+  * ========================= */
+
+  // Availability → AvailabilityTopics
+  if (!TeacherAvailability.associations?.availabilityTopics) {
+    TeacherAvailability.hasMany(TeacherAvailabilityTopic, {
+      foreignKey: "availability_id",
+      as: "availabilityTopics",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!TeacherAvailabilityTopic.associations?.availability) {
+    TeacherAvailabilityTopic.belongsTo(TeacherAvailability, {
+      foreignKey: "availability_id",
+      as: "availability",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  // Topic → AvailabilityTopics
+  if (!CatalogueNode.associations?.availabilityTopics) {
+    CatalogueNode.hasMany(TeacherAvailabilityTopic, {
+      foreignKey: "topic_id",
+      as: "availabilityTopics",
+      onDelete: "CASCADE",
+      onUpdate: "CASCADE",
+    });
+  }
+
+  if (!TeacherAvailabilityTopic.associations?.topic) {
+    TeacherAvailabilityTopic.belongsTo(CatalogueNode, {
+      foreignKey: "topic_id",
+      as: "topic",
+      onDelete: "CASCADE",
       onUpdate: "CASCADE",
     });
   }

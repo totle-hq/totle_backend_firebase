@@ -17,10 +17,10 @@ export const TeacherAvailability = sequelize1.define(
       allowNull: false,
     },
 
-    topic_id: {
-      type: DataTypes.UUID,
-      allowNull: false,
-    },
+    // topic_id: {
+    //   type: DataTypes.UUID,
+    //   allowNull: false,
+    // },
 
     start_at: {
       type: DataTypes.DATE,
@@ -59,10 +59,10 @@ export const TeacherAvailability = sequelize1.define(
         name: "idx_teacher_time",
         fields: ["teacher_id", "start_at", "end_at"],
       },
-      {
-        name: "idx_teacher_topic",
-        fields: ["teacher_id", "topic_id"],
-      },
+      // {
+      //   name: "idx_teacher_topic",
+      //   fields: ["teacher_id", "topic_id"],
+      // },
     ],
 
     hooks: {

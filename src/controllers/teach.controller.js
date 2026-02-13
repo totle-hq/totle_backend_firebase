@@ -36,6 +36,8 @@ import {
 } from "../utils/time.js"; // if you saved as JS, use: "../utils/time.js"
 import Feedback from "../Models/feedbackModels.js";
 import { sequelize1 } from "../config/sequelize.js";
+import { TeacherTopicQualification } from "../Models/TeacherTopicQualification.model.js";
+import { TeacherAvailabilityTopic } from "../Models/TeacherAvailabilityTopics.model.js";
 
 // We pass +05:30 in ISO strings, so a plain Date ctor suffices.
 // function zonedTimeToUtc(dateString /*, tzIgnored */) {
@@ -93,7 +95,7 @@ export const setTeacherAvailability = async (req, res) => {
   try {
     const teacher_id = req.user.id;
     const tz = req.userTz || "UTC";
-    const { date, timeRange, topic_id} = req.body;
+    const { date, timeRange, topic_ids} = req.body;
     const user = await User.findByPk(teacher_id, {
       attributes: ["location"],
     });
@@ -110,9 +112,9 @@ export const setTeacherAvailability = async (req, res) => {
       });
     }
 
-    if (!topic_id) {
+    if (!Array.isArray(topic_ids) || topic_ids.length === 0) {
       return res.status(400).json({
-        message: "Missing topic.",
+        message: "At least one topic must be selected.",
       });
     }
 
@@ -161,9 +163,9 @@ export const setTeacherAvailability = async (req, res) => {
     try {
       
       // 🔎 Validate topic exists
-      const topic = await CatalogueNode.findOne({
+      const topics = await CatalogueNode.findAll({
         where: {
-          node_id: topic_id,
+          node_id: topic_ids,
           is_topic: true,
           status: "active",
         },
@@ -171,18 +173,18 @@ export const setTeacherAvailability = async (req, res) => {
         transaction,
       });
 
-      if (!topic) {
+      if (topics.length !== topic_ids.length) {
         await transaction.rollback();
         return res.status(400).json({
-          message: "Invalid or inactive topic.",
+          message: "One or more topics are invalid or inactive.",
         });
       }
 
       // 🔎 Validate teacher qualification (JOIN TABLE)
-      const qualification = await TeacherTopicQualification.findOne({
+      const qualifications = await TeacherTopicQualification.findAll({
         where: {
           teacher_id,
-          topic_id,
+          topic_id: topic_ids,
           passed: true,
           [Op.or]: [
             { expires_at: null },
@@ -192,10 +194,11 @@ export const setTeacherAvailability = async (req, res) => {
         transaction,
       });
 
-      if (!qualification) {
+      if (qualifications.length !== topic_ids.length) {
         await transaction.rollback();
         return res.status(403).json({
-          message: "You are not qualified to offer availability for this topic.",
+          message:
+            "You are not qualified to offer availability for one or more selected topics.",
         });
       }
 
@@ -225,11 +228,19 @@ export const setTeacherAvailability = async (req, res) => {
           teacher_id,
           start_at,
           end_at,
-          topic_id,
           is_active: true,
         },
         { transaction }
       );
+
+      const availabilityTopics = topic_ids.map((topic_id) => ({
+        availability_id: availability.availability_id,
+        topic_id,
+      }));
+
+      await TeacherAvailabilityTopic.bulkCreate(availabilityTopics, {
+        transaction,
+      });
 
       await transaction.commit();
 
@@ -680,6 +691,11 @@ export const deleteAvailabilitySlot = async (req, res) => {
       });
     }
 
+    await TeacherAvailabilityTopic.destroy({
+      where: { availability_id: availabilityId },
+      transaction,
+    });
+
     await slot.destroy({ transaction });
 
     await transaction.commit();
@@ -738,6 +754,19 @@ export const getAvailabilityChart = async (req, res) => {
         start_at: { [Op.lt]: utcEnd },
         end_at: { [Op.gt]: utcStart },
       },
+      include: [
+        {
+          model: TeacherAvailabilityTopic,
+          as: "availabilityTopics",
+          include: [
+            {
+              model: CatalogueNode,
+              as: "topic",
+              attributes: ["node_id", "name"],
+            },
+          ],
+        },
+      ],
       order: [["start_at", "ASC"]],
     });
 
@@ -785,12 +814,15 @@ export const getAvailabilityChart = async (req, res) => {
 
         result[dayKey].push({
           id: slot.availability_id,
-          start_at: slot.start_at,
-          end_at: slot.end_at,
           start_time: format(clippedStart, "HH:mm"),
           end_time: format(clippedEnd, "HH:mm"),
           status: "available",
+          topics: slot.availabilityTopics.map((t) => ({
+            topic_id: t.topic.node_id,
+            name: t.topic.name,
+          })),
         });
+
       }
     }
 
