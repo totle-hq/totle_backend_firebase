@@ -1682,23 +1682,119 @@ export const getTeacherFeedbackSummary = async (req, res) => {
   }
 };
 
+// export const getTeacherEarningsSummary = async (req, res) => {
+//   try {
+//     const teacherId = req.user.id;
+
+//     // -----------------------------------
+//     // Fetch completed PAID sessions only
+//     // -----------------------------------
+//     const sessions = await Session.findAll({
+//       where: {
+//         teacher_id: teacherId,
+//         status: "completed",
+//         session_tier: "paid"
+//       },
+//       attributes: [
+//         "session_id",
+//         "topic_id",
+//         "student_id",           // FIXED
+//         "duration_minutes",
+//         "scheduled_at",
+//       ],
+//       raw: true,
+//     });
+
+//     if (!sessions.length) {
+//       return res.status(200).json({
+//         success: true,
+//         totalEarnings: 0,
+//         uniqueLearners: 0,
+//         totalHoursTaught: 0,
+//         monthlyData: [],
+//       });
+//     }
+
+//     // ------------------------------------------------------
+//     // Compute payout per session based on session_level tier
+//     // ------------------------------------------------------
+//     const PAYOUTS = {
+//       Bridger: 180,
+//       Expert: 500,
+//       Master: 1200,
+//       Legend: 2500,
+//     };
+
+//     let totalEarnings = 0;
+//     let totalHours = 0;
+
+//     const monthlyMap = {};
+
+//     for (const s of sessions) {
+//       // Fetch teacher stats for this topic
+//       const stats = await Teachertopicstats.findOne({
+//         where: { teacherId, node_id: s.topic_id },
+//         attributes: ["level"],
+//         raw: true,
+//       });
+
+//       const level = stats?.level || "Bridger";
+//       const payout = PAYOUTS[level] || PAYOUTS.Bridger;
+
+//       totalEarnings += payout;
+//       totalHours += (s.duration_minutes || 0) / 60;
+
+//       const date = new Date(s.scheduled_at);
+//       const monthKey = date.toLocaleString("en-US", {
+//         month: "short",
+//         year: "numeric",
+//       });
+
+//       if (!monthlyMap[monthKey]) {
+//         monthlyMap[monthKey] = {
+//           month: monthKey,
+//           hours: 0,
+//           payout: 0,
+//         };
+//       }
+
+//       monthlyMap[monthKey].hours += (s.duration_minutes || 0) / 60;
+//       monthlyMap[monthKey].payout += payout;
+//     }
+
+//     const uniqueLearners = new Set(sessions.map((s) => s.student_id)).size;
+
+//     return res.status(200).json({
+//       success: true,
+//       totalEarnings,
+//       uniqueLearners,
+//       totalHoursTaught: totalHours,
+//       monthlyData: Object.values(monthlyMap),
+//     });
+//   } catch (err) {
+//     console.error("❌ Earnings Summary ERROR:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "SERVER_ERROR",
+//     });
+//   }
+// };
+
+
 export const getTeacherEarningsSummary = async (req, res) => {
   try {
     const teacherId = req.user.id;
 
-    // -----------------------------------
-    // Fetch completed PAID sessions only
-    // -----------------------------------
     const sessions = await Session.findAll({
       where: {
         teacher_id: teacherId,
         status: "completed",
-        session_tier: "paid"
+        session_tier: "paid",
       },
       attributes: [
         "session_id",
         "topic_id",
-        "student_id",           // FIXED
+        "student_id",
         "duration_minutes",
         "scheduled_at",
       ],
@@ -1715,9 +1811,22 @@ export const getTeacherEarningsSummary = async (req, res) => {
       });
     }
 
-    // ------------------------------------------------------
-    // Compute payout per session based on session_level tier
-    // ------------------------------------------------------
+    // -----------------------------------
+    // Fetch ALL topic stats in ONE query
+    // -----------------------------------
+    const topicIds = [...new Set(sessions.map(s => s.topic_id))];
+
+    const stats = await Teachertopicstats.findAll({
+      where: { teacherId, node_id: topicIds },
+      attributes: ["node_id", "level"],
+      raw: true,
+    });
+
+    const levelMap = {};
+    stats.forEach(s => {
+      levelMap[s.node_id] = s.level;
+    });
+
     const PAYOUTS = {
       Bridger: 180,
       Expert: 500,
@@ -1727,18 +1836,10 @@ export const getTeacherEarningsSummary = async (req, res) => {
 
     let totalEarnings = 0;
     let totalHours = 0;
-
     const monthlyMap = {};
 
     for (const s of sessions) {
-      // Fetch teacher stats for this topic
-      const stats = await Teachertopicstats.findOne({
-        where: { teacherId, node_id: s.topic_id },
-        attributes: ["level"],
-        raw: true,
-      });
-
-      const level = stats?.level || "Bridger";
+      const level = levelMap[s.topic_id] || "Bridger";
       const payout = PAYOUTS[level] || PAYOUTS.Bridger;
 
       totalEarnings += payout;
@@ -1762,7 +1863,9 @@ export const getTeacherEarningsSummary = async (req, res) => {
       monthlyMap[monthKey].payout += payout;
     }
 
-    const uniqueLearners = new Set(sessions.map((s) => s.student_id)).size;
+    const uniqueLearners = new Set(
+      sessions.map(s => s.student_id)
+    ).size;
 
     return res.status(200).json({
       success: true,
@@ -1771,6 +1874,7 @@ export const getTeacherEarningsSummary = async (req, res) => {
       totalHoursTaught: totalHours,
       monthlyData: Object.values(monthlyMap),
     });
+
   } catch (err) {
     console.error("❌ Earnings Summary ERROR:", err);
     return res.status(500).json({
