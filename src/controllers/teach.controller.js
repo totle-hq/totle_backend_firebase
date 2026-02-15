@@ -1612,40 +1612,26 @@ export const getTeacherFeedbackSummary = async (req, res) => {
     }
 
     // ------------------------------------------------------
-    // 1. Pull all topic-level summary data
+    // 1️⃣ Pull topic-level summary data
     // ------------------------------------------------------
     const summaryRows = await FeedbackSummary.findAll({
       where: { teacher_id: teacherId, node_type: "topic" },
       raw: true,
     });
 
-    if (!summaryRows.length) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          star_rating: {
-            last_ten_sessions: 0,
-            lifetime: 0,
-          },
-          helpfulness_avg: 0,
-          clarity_avg: 0,
-          confidence_gain: "0%",
-          engagement: "0%",
-          pace_trend: { fast: 0, normal: 0, slow: 0 },
-          text_feedback: [],
-        },
-      });
-    }
-
     const avg = (key) =>
-      summaryRows.reduce((sum, r) => sum + (+r[key] || 0), 0) /
-      (summaryRows.length || 1);
+      summaryRows.length
+        ? summaryRows.reduce((sum, r) => sum + (+r[key] || 0), 0) /
+          summaryRows.length
+        : 0;
 
     const percent = (key) =>
-      Math.round(
-        summaryRows.reduce((sum, r) => sum + (+r[key] || 0), 0) /
-          (summaryRows.length || 1)
-      );
+      summaryRows.length
+        ? Math.round(
+            summaryRows.reduce((sum, r) => sum + (+r[key] || 0), 0) /
+              summaryRows.length
+          )
+        : 0;
 
     const paceStats = {
       fast: summaryRows.reduce((s, r) => s + (r.pace_fast || 0), 0),
@@ -1654,98 +1640,23 @@ export const getTeacherFeedbackSummary = async (req, res) => {
     };
 
     // ------------------------------------------------------
-    // 2. Pull teacher’s text feedback
+    // 2️⃣ Pull teacher text feedback (FLAT FORMAT)
     // ------------------------------------------------------
-    const qualified = await Teachertopicstats.findAll({
-      where: { teacherId },
-      attributes: ["node_id"],
-      raw: true,
-    });
-
-    const topicIds = qualified.map((t) => t.node_id);
-
-    const textFeedback = await Feedback.findAll({
+    const feedbackRows = await Feedback.findAll({
       where: {
         bridger_id: teacherId,
-        topic_id: { [Op.in]: topicIds },
         text_feedback: { [Op.ne]: null },
       },
+      order: [["created_at", "DESC"]],
       raw: true,
     });
 
-    // ------------------------------------------------------
-    // 3. Build domain → subject → topic → feedback hierarchy
-    // ------------------------------------------------------
-    const outputHierarchy = {};
-
-    for (const fb of textFeedback) {
-      const topicNode = await CatalogueNode.findOne({
-        where: { node_id: fb.topic_id },
-      });
-      if (!topicNode) continue;
-
-      let subject = null;
-      let domain = null;
-      let parent = topicNode;
-
-      while (parent && parent.parent_id) {
-        const next = await CatalogueNode.findOne({
-          where: { node_id: parent.parent_id },
-        });
-        if (!next) break;
-
-        if (next.is_subject) subject = next;
-        if (next.is_domain) domain = next;
-
-        parent = next;
-      }
-
-      const domainName = domain?.name || "Unknown Domain";
-      const subjectName = subject?.name || "Unknown Subject";
-      const topicName = topicNode.name;
-
-      if (!outputHierarchy[domainName]) outputHierarchy[domainName] = {};
-      if (!outputHierarchy[domainName][subjectName])
-        outputHierarchy[domainName][subjectName] = {};
-      if (!outputHierarchy[domainName][subjectName][topicName])
-        outputHierarchy[domainName][subjectName][topicName] = {
-          name: topicName,
-          date: fb.created_at ? new Date(fb.created_at).toISOString().split("T")[0] : null,
-          feedback: [],
-        };
-
-      const user = await User.findByPk(fb.learner_id);
-      const learnerName = [user?.firstName, user?.lastName]
-        .filter(Boolean)
-        .join(" ");
-
-      const comment =
-        fb.star_rating > 3
-          ? "POSITIVE"
-          : fb.star_rating === 3
-          ? "NEUTRAL"
-          : "NEGATIVE";
-
-      outputHierarchy[domainName][subjectName][topicName].feedback.push({
-        learner_name: learnerName || "Anonymous",
-        text: fb.text_feedback,
-        rating: fb.star_rating,
-        comment,
-      });
-    }
-
-    const groupedFeedback = Object.entries(outputHierarchy).map(
-      ([domain, subjects]) => ({
-        domain,
-        subject: Object.entries(subjects).map(([subject, topics]) => ({
-          name: subject,
-          topic: Object.values(topics),
-        })),
-      })
-    );
+    const flatTextFeedback = feedbackRows
+      .map((fb) => fb.text_feedback)
+      .filter(Boolean);
 
     // ------------------------------------------------------
-    // FINAL RESPONSE (TeachDashboard format)
+    // 3️⃣ Final Response (Dashboard Compatible)
     // ------------------------------------------------------
     return res.status(200).json({
       success: true,
@@ -1759,12 +1670,15 @@ export const getTeacherFeedbackSummary = async (req, res) => {
         confidence_gain: `${percent("confidence_gain_percent")}%`,
         engagement: `${percent("engagement_percent")}%`,
         pace_trend: paceStats,
-        text_feedback: groupedFeedback,
+        text_feedback: flatTextFeedback, // ✅ Flat array for frontend
       },
     });
   } catch (err) {
     console.error("❌ Feedback Summary API ERROR:", err);
-    return res.status(500).json({ success: false, message: "SERVER_ERROR" });
+    return res.status(500).json({
+      success: false,
+      message: "SERVER_ERROR",
+    });
   }
 };
 
