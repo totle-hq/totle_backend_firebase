@@ -637,21 +637,21 @@ export const bookFreeSession = async (req, res) => {
 
 
     // ✅ Send emails (DO NOT BREAK BOOKING IF FAILS)
-    // try {
-    //   await sendSessionBookedEmails({
-    //     learner: learnerFull,
-    //     teacher: teacherFull,
-    //     topicName: topic?.name || "Unknown",
-    //     scheduledAtTeacher,
-    //     scheduledAtLearner,
-    //     durationMinutes: SESSION_DURATION_MIN,
-    //     bookingReason: booking_reason?.trim() || null,
-    //   });
+    try {
+      await sendSessionBookedEmails({
+        learner: learnerFull,
+        teacher: teacherFull,
+        topicName: topic?.name || "Unknown",
+        scheduledAtTeacher,
+        scheduledAtLearner,
+        durationMinutes: SESSION_DURATION_MIN,
+        bookingReason: booking_reason?.trim() || null,
+      });
 
-    //   console.log("📧 Session booking emails sent");
-    // } catch (emailErr) {
-    //   console.error("❌ Email sending failed (booking still successful):", emailErr);
-    // }
+      console.log("📧 Session booking emails sent");
+    } catch (emailErr) {
+      console.error("❌ Email sending failed (booking still successful):", emailErr);
+    }
 
     // ✅ Create Notifications (DO NOT BREAK BOOKING)
     try {
