@@ -77,69 +77,58 @@ class NotificationService {
   }
 
   // Get notifications for user with formatting - UPDATED to handle field names correctly
-  static async getUserNotifications(userId, category = 'all', filter = 'all') {
+  static async getUserNotifications(userId, category = "all", filter = "all") {
     try {
-      const whereClause = { user_id: userId, dismissed_at: null };
-      if (filter === "unread") whereClause.read = false;
-      
-      if (category !== 'all')  whereClause.category = category;
-      
+      const whereClause = {
+        user_id: userId,
+        dismissed_at: null,
+      };
+
+      if (filter === "unread") {
+        whereClause.read = false;
+      }
+
+      if (category !== "all") {
+        whereClause.category = category;
+      }
 
       const notifications = await Notification.findAll({
         where: whereClause,
-        order: [['created_at', 'DESC']], // mapped correctly via model
+        order: [["created_at", "DESC"]],
         limit: 50,
       });
-      
-      // Format for frontend - handle both createdAt and created_at
-      return notifications.map(notification => {
+
+      return notifications.map((notification) => {
         const data = notification.data || {};
-
-        let formattedOldTime = null;
-        let formattedNewTime = null;
-
-        if (
-          notification.type === "session_rescheduled" &&
-          data.oldTime &&
-          data.newTime
-        ) {
-          const format = (date) =>
-            new Intl.DateTimeFormat("en-IN", {
-              hour: "2-digit",
-              minute: "2-digit",
-              hour12: true,
-              timeZone: "Asia/Kolkata",
-            }).format(new Date(date));
-
-          formattedOldTime = format(data.oldTime);
-          formattedNewTime = format(data.newTime);
-        }
 
         return {
           id: notification.id,
           title: notification.title,
           message: notification.message,
+
+          // ✔ REQUIRED by frontend
           time: this.formatTimeAgo(notification.created_at),
+
           logo: notification.logo || "/lo.jpg",
           type: notification.type,
           category: notification.category,
           read: notification.read,
-          priority: notification.priority,
+          priority: notification.priority || "medium",
+
+          // ✔ REQUIRED optional fields used in UI
           timeRemaining: this.getTimeRemaining(data),
           progress: this.calculateProgress(notification),
-          action: data?.action,
 
-          // 👇 Extra formatted fields
-          oldTime: formattedOldTime,
-          newTime: formattedNewTime
+          // ✔ action must be flat (not nested in data)
+          action: data.action || null,
         };
       });
     } catch (error) {
-      console.error('❌ Error fetching notifications:', error);
-      // Return empty array instead of throwing to prevent frontend crashes
+      console.error("❌ Error fetching notifications:", error);
       return [];
     }
   }
+
 
   // Get unread counts by category - UPDATED to use raw SQL
   static async getUnreadCounts(userId) {
