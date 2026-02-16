@@ -185,10 +185,11 @@ export const setTeacherAvailability = async (req, res) => {
       console.log("Teacher:", teacher_id);
       console.log("Requested Topics:", topic_ids);
 
-      const qualifications = await TeacherTopicQualification.findAll({
+      // 1️⃣ Certification table
+      const certified = await TeacherTopicQualification.findAll({
         where: {
           teacher_id,
-          topic_id: topic_ids,
+          topic_id: { [Op.in]: topic_ids },
           passed: true,
           [Op.or]: [
             { expires_at: null },
@@ -199,9 +200,26 @@ export const setTeacherAvailability = async (req, res) => {
         raw: true,
       });
 
-      console.log("✅ Found qualifications:", qualifications);
+      // 2️⃣ Stats table
+      const statsQualified = await Teachertopicstats.findAll({
+        where: {
+          teacherId: teacher_id,
+          node_id: { [Op.in]: topic_ids },
+        },
+        transaction,
+        raw: true,
+      });
 
-      const qualifiedTopicIds = qualifications.map(q => q.topic_id);
+      console.log("✅ Certified:", certified);
+      console.log("✅ Stats Qualified:", statsQualified);
+
+      const certifiedIds = certified.map(q => q.topic_id);
+      const statsIds = statsQualified.map(s => s.node_id);
+
+      // Merge unique topic IDs
+      const qualifiedTopicIds = [
+        ...new Set([...certifiedIds, ...statsIds])
+      ];
 
       const missingTopics = topic_ids.filter(
         id => !qualifiedTopicIds.includes(id)
@@ -214,7 +232,7 @@ export const setTeacherAvailability = async (req, res) => {
         return res.status(403).json({
           message:
             "You are not qualified to offer availability for one or more selected topics.",
-          missingTopics, // optional but VERY helpful during debugging
+          missingTopics,
         });
       }
 

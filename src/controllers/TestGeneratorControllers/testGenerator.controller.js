@@ -1052,34 +1052,94 @@ export const getQualifiedTopics = async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
     }
 
-    const topics = await Teachertopicstats.findAll({
+    // 1️⃣ Fetch from stats table
+    const statsTopics = await Teachertopicstats.findAll({
       where: { teacherId: userId },
-      include: [
-        {
-          model: CatalogueNode,
-          as: "catalogueNode",
-          attributes: ["node_id", "name", "parent_id"],
+      attributes: ["node_id", "tier", "level", "sessionCount", "rating"],
+      raw: true,
+    });
+
+    // 2️⃣ Fetch from certification table
+    const certifiedTopics = await TeacherTopicQualification.findAll({
+      where: {
+        teacher_id: userId,
+        passed: true,
+        [Op.or]: [
+          { expires_at: null },
+          { expires_at: { [Op.gt]: new Date() } },
+        ],
+      },
+      attributes: ["topic_id"],
+      raw: true,
+    });
+
+    // 3️⃣ Merge unique topic IDs
+    const statsTopicIds = statsTopics.map(t => t.node_id);
+    const certifiedTopicIds = certifiedTopics.map(t => t.topic_id);
+
+    const allTopicIds = [
+      ...new Set([...statsTopicIds, ...certifiedTopicIds]),
+    ];
+
+    if (allTopicIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+      });
+    }
+
+    // 4️⃣ Fetch catalogue node details
+    const catalogueNodes = await CatalogueNode.findAll({
+      where: {
+        node_id: {
+          [Op.in]: allTopicIds,
         },
-      ],
-      order: [["createdAt", "DESC"]],
+      },
+      attributes: ["node_id", "name", "parent_id"],
+      raw: true,
+    });
+
+    // 5️⃣ Build clean response
+    const data = catalogueNodes.map(node => {
+      const stats = statsTopics.find(
+        s => s.node_id === node.node_id
+      );
+
+      return {
+        node_id: node.node_id,
+        name: node.name,
+        parent_id: node.parent_id,
+        tier: stats?.tier || "certified",
+        level: stats?.level || null,
+        sessionCount: stats?.sessionCount || 0,
+        rating: stats?.rating || 0,
+        source: stats
+          ? "stats"
+          : "certification",
+      };
     });
 
     return res.status(200).json({
       success: true,
-      data: topics || [],
+      data,
     });
+
   } catch (err) {
     console.error("❌ Error fetching qualified topics:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Could not fetch qualified topics",
       error: err.message,
     });
   }
 };
+
 
 
 export const getTeachStats = async (req, res) => {
