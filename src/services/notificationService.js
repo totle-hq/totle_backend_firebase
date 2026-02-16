@@ -92,20 +92,48 @@ class NotificationService {
       });
       
       // Format for frontend - handle both createdAt and created_at
-      return notifications.map(notification => ({
-        id: notification.id,
-        title: notification.title,
-        message: notification.message,
-        time: this.formatTimeAgo(notification.created_at),
-        logo: notification.logo || "/lo.jpg",
-        type: notification.type,
-        category: notification.category,
-        read: notification.read,
-        priority: notification.priority,
-        timeRemaining: this.getTimeRemaining(notification.data),
-        progress: this.calculateProgress(notification),
-        action: notification.data?.action
-      }));
+      return notifications.map(notification => {
+        const data = notification.data || {};
+
+        let formattedOldTime = null;
+        let formattedNewTime = null;
+
+        if (
+          notification.type === "session_rescheduled" &&
+          data.oldTime &&
+          data.newTime
+        ) {
+          const format = (date) =>
+            new Intl.DateTimeFormat("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+              timeZone: "Asia/Kolkata",
+            }).format(new Date(date));
+
+          formattedOldTime = format(data.oldTime);
+          formattedNewTime = format(data.newTime);
+        }
+
+        return {
+          id: notification.id,
+          title: notification.title,
+          message: notification.message,
+          time: this.formatTimeAgo(notification.created_at),
+          logo: notification.logo || "/lo.jpg",
+          type: notification.type,
+          category: notification.category,
+          read: notification.read,
+          priority: notification.priority,
+          timeRemaining: this.getTimeRemaining(data),
+          progress: this.calculateProgress(notification),
+          action: data?.action,
+
+          // 👇 Extra formatted fields
+          oldTime: formattedOldTime,
+          newTime: formattedNewTime
+        };
+      });
     } catch (error) {
       console.error('❌ Error fetching notifications:', error);
       // Return empty array instead of throwing to prevent frontend crashes
