@@ -147,7 +147,7 @@ export const postFeedBack = async (req, res) => {
 
       if (teacher?.email) {
         await transporter.sendMail({
-          from: `"Your Platform Name" <${process.env.EMAIL_USER}>`,
+          from: `"TOTLE" <${process.env.EMAIL_USER}>`,
           to: teacher.email,
           subject: "📢 New Session Feedback Received",
           html: `

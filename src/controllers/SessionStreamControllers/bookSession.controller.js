@@ -619,22 +619,7 @@ export const bookFreeSession = async (req, res) => {
 
     await transaction.commit();
 
-    // ✅ Format time (important for email readability)
-    const teacherTz = teacherFull?.profileTimezone || "UTC";
-    const learnerTz = learnerFull?.profileTimezone || "UTC";
-
-    const scheduledAtTeacher = formatInTimeZone(
-      selected.scheduled_at,
-      teacherTz,
-      "dd MMM yyyy, hh:mm a"
-    );
-
-    const scheduledAtLearner = formatInTimeZone(
-      selected.scheduled_at,
-      learnerTz,
-      "dd MMM yyyy, hh:mm a"
-    );
-
+   
 
     // ✅ Send emails (DO NOT BREAK BOOKING IF FAILS)
     try {
@@ -642,8 +627,7 @@ export const bookFreeSession = async (req, res) => {
         learner: learnerFull,
         teacher: teacherFull,
         topicName: topic?.name || "Unknown",
-        scheduledAtTeacher,
-        scheduledAtLearner,
+        scheduledAtUtc: selected.scheduled_at,
         durationMinutes: SESSION_DURATION_MIN,
         bookingReason: booking_reason?.trim() || null,
       });
@@ -687,6 +671,13 @@ export const bookFreeSession = async (req, res) => {
   }
 };
 
+const normalizeTimezone = (tz) => {
+  if (!tz) return "UTC";
+
+  if (tz === "Asia/Calcutta") return "Asia/Kolkata";
+
+  return tz;
+};
 
 /** POST /api/session/book/paid  — book specific PAID session (re-validate gates) */
 export const bookPaidSession = async (req, res) => {
@@ -878,14 +869,15 @@ export const sendSessionBookedEmails = async ({
 }) => {
   console.log("📧 [Email] Preparing session booking emails", {
     topicName,
-    scheduledAt: scheduledAtFormatted,
+    scheduledAtUtc,
     learnerId: learner?.id,
     teacherId: teacher?.id,
   });
 
   try {
-    const learnerTz = learner.timezone || "UTC";
-    const teacherTz = teacher.timezone || "UTC";
+    
+    const learnerTz = normalizeTimezone(learner.profileTimezone);
+    const teacherTz = normalizeTimezone(teacher.profileTimezone);
 
     const learnerTime = formatInTimeZone(
       scheduledAtUtc,
@@ -1061,11 +1053,7 @@ export const bookCustomSlot = async (req, res) => {
         learner,
         teacher,
         topicName: topic?.name || "Unknown",
-        scheduledAtFormatted: formatInTz(
-          booked.scheduled_at,
-          req.userTz || "UTC",
-          "dd MMM yyyy, HH:mm"
-        ),
+        scheduledAtUtc: selected.scheduled_at, // ✅ THIS IS THE FIX
         durationMinutes: 90,
       });
 

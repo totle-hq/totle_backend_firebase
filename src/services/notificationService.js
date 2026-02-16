@@ -56,7 +56,7 @@ class NotificationService {
           sessionType,
           action: {
             label: "View Schedule",
-            callback: `/teach/schedule`
+            callback: `/teach/my-sessions`
           }
         }
       };
