@@ -67,6 +67,7 @@ import featureRoadmapRoutes from "./routes/strategy/featureRoadmap.routes.js";
 import iqQuestionRoutes from "./routes/cps/iqQuestion.routes.js";
 import sitemapRouter from "./routes/SiteMap/sitemap.js";
 import promocodes from "./routes/PromoCode.routes.js"
+import paidTeacherRoutes from "./routes/UserRoutes/PaidTier.routes.js";
 // DB sync (your existing)
 import { defineModelRelationships, runDbSync, syncDatabase } from "./config/syncDb.js";
 import { initCpsModels } from "./Models/Cps/index.js";
@@ -355,6 +356,7 @@ app.use("/api/tests", testRoutes);
 app.use("/api/stream", streamRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/session", sessionRoutes);
+app.use("/api/topic", paidTeacherRoutes);
 app.use("/api/teach", teachRoutes);
 app.use("/api/feedback", FeedbackRoutes);
 

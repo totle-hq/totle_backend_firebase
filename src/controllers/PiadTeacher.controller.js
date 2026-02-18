@@ -1,6 +1,6 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
-import { Op } from "sequelize";
+import { Op, Sequelize } from "sequelize";
 import { User } from "../Models/UserModels/UserModel.js";
 import { Session } from "../Models/SessionModel.js";
 // import { BookedSession } from "../Models/BookedSession.js";
@@ -10,6 +10,8 @@ import { Language } from "../Models/LanguageModel.js";
 import { Teachertopicstats } from "../Models/TeachertopicstatsModel.js";
 import { CatalogueNode } from "../Models/CatalogModels/catalogueNode.model.js";
 import { getRazorpayInstance } from "./PaymentControllers/paymentController.js";
+import TeacherAvailability from "../Models/TeacherAvailability.js";
+import Feedback from "../Models/feedbackModels.js";
 
 // creating the instance for razorpay 
 // const razorpay = new Razorpay({
@@ -742,3 +744,183 @@ export const handlePaymentFailure = async (req, res) => {
     });
   }
 };
+
+export const getPaidTeachersWithAvailability = async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const currentUserId =
+      req.user?.id || req.user?.user_id || req.user?.userId;
+
+    if (!topicId) {
+      return res.status(400).json({
+        success: false,
+        message: "Topic ID is required",
+      });
+    }
+
+    const now = new Date();
+    const next7Days = new Date();
+    next7Days.setDate(now.getDate() + 7);
+
+    /*
+      STEP 1: Get paid teachers for topic
+    */
+    const paidTeachers = await Teachertopicstats.findAll({
+      where: {
+        node_id: topicId,
+        tier: "paid",
+      },
+      attributes: ["teacherId", "level"],
+      raw: true,
+    });
+
+    if (!paidTeachers.length) {
+      return res.json({ success: true, teachers: [] });
+    }
+
+    const teacherMap = new Map();
+
+    paidTeachers.forEach((t) => {
+      if (t.teacherId !== currentUserId) {
+        teacherMap.set(t.teacherId, {
+          teacher_id: t.teacherId,
+          level: t.level,
+          availableSlots: [],
+        });
+      }
+    });
+
+    const teacherIds = Array.from(teacherMap.keys());
+
+    if (!teacherIds.length) {
+      return res.json({ success: true, teachers: [] });
+    }
+
+    /*
+      STEP 2: Get availability linked to topic (M2M)
+    */
+    const availabilities = await TeacherAvailability.findAll({
+      where: {
+        teacher_id: { [Op.in]: teacherIds },
+        is_active: true,
+        start_at: {
+          [Op.between]: [now, next7Days],
+        },
+      },
+      include: [
+        {
+          model: CatalogueNode,
+          as: "topics",
+          where: { node_id: topicId },
+          attributes: [],
+          through: { attributes: [] },
+          required: true,
+        },
+      ],
+      order: [["start_at", "ASC"]],
+      raw: false,
+    });
+
+    /*
+      STEP 3: Group availability under teachers
+    */
+    for (const slot of availabilities) {
+      const teacherId = slot.teacher_id;
+
+      if (teacherMap.has(teacherId)) {
+        teacherMap.get(teacherId).availableSlots.push({
+          availability_id: slot.availability_id,
+          start: slot.start_at,
+          end: slot.end_at,
+        });
+      }
+    }
+    /*
+      STEP 4: Fetch user + rating info (USING Feedback MODEL)
+    */
+
+    // First get teacher IDs that actually have slots
+    const teacherIdsWithSlots = Array.from(teacherMap.entries())
+      .filter(([_, data]) => data.availableSlots.length > 0)
+      .map(([teacherId]) => teacherId);
+
+    if (!teacherIdsWithSlots.length) {
+      return res.json({ success: true, teachers: [] });
+    }
+
+    // 1️⃣ Get average rating per teacher from Feedback
+    const ratings = await Feedback.findAll({
+      attributes: [
+        "bridger_id",
+        [Sequelize.fn("AVG", Sequelize.col("star_rating")), "avg_rating"],
+      ],
+      where: {
+        topic_id: topicId,
+        bridger_id: { [Op.in]: teacherIdsWithSlots },
+      },
+      group: ["bridger_id"],
+      raw: true,
+    });
+
+    const ratingMap = new Map();
+    ratings.forEach((r) => {
+      ratingMap.set(r.bridger_id, parseFloat(r.avg_rating));
+    });
+
+    // 2️⃣ Fetch all users in one query
+    const users = await User.findAll({
+      where: { id: { [Op.in]: teacherIdsWithSlots } },
+      attributes: ["id", "firstName", "lastName"],
+      raw: true,
+    });
+
+    const userMap = new Map();
+    users.forEach((u) => userMap.set(u.id, u));
+
+    // 3️⃣ Build response
+    const teachersWithAvailability = teacherIdsWithSlots.map(
+      (teacherId) => {
+        const teacherData = teacherMap.get(teacherId);
+        const user = userMap.get(teacherId);
+
+        return {
+          teacher_id: teacherId,
+          name: user
+            ? `${user.firstName} ${user.lastName || ""}`.trim()
+            : "Unknown",
+          level: teacherData.level,
+          avgRating: ratingMap.get(teacherId) || 0,
+          availableSlots: teacherData.availableSlots,
+        };
+      }
+    );
+
+    // Fetch topic prices
+    const topic = await CatalogueNode.findByPk(topicId, {
+      attributes: ["prices"],
+      raw: true,
+    });
+
+    const topicPrices = topic?.prices || {};
+
+
+
+    return res.json({
+      success: true,
+      teachers: teachersWithAvailability,
+      prices: {
+        bridgers: topicPrices.bridgers || 0,
+        experts: topicPrices.experts || 0,
+        masters: topicPrices.masters || 0,
+        legends: topicPrices.legends || 0,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching paid teachers:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
