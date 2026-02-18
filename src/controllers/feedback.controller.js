@@ -10,6 +10,7 @@ import { FeedbackSummary } from "../Models/feedbacksummary.js";
 import { handleAllFeedbackSummaries } from "../utils/updatefeedbacksummary.js";
 import jwt from 'jsonwebtoken';
 import { transporter } from "../config/mailer.js";
+import { sequelize1 } from "../config/sequelize.js";
 
 export const verifyFeedbackToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
@@ -384,17 +385,9 @@ export const rebuildTeacherTopicStats = async () => {
   const transaction = await sequelize1.transaction();
 
   try {
-    console.log("🚀 Rebuilding teacher_topic_stats from Feedback...");
+    console.log("🚀 Syncing teacher_topic_stats from Feedback...");
 
-    // 1️⃣ Clear existing stats
-    await Teachertopicstats.destroy({
-      where: {},
-      truncate: true,
-      cascade: false,
-      transaction,
-    });
-
-    // 2️⃣ Aggregate feedback (teacher + topic)
+    // 1️⃣ Aggregate feedback
     const aggregates = await Feedback.findAll({
       attributes: [
         "bridger_id",
@@ -406,8 +399,6 @@ export const rebuildTeacherTopicStats = async () => {
       raw: true,
       transaction,
     });
-
-    const bulkInsert = [];
 
     for (const row of aggregates) {
       const teacherId = row.bridger_id;
@@ -426,22 +417,32 @@ export const rebuildTeacherTopicStats = async () => {
         level = "Expert";
       }
 
-      bulkInsert.push({
-        teacherId,
-        node_id: topicId,
-        sessionCount,
-        rating: Number(avgRating.toFixed(2)),
-        tier,
-        level,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+      const [stat, created] = await Teachertopicstats.findOrCreate({
+        where: {
+          teacherId,
+          node_id: topicId,
+        },
+        defaults: {
+          teacherId,
+          node_id: topicId,
+          sessionCount,
+          rating: Number(avgRating.toFixed(2)),
+          tier,
+          level,
+        },
+        transaction,
       });
+
+      if (!created) {
+        stat.sessionCount = sessionCount;
+        stat.rating = Number(avgRating.toFixed(2));
+        stat.tier = tier;
+        stat.level = level;
+        await stat.save({ transaction });
+      }
     }
 
-    // 3️⃣ Bulk insert all stats
-    await Teachertopicstats.bulkCreate(bulkInsert, { transaction });
-
-    // 4️⃣ MASTER VALIDATION
+    // 2️⃣ MASTER VALIDATION
 
     const expertStats = await Teachertopicstats.findAll({
       where: { level: "Expert" },
@@ -472,6 +473,7 @@ export const rebuildTeacherTopicStats = async () => {
       if (!subject) continue;
 
       const key = `${stat.teacherId}-${subject.node_id}`;
+
       if (!subjectMap[key]) {
         subjectMap[key] = {
           teacherId: stat.teacherId,
@@ -514,15 +516,16 @@ export const rebuildTeacherTopicStats = async () => {
 
     await transaction.commit();
 
-    console.log("✅ teacher_topic_stats rebuild complete");
+    console.log("✅ teacher_topic_stats sync complete");
     return { success: true };
 
   } catch (error) {
     await transaction.rollback();
-    console.error("❌ Rebuild failed:", error);
+    console.error("❌ Sync failed:", error);
     throw error;
   }
 };
+
 
 
 // ✅ GET Feedback Summary for Learner or Qualified Teacher
