@@ -17,6 +17,7 @@ const Feedback = sequelize1.define('learner_session_feedback', {
   session_id: {
     type: DataTypes.UUID,
     allowNull: false,
+    unique: true
   },
   bridger_id: {
     type: DataTypes.UUID,
@@ -46,10 +47,6 @@ const Feedback = sequelize1.define('learner_session_feedback', {
   topic_name: {
     type: DataTypes.STRING,
     allowNull: true,
-  },
-  topic_id: {
-    type: DataTypes.UUID,
-    allowNull: true, 
   },
   star_rating: {
     type: DataTypes.INTEGER,
@@ -98,6 +95,17 @@ const Feedback = sequelize1.define('learner_session_feedback', {
   schema: 'user',
   tableName: 'learner_session_feedback',
   timestamps: false,
+  indexes: [
+  { fields: ['learner_id'] },
+  { fields: ['bridger_id'] },
+  { fields: ['topic_id'] },
+  { fields: ['created_at'] },
+  {
+    unique: true,
+    fields: ['session_id'],
+  },
+],
+
 });
 
 // 🔁 ASSOCIATIONS

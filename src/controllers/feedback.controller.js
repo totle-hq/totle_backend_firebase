@@ -34,6 +34,150 @@ export const verifyFeedbackToken = (req, res, next) => {
   }
 };
 
+
+export const updateTeacherTopicStats = async ({
+  teacherId,
+  topicId,
+  transaction,
+}) => {
+  // ==========================================
+  // 1️⃣ Recalculate rating + session count
+  // ==========================================
+
+  const feedbacks = await Feedback.findAll({
+    where: {
+      bridger_id: teacherId,
+      topic_id: topicId,
+      star_rating: { [Op.not]: null },
+    },
+    attributes: ["star_rating"],
+    transaction,
+  });
+
+  const sessionCount = feedbacks.length;
+
+  const averageRating =
+    sessionCount > 0
+      ? feedbacks.reduce((sum, f) => sum + f.star_rating, 0) / sessionCount
+      : 0;
+
+  const [stats] = await Teachertopicstats.findOrCreate({
+    where: {
+      teacherId,
+      node_id: topicId,
+    },
+    defaults: {
+      teacherId,
+      node_id: topicId,
+      sessionCount,
+      rating: averageRating,
+      tier: "free",
+      level: "Bridger",
+    },
+    transaction,
+  });
+
+  stats.sessionCount = sessionCount;
+  stats.rating = Number(averageRating.toFixed(2));
+
+  // ==========================================
+  // 2️⃣ FREE → PAID
+  // ==========================================
+
+  if (stats.tier === "free" && stats.rating > 4) {
+    stats.tier = "paid";
+  }
+
+  // ==========================================
+  // 3️⃣ Bridger → Expert
+  // ==========================================
+
+  if (stats.level === "Bridger" && stats.sessionCount >= 20) {
+    stats.level = "Expert";
+  }
+
+  await stats.save({ transaction });
+
+  // ==========================================
+  // 4️⃣ Check MASTER (Subject-wide)
+  // ==========================================
+
+  await checkAndPromoteMaster({
+    teacherId,
+    topicId,
+    transaction,
+  });
+};
+
+const checkAndPromoteMaster = async ({
+  teacherId,
+  topicId,
+  transaction,
+}) => {
+  const topic = await CatalogueNode.findByPk(topicId, { transaction });
+  if (!topic) return;
+
+  // climb tree to find subject
+  let current = topic;
+  let subject = null;
+
+  while (current?.parent_id) {
+    const parent = await CatalogueNode.findByPk(current.parent_id, {
+      transaction,
+    });
+    if (!parent) break;
+
+    if (parent.is_subject) {
+      subject = parent;
+      break;
+    }
+
+    current = parent;
+  }
+
+  if (!subject) return;
+
+  // get all active topics under subject
+  const subjectTopics = await CatalogueNode.findAll({
+    where: {
+      parent_id: subject.node_id,
+      is_topic: true,
+      status: "active",
+    },
+    attributes: ["node_id"],
+    transaction,
+  });
+
+  const topicIds = subjectTopics.map((t) => t.node_id);
+  if (topicIds.length === 0) return;
+
+  const stats = await Teachertopicstats.findAll({
+    where: {
+      teacherId,
+      node_id: { [Op.in]: topicIds },
+    },
+    transaction,
+  });
+
+  if (stats.length !== topicIds.length) return;
+
+  const allExpert = stats.every(
+    (s) => s.level === "Expert" || s.level === "Master"
+  );
+
+  if (!allExpert) return;
+
+  // Promote all to Master
+  for (const s of stats) {
+    if (s.level !== "Master") {
+      s.level = "Master";
+      await s.save({ transaction });
+    }
+  }
+};
+
+
+
 // ✅ POST Feedback
 
 
@@ -103,39 +247,69 @@ export const postFeedBack = async (req, res) => {
     if (existing) return res.status(409).json({ success: false, message: "Already submitted" });
 
     // ✅ Submit feedback
-    const feedback = await Feedback.create({
-      learner_id,
-      session_id,
-      bridger_id,
-      topic_id,
-      topic_name: topic.name,
-      subject_id: subject.node_id,
-      subject_name: subject.name,
-      domain_id: domain.node_id,
-      domain_name: domain.name,
-      star_rating,
-      helpfulness_rating,
-      clarity_rating,
-      pace_feedback,
-      engagement_yn,
-      confidence_gain_yn,
-      text_feedback,
-      flagged_issue,
-      flag_reason,
-    });
+    const transaction = await sequelize1.transaction();
 
-    await handleAllFeedbackSummaries({
-      teacher_id: bridger_id,
-      topic_id,
-      newFeedback: {
-        star_rating,
-        clarity_rating,
-        helpfulness_rating,
-        pace_feedback,
-        engagement_yn,
-        confidence_gain_yn,
-      },
-    });
+    let feedback;
+
+    try {
+      // ✅ Create feedback (ONLY ONCE)
+      feedback = await Feedback.create(
+        {
+          learner_id,
+          session_id,
+          bridger_id,
+          topic_id,
+          topic_name: topic.name,
+          subject_id: subject.node_id,
+          subject_name: subject.name,
+          domain_id: domain.node_id,
+          domain_name: domain.name,
+          star_rating,
+          helpfulness_rating,
+          clarity_rating,
+          pace_feedback,
+          engagement_yn,
+          confidence_gain_yn,
+          text_feedback,
+          flagged_issue,
+          flag_reason,
+        },
+        { transaction }
+      );
+
+      // Optional: make this transactional too if it writes DB
+      await handleAllFeedbackSummaries({
+        teacher_id: bridger_id,
+        topic_id,
+        newFeedback: {
+          star_rating,
+          clarity_rating,
+          helpfulness_rating,
+          pace_feedback,
+          engagement_yn,
+          confidence_gain_yn,
+        },
+        transaction,
+      });
+
+      // 🔥 Update teacher stats
+      await updateTeacherTopicStats({
+        teacherId: bridger_id,
+        topicId: topic_id,
+        transaction,
+      });
+
+      await transaction.commit();
+
+    } catch (err) {
+      await transaction.rollback();
+      console.error("❌ Transaction failed:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to submit feedback",
+      });
+    }
+
 
     // ================================
     // 📧 SEND EMAIL TO TEACHER
@@ -206,6 +380,149 @@ export const postFeedBack = async (req, res) => {
   }
 };
 
+export const rebuildTeacherTopicStats = async () => {
+  const transaction = await sequelize1.transaction();
+
+  try {
+    console.log("🚀 Rebuilding teacher_topic_stats from Feedback...");
+
+    // 1️⃣ Clear existing stats
+    await Teachertopicstats.destroy({
+      where: {},
+      truncate: true,
+      cascade: false,
+      transaction,
+    });
+
+    // 2️⃣ Aggregate feedback (teacher + topic)
+    const aggregates = await Feedback.findAll({
+      attributes: [
+        "bridger_id",
+        "topic_id",
+        [sequelize1.fn("COUNT", sequelize1.col("star_rating")), "sessionCount"],
+        [sequelize1.fn("AVG", sequelize1.col("star_rating")), "avgRating"],
+      ],
+      group: ["bridger_id", "topic_id"],
+      raw: true,
+      transaction,
+    });
+
+    const bulkInsert = [];
+
+    for (const row of aggregates) {
+      const teacherId = row.bridger_id;
+      const topicId = row.topic_id;
+      const sessionCount = parseInt(row.sessionCount);
+      const avgRating = parseFloat(row.avgRating);
+
+      let tier = "free";
+      let level = "Bridger";
+
+      if (avgRating > 4) {
+        tier = "paid";
+      }
+
+      if (sessionCount >= 20) {
+        level = "Expert";
+      }
+
+      bulkInsert.push({
+        teacherId,
+        node_id: topicId,
+        sessionCount,
+        rating: Number(avgRating.toFixed(2)),
+        tier,
+        level,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    // 3️⃣ Bulk insert all stats
+    await Teachertopicstats.bulkCreate(bulkInsert, { transaction });
+
+    // 4️⃣ MASTER VALIDATION
+
+    const expertStats = await Teachertopicstats.findAll({
+      where: { level: "Expert" },
+      transaction,
+    });
+
+    const subjectMap = {};
+
+    for (const stat of expertStats) {
+      const topic = await CatalogueNode.findByPk(stat.node_id, { transaction });
+      if (!topic) continue;
+
+      let current = topic;
+      let subject = null;
+
+      while (current?.parent_id) {
+        const parent = await CatalogueNode.findByPk(current.parent_id, { transaction });
+        if (!parent) break;
+
+        if (parent.is_subject) {
+          subject = parent;
+          break;
+        }
+
+        current = parent;
+      }
+
+      if (!subject) continue;
+
+      const key = `${stat.teacherId}-${subject.node_id}`;
+      if (!subjectMap[key]) {
+        subjectMap[key] = {
+          teacherId: stat.teacherId,
+          subjectId: subject.node_id,
+          topicIds: [],
+        };
+      }
+
+      subjectMap[key].topicIds.push(stat.node_id);
+    }
+
+    for (const key in subjectMap) {
+      const { teacherId, subjectId, topicIds } = subjectMap[key];
+
+      const subjectTopics = await CatalogueNode.findAll({
+        where: {
+          parent_id: subjectId,
+          is_topic: true,
+          status: "active",
+        },
+        attributes: ["node_id"],
+        transaction,
+      });
+
+      const allTopicIds = subjectTopics.map(t => t.node_id);
+
+      if (allTopicIds.length === topicIds.length) {
+        await Teachertopicstats.update(
+          { level: "Master" },
+          {
+            where: {
+              teacherId,
+              node_id: { [Op.in]: allTopicIds },
+            },
+            transaction,
+          }
+        );
+      }
+    }
+
+    await transaction.commit();
+
+    console.log("✅ teacher_topic_stats rebuild complete");
+    return { success: true };
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error("❌ Rebuild failed:", error);
+    throw error;
+  }
+};
 
 
 // ✅ GET Feedback Summary for Learner or Qualified Teacher

@@ -37,6 +37,7 @@ import { SessionToken } from "../Models/SessionTokenModel.js";
 import TeacherAvailability from "../Models/TeacherAvailability.js";
 import url from "url";
 import path from "path";
+import { rebuildTeacherTopicStats } from "../controllers/feedback.controller.js";
 dotenv.config();
 
 /* -------------------------------------------------
@@ -311,6 +312,7 @@ export const runDbSync = async (isSyncNeeded = false) => {
   } else {
     console.log("🔗 Defining model relationships only...");
     await defineModelRelationships();
+    await rebuildTeacherTopicStats();
   }
 };
 
