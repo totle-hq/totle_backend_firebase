@@ -773,6 +773,7 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
       attributes: ["teacherId", "level"],
       raw: true,
     });
+    console.log("paidTeachers count:", paidTeachers.length);
 
     if (!paidTeachers.length) {
       return res.json({ success: true, teachers: [] });
@@ -803,8 +804,11 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
       where: {
         teacher_id: { [Op.in]: teacherIds },
         is_active: true,
+        end_at: {
+          [Op.gte]: new Date(now.getTime() + 90 * 60 * 1000),
+        },
         start_at: {
-          [Op.between]: [now, next7Days],
+          [Op.lte]: next7Days,
         },
       },
       include: [
@@ -844,6 +848,8 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
       .filter(([_, data]) => data.availableSlots.length > 0)
       .map(([teacherId]) => teacherId);
 
+    console.log("teacher id", teacherIdsWithSlots.length)
+
     if (!teacherIdsWithSlots.length) {
       return res.json({ success: true, teachers: [] });
     }
@@ -867,6 +873,55 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
       ratingMap.set(r.bridger_id, parseFloat(r.avg_rating));
     });
 
+    /*
+      STEP 6: Session breakdown (🔥 NEW)
+    */
+    const sessionStats = await Session.findAll({
+      attributes: [
+        "teacher_id",
+        [Sequelize.fn("COUNT", Sequelize.col("session_id")), "total_sessions"],
+        [
+          Sequelize.fn(
+            "SUM",
+            Sequelize.literal(
+              `CASE WHEN session_tier = 'paid' THEN 1 ELSE 0 END`
+            )
+          ),
+          "paid_sessions",
+        ],
+        [
+          Sequelize.fn(
+            "SUM",
+            Sequelize.literal(
+              `CASE WHEN session_tier = 'free' THEN 1 ELSE 0 END`
+            )
+          ),
+          "free_sessions",
+        ],
+      ],
+      where: {
+        topic_id: topicId,
+        teacher_id: { [Op.in]: teacherIdsWithSlots },
+        status: "completed",
+      },
+      group: ["teacher_id"],
+      raw: true,
+    });
+
+    const sessionStatsMap = new Map();
+
+    sessionStats.forEach((row) => {
+      sessionStatsMap.set(row.teacher_id, {
+        totalSessionsCount: parseInt(row.total_sessions, 10) || 0,
+        paidSessionsCount: parseInt(row.paid_sessions, 10) || 0,
+        freeSessionsCount: parseInt(row.free_sessions, 10) || 0,
+      });
+    });
+
+    /*
+      STEP 7: Fetch users
+    */
+
     // 2️⃣ Fetch all users in one query
     const users = await User.findAll({
       where: { id: { [Op.in]: teacherIdsWithSlots } },
@@ -876,12 +931,20 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
 
     const userMap = new Map();
     users.forEach((u) => userMap.set(u.id, u));
-
-    // 3️⃣ Build response
+    /*
+      STEP 8: Build response
+    */   
     const teachersWithAvailability = teacherIdsWithSlots.map(
       (teacherId) => {
+        console.log(teacherId)
+
         const teacherData = teacherMap.get(teacherId);
         const user = userMap.get(teacherId);
+        const stats = sessionStatsMap.get(teacherId) || {
+          totalSessionsCount: 0,
+          paidSessionsCount: 0,
+          freeSessionsCount: 0,
+        };
 
         return {
           teacher_id: teacherId,
@@ -890,6 +953,9 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
             : "Unknown",
           level: teacherData.level,
           avgRating: ratingMap.get(teacherId) || 0,
+          totalSessionsCount: stats.totalSessionsCount,
+          // paidSessionsCount: stats.paidSessionsCount,
+          // freeSessionsCount: stats.freeSessionsCount,
           availableSlots: teacherData.availableSlots,
         };
       }

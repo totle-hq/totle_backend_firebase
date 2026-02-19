@@ -312,7 +312,7 @@ export const runDbSync = async (isSyncNeeded = false) => {
   } else {
     console.log("🔗 Defining model relationships only...");
     await defineModelRelationships();
-    await rebuildTeacherTopicStats();
+    // await rebuildTeacherTopicStats();
   }
 };
 

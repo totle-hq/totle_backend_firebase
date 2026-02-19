@@ -409,7 +409,7 @@ export const rebuildTeacherTopicStats = async () => {
       let tier = "free";
       let level = "Bridger";
 
-      if (avgRating > 4) {
+      if (avgRating >= 4) {
         tier = "paid";
       }
 
