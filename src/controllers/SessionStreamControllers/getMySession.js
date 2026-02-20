@@ -79,8 +79,8 @@ export const getStudentSessions = async (req, res) => {
     const sessions = await Session.findAll({
       where: {
         student_id: id,
-        status: "upcoming",
-        ...upcomingOrOngoingFilter()
+        // status: "upcoming",
+        // ...upcomingOrOngoingFilter()
       },
 
       include: [
