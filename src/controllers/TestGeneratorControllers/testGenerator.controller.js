@@ -1362,7 +1362,9 @@ export const generateTest = async (req, res) => {
   const BASELINE_QUESTION_COUNT = 25;
   const REUSE_RATIO = 0.7;
   const MAX_REUSE_PER_QUESTION = 3;
-  const DEFAULT_TIME_LIMIT_MINUTES = 30;
+  // const DEFAULT_TIME_LIMIT_MINUTES = 30;
+  // Pilot
+  const DEFAULT_TIME_LIMIT_MINUTES = 20;
 
   const userId = req?.user?.id;
   const { topicId } = req.body;
