@@ -214,7 +214,7 @@ function getLanguageTier(learner, teacher) {
   if (!hasCommonPreferred && commonKnown.length >= 1) return 7; // Tier 2
   if (hasCommonPreferred && commonKnown.length >= 1) return 5; // Tier 3
 
-  return 0; // Disqualify
+  return 1; // Disqualify
 }
 
 function isWithinBridgerBuffer(slotStart, bridgerSessions) {
