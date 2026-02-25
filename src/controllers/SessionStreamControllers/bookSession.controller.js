@@ -331,6 +331,36 @@ export const bookFreeSession = async (req, res) => {
       await transaction.rollback();
       return res.status(400).json({ error: true, message: "Missing learner_id or topic_id" });
     }
+    // 🔒 Enforce feedback submission before new booking
+    const lastCompletedSession = await Session.findOne({
+      where: {
+        student_id: learner_id,
+        status: "completed",
+      },
+      order: [["completed_at", "DESC"]],
+      attributes: ["session_id"],
+      transaction,
+      lock: transaction.LOCK.SHARE,
+      raw: true,
+    });
+
+    if (lastCompletedSession) {
+      const existingFeedback = await Feedback.findOne({
+        where: { session_id: lastCompletedSession.session_id },
+        attributes: ["id"],
+        transaction,
+        raw: true,
+      });
+
+      if (!existingFeedback) {
+        await transaction.rollback();
+        return res.status(403).json({
+          error: true,
+          message:
+            "Please submit feedback for your previous session before booking a new one.",
+        });
+      }
+    }
 
     const learner = await User.findByPk(learner_id, {
       attributes: [
