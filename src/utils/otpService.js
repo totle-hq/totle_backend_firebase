@@ -212,6 +212,7 @@ export const verifyOtp = async (email, otp) => {
 export const sendWelcomeEmail = async (email, firstName) => {
   try {
     const templatePath = path.join(__dirname, "welcome4.html");
+    const attachmentPath = path.join(__dirname, "TOTLE_Teacher_Onboarding_Guide.pdf");
     let emailTemplate = fs.readFileSync(templatePath, "utf-8");
 
     emailTemplate = emailTemplate.replace("[User's Name]", firstName);
@@ -225,6 +226,13 @@ export const sendWelcomeEmail = async (email, firstName) => {
       to: email,
       subject: "🎉 Welcome to TOTLE!  — Let’s Begin Your Journey to Teach and Learn",
       html: emailTemplate,
+      attachments: [
+        {
+          filename: "TOTLE-Welcome-Guide.pdf",
+          path: attachmentPath,
+          contentType: "application/pdf",
+        },
+      ],
     });
 
     console.log(`✅ Welcome Email sent to ${email}`);
