@@ -511,9 +511,11 @@ export const bookFreeSession = async (req, res) => {
       if (!teacher) continue;
 
       const langScore = getLanguageTier(learner, teacher);
+      console.log("lang score", langScore)
       if (langScore === 0) continue;
 
       const genderScore = learner.gender === teacher.gender ? 2 : 0;
+      console.log("gn", genderScore)
 
       const distKm = getDistance(
         { lat: learner.latitude, lon: learner.longitude },
@@ -521,10 +523,13 @@ export const bookFreeSession = async (req, res) => {
       );
 
       const distanceScore = Math.max(0, 10 - distKm / 50); // better scaling
+      console.log("ds", distanceScore)
       const ageScore = Math.max(0, 5 - Math.abs(getAge(teacher.dob) - getAge(learner.dob)) / 5);
+      console.log("as", ageScore)
 
       const totalScore = langScore * 2 + genderScore + distanceScore + ageScore;
-
+      console.log("ts", totalScore)
+      
       scored.push({ ...slot, score: totalScore });
     }
 
