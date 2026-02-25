@@ -236,6 +236,29 @@ export const setTeacherAvailability = async (req, res) => {
         });
       }
 
+      // 🔥 Prevent overlap with existing sessions
+      const conflictSession = await Session.findOne({
+        where: {
+          teacher_id,
+          status: { [Op.notIn]: ["cancelled", "completed"] }, // safest
+          scheduled_at: { [Op.lt]: end_at },
+          completed_at: { [Op.gt]: start_at },
+        },
+        transaction,
+        lock: transaction.LOCK.UPDATE, // important
+      });
+
+      if (conflictSession) {
+        await transaction.rollback();
+        return res.status(409).json({
+          message: "You already have a booked session during this time.",
+          conflictSession: {
+            scheduled_at: conflictSession.scheduled_at,
+            completed_at: conflictSession.completed_at,
+          },
+        });
+      }
+
 
       // 🔒 Prevent overlapping availability
       const overlap = await TeacherAvailability.findOne({
