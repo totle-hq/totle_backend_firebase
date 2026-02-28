@@ -222,10 +222,10 @@ export const existingPromoCodes = async (req, res) => {
 
     const all = await PromoCode.findAll({
       where: {
-        [Op.or]: [
-          { expires_at: null },                   // Never expires
-          { expires_at: { [Op.gt]: now } },       // Expires in the future
-        ],
+        // [Op.or]: [
+        //   { expires_at: null },                   // Never expires
+        //   { expires_at: { [Op.gt]: now } },       // Expires in the future
+        // ],
         // is_active: true,                          // Optional: only active promos
       },
       order: [["createdAt", "DESC"]],
