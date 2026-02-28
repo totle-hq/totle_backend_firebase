@@ -1374,6 +1374,29 @@ export const generateTest = async (req, res) => {
   }
 
   try {
+    // 🔁 RESUME CHECK
+    const existingUnsubmittedTest = await Test.findOne({
+      where: {
+        user_id: userId,
+        topic_uuid: topicId,
+        status: ["generated", "ongoing"],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    if (existingUnsubmittedTest) {
+      return res.status(200).json({
+        success: true,
+        message: "Resuming existing test.",
+        data: {
+          test_id: existingUnsubmittedTest.test_id,
+          topicId,
+          difficulty: "baseline",
+          time_limit_minutes: existingUnsubmittedTest.test_settings?.time_limit_minutes || 20,
+          questions: existingUnsubmittedTest.questions,
+        },
+      });
+    }
     const [user, userDevice] = await Promise.all([
       User.findByPk(userId),
       UserDevice.findOne({ where: { userId } }),
@@ -1482,6 +1505,32 @@ export const generateTest = async (req, res) => {
 
     // ✅ Final Save
     const payment = await findUnusedSuccessfulPayment(userId, topicId);
+    if (!payment) {
+      return res.status(400).json({
+        success: false,
+        payment_required: true,
+        message: "No valid payment found."
+      });
+    }
+
+    // 🔒 SAFETY CHECK
+    const existingTest = await Test.findOne({
+      where: { payment_id: payment.payment_id }
+    });
+
+    if (existingTest) {
+      return res.status(200).json({
+        success: true,
+        message: "Test already generated for this payment.",
+        data: {
+          test_id: existingTest.test_id,
+          topicId,
+          difficulty: "baseline",
+          time_limit_minutes: DEFAULT_TIME_LIMIT_MINUTES,
+          questions: existingTest.questions,
+        },
+      });
+    }
     const count = (await Test.count()) + 1;
 
     const savedTest = await Test.create({
