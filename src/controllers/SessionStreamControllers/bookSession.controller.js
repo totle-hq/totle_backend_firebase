@@ -912,21 +912,22 @@ export const sendSessionBookedEmails = async ({
 
   try {
     
-    const learnerTz = normalizeTimezone(learner.profileTimezone);
-    const teacherTz = normalizeTimezone(teacher.profileTimezone);
+    // const learnerTz = normalizeTimezone(learner.profileTimezone);
+    // const teacherTz = normalizeTimezone(teacher.profileTimezone);
+    const IST = "Asia/Kolkata";
 
     const learnerTime = formatInTimeZone(
       scheduledAtUtc,
-      learnerTz,
-      "dd MMM yyyy, hh:mm a (zzz)"
+      IST,
+      "dd MMM yyyy, hh:mm a 'IST'"
     );
 
     const teacherTime = formatInTimeZone(
       scheduledAtUtc,
-      teacherTz,
-      "dd MMM yyyy, hh:mm a (zzz)"
+      IST,
+      "dd MMM yyyy, hh:mm a 'IST'"
     );
-
+    
     const learnerEmail = sessionBookedEmail({
       recipientName: learner.firstName,
       role: "learner",
