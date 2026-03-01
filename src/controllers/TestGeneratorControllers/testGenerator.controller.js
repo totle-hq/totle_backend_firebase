@@ -354,17 +354,44 @@ export const checkTestPaymentStatus = async (req, res) => {
     const passed = await Test.findOne({
       where: { user_id: userId, topic_uuid: topicId, eligible_for_bridger: true },
     });
+
     if (passed) {
       return res.status(200).json({
         success: true,
         data: {
           already_bridger: true,
-          message: "You are already a Bridger for this topic.",
+          paid: true,
+          cooldown_active: false,
+          amount_required: 0,
         },
       });
     }
 
-    // 2️⃣ Cooling period
+    /* ================= Existing Test (IMPORTANT FIX) ================= */
+
+    const existingTest = await Test.findOne({
+      where: {
+        user_id: userId,
+        topic_uuid: topicId,
+        status: ["generated", "ongoing", "submitted"],
+      },
+      order: [["createdAt", "DESC"]],
+    });
+
+    if (existingTest) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          paid: true,
+          already_bridger: false,
+          cooldown_active: false,
+          payment_mode: existingTest?.payment_mode || "LIVE",
+          amount_required: 0,
+        },
+      });
+    }
+
+    // Cooling period
     const { eligible, waitTime, cooldown_end } = await isUserEligibleForRetest(userId, topicId);
     if (!eligible) {
       return res.status(200).json({
@@ -380,41 +407,28 @@ export const checkTestPaymentStatus = async (req, res) => {
     }
 
     // 3️⃣ Get latest payment and read its mode
-    const recentPaymentTest = await Test.findOne({
+    const successfulPayment = await Payment.findOne({
       where: {
         user_id: userId,
-        topic_uuid: topicId,
+        entity_id: topicId,
+        status: "success", // ✅ FIXED (not "captured")
       },
-      include: [{
-        model: Payment,
-        as: "payment",
-        required: true,
-        where: { status: "captured" },
-      }],
-      order: [["created_at", "DESC"]],
+      order: [["createdAt", "DESC"]],
     });
 
-    let payment_mode = recentPaymentTest?.payment?.payment_mode || null;
-    let topic_price = null;
+    const node = await CatalogueNode.findByPk(topicId);
 
-    // 4️⃣ If no recent test, fallback to node settings
-    if (!payment_mode) {
-      const node = await CatalogueNode.findByPk(topicId);
-      payment_mode = node?.payment_mode || 'DEMO'; // fallback to DEMO
-      topic_price = node?.topic_price ?? 99; // fallback to 99
-    }
-
-    // 5️⃣ Check if there's still an unused successful payment
-    const payment = await findUnusedSuccessfulPayment(userId, topicId, payment_mode);
+    const topic_price = node?.topic_price ?? 99;
+    const payment_mode = node?.payment_mode ?? "LIVE";
 
     return res.status(200).json({
       success: true,
       data: {
-        paid: !!payment,
+        paid: !!successfulPayment,
         payment_mode,
         cooldown_active: false,
         already_bridger: false,
-        amount_required: payment ? 0 : topic_price ?? 99,
+        amount_required: successfulPayment ? 0 : topic_price,
       },
     });
 
