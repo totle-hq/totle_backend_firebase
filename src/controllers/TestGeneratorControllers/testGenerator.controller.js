@@ -738,8 +738,8 @@ export const evaluateTest = async (req, res) => {
 
     //------------------ 4) TEST PILOT --------------------------- */
     let cooling_period_days = 0;
-    if (percentage >= 60 && percentage < 75) cooling_period_days = 7;
-    else if (percentage < 60) cooling_period_days = 14;
+    if (percentage < 75) cooling_period_days = 7;
+    // else if (percentage < 60) cooling_period_days = 14;
 
     test.cooling_period = cooling_period_days;
     let cooling_period_end = null;
