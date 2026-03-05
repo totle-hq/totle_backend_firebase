@@ -244,416 +244,394 @@ export const getTeachersForTopic = async (req, res) => {
   }
 };
 
-export const BookPaidSlot = async (req, res) => {
-  try {
-    const user_id = req.user?.id || req.user?.user_id || req.user?.userId;
-    const { slot, teacher_id, level, topic_id,paymentMode: requestedMode } = req.body;
+// export const BookPaidSlot = async (req, res) => {
 
-    const paymentMode = ['LIVE', 'DEMO'].includes(requestedMode) ? requestedMode : 'DEMO';
+//   try {
+//     const user_id = req.user?.id || req.user?.user_id || req.user?.userId;
+//     const { slot, teacher_id, level, topic_id,paymentMode: requestedMode } = req.body;
+
+//     const paymentMode = ['LIVE', 'DEMO'].includes(requestedMode) ? requestedMode : 'DEMO';
     
-    console.log("=== BOOKING REQUEST DEBUG ===");
-    console.log("User ID:", user_id);
-    console.log("Request body:", { slot, teacher_id, level, topic_id });
-    console.log("===============================");
+//     console.log("=== BOOKING REQUEST DEBUG ===");
+//     console.log("User ID:", user_id);
+//     console.log("Request body:", { slot, teacher_id, level, topic_id });
+//     console.log("===============================");
 
-    if (!slot || !teacher_id || !level || !topic_id) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields: slot, teacher_id, level, topic_id",
-      });
-    }
+//     if (!slot || !teacher_id || !level || !topic_id) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Missing required fields: slot, teacher_id, level, topic_id",
+//       });
+//     }
 
-    if (!user_id) {
-      console.error('Auth middleware failed to set req.user:', req.user);
-      return res.status(401).json({
-        success: false,
-        message: "Authentication failed - user not found in request",
-      });
-    }
+//     if (!user_id) {
+//       console.error('Auth middleware failed to set req.user:', req.user);
+//       return res.status(401).json({
+//         success: false,
+//         message: "Authentication failed - user not found in request",
+//       });
+//     }
 
-    //Validate teacher & topic, fetch actual level & price from DB
-    const teacherStats = await Teachertopicstats.findOne({
-      where: { teacherId: teacher_id, node_id: topic_id },
-    });
+//     //Validate teacher & topic, fetch actual level & price from DB
+//     const teacherStats = await Teachertopicstats.findOne({
+//       where: { teacherId: teacher_id, node_id: topic_id },
+//     });
 
-    if (!teacherStats) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Teacher not found for this topic" 
-      });
-    }
+//     if (!teacherStats) {
+//       return res.status(404).json({ 
+//         success: false, 
+//         message: "Teacher not found for this topic" 
+//       });
+//     }
 
-    const topicNode = await CatalogueNode.findByPk(topic_id);
-    if (!topicNode) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Topic not found" 
-      });
-    }
+//     const topicNode = await CatalogueNode.findByPk(topic_id);
+//     if (!topicNode) {
+//       return res.status(404).json({ 
+//         success: false, 
+//         message: "Topic not found" 
+//       });
+//     }
 
-    //Check if slot is still available and not already booked
-    const existingBooking = await Session.findOne({
-      where: {
-        teacher_id,
-        scheduled_at: new Date(slot),
-        status: {
-          [Op.in]: ["pending", "upcoming", "booked", "completed"]
-        }
-      }
-    });
+//     //Check if slot is still available and not already booked
+//     const existingBooking = await Session.findOne({
+//       where: {
+//         teacher_id,
+//         scheduled_at: new Date(slot),
+//         status: {
+//           [Op.in]: ["pending", "upcoming", "booked", "completed"]
+//         }
+//       }
+//     });
 
-    if (existingBooking) {
-      console.log("Slot unavailable - existing booking:", existingBooking.toJSON());
-      return res.status(400).json({
-        success: false,
-        message: "This slot is no longer available"
-      });
-    }
+//     if (existingBooking) {
+//       console.log("Slot unavailable - existing booking:", existingBooking.toJSON());
+//       return res.status(400).json({
+//         success: false,
+//         message: "This slot is no longer available"
+//       });
+//     }
 
-    //Ensure the slot exists and is available
-    const availableSession = await Session.findOne({
-      where: {
-        teacher_id,
-        scheduled_at: new Date(slot),
-        status: "available"
-      }
-    });
+//     //Ensure the slot exists and is available
+//     const availableSession = await Session.findOne({
+//       where: {
+//         teacher_id,
+//         scheduled_at: new Date(slot),
+//         status: "available"
+//       }
+//     });
 
-    if (!availableSession) {
-      return res.status(400).json({
-        success: false,
-        message: "This slot is not available for booking"
-      });
-    }
+//     if (!availableSession) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "This slot is not available for booking"
+//       });
+//     }
 
-    //Enhanced pricing validation with debugging
-    const skillLevel = teacherStats.level;  // ✅ FIXED: Use 'level' instead of 'tier'
-    const prices = topicNode.prices || {};
+//     //Enhanced pricing validation with debugging
+//     const skillLevel = teacherStats.level;  // ✅ FIXED: Use 'level' instead of 'tier'
+//     const prices = topicNode.prices || {};
     
-    console.log("=== PRICING DEBUG ===");
-    console.log("Teacher Stats:", teacherStats.toJSON());
-    console.log("Topic Node prices:", prices);
-    console.log("Teacher Level from DB:", skillLevel);  // ✅ FIXED: Updated variable name
-    console.log("Level from frontend:", level);
-    console.log("====================");
+//     console.log("=== PRICING DEBUG ===");
+//     console.log("Teacher Stats:", teacherStats.toJSON());
+//     console.log("Topic Node prices:", prices);
+//     console.log("Teacher Level from DB:", skillLevel);  // ✅ FIXED: Updated variable name
+//     console.log("Level from frontend:", level);
+//     console.log("====================");
 
-    // ✅ FIXED: Price mapping for plural keys
-    const getTierPrice = (skillLevel, pricesObj) => {
-      if (!skillLevel || !pricesObj || typeof pricesObj !== 'object') {
-        console.log("Invalid skill level or prices object:", { skillLevel, pricesObj });
-        return 0;
-      }
+//     // ✅ FIXED: Price mapping for plural keys
+//     const getTierPrice = (skillLevel, pricesObj) => {
+//       if (!skillLevel || !pricesObj || typeof pricesObj !== 'object') {
+//         console.log("Invalid skill level or prices object:", { skillLevel, pricesObj });
+//         return 0;
+//       }
 
-      // Convert PascalCase to lowercase and add 's' for plural
-      const normalizedLevel = skillLevel.toLowerCase() + 's';
+//       // Convert PascalCase to lowercase and add 's' for plural
+//       const normalizedLevel = skillLevel.toLowerCase() + 's';
       
-      console.log("Looking for price with key:", normalizedLevel);
+//       console.log("Looking for price with key:", normalizedLevel);
       
-      if (pricesObj[normalizedLevel] !== undefined && pricesObj[normalizedLevel] !== null) {
-        console.log(`Found price for key '${normalizedLevel}':`, pricesObj[normalizedLevel]);
-        return Number(pricesObj[normalizedLevel]) || 0;
-      }
+//       if (pricesObj[normalizedLevel] !== undefined && pricesObj[normalizedLevel] !== null) {
+//         console.log(`Found price for key '${normalizedLevel}':`, pricesObj[normalizedLevel]);
+//         return Number(pricesObj[normalizedLevel]) || 0;
+//       }
 
-      console.log("No matching price key found. Available keys:", Object.keys(pricesObj));
-      return 0;
-    };
+//       console.log("No matching price key found. Available keys:", Object.keys(pricesObj));
+//       return 0;
+//     };
 
-    const amount = getTierPrice(skillLevel, prices);  // ✅ FIXED: Use skillLevel
+//     const amount = getTierPrice(skillLevel, prices);  // ✅ FIXED: Use skillLevel
 
-    console.log("Final calculated amount:", amount);
+//     console.log("Final calculated amount:", amount);
 
-    if (amount <= 0) {
-      console.error("Price configuration error:", {
-        skillLevel,  // ✅ FIXED: Updated variable name
-        level,
-        prices,
-        amount,
-        availableKeys: Object.keys(prices)
-      });
+//     if (amount <= 0) {
+//       console.error("Price configuration error:", {
+//         skillLevel,  // ✅ FIXED: Updated variable name
+//         level,
+//         prices,
+//         amount,
+//         availableKeys: Object.keys(prices)
+//       });
       
-      return res.status(400).json({ 
-        success: false, 
-        message: `Invalid price configuration for teacher level '${skillLevel}'. Available pricing tiers: ${Object.keys(prices).join(', ')}. Please contact support.`  // ✅ FIXED: Updated variable name
-      });
-    }
+//       return res.status(400).json({ 
+//         success: false, 
+//         message: `Invalid price configuration for teacher level '${skillLevel}'. Available pricing tiers: ${Object.keys(prices).join(', ')}. Please contact support.`  // ✅ FIXED: Updated variable name
+//       });
+//     }
 
-    // ✅ FIXED: Level verification - compare actual skill levels
-    const normalizedDbLevel = skillLevel.toLowerCase();  // ✅ FIXED: Use skillLevel
-    const normalizedRequestLevel = level.toString().toLowerCase().trim();
+//     // ✅ FIXED: Level verification - compare actual skill levels
+//     const normalizedDbLevel = skillLevel.toLowerCase();  // ✅ FIXED: Use skillLevel
+//     const normalizedRequestLevel = level.toString().toLowerCase().trim();
     
-    if (normalizedRequestLevel !== normalizedDbLevel) {
-      return res.status(400).json({
-        success: false,
-        message: `Teacher level mismatch. Expected: ${skillLevel}, Received: ${level}. Please refresh and try again.`  // ✅ FIXED: Use skillLevel
-      });
-    }
+//     if (normalizedRequestLevel !== normalizedDbLevel) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Teacher level mismatch. Expected: ${skillLevel}, Received: ${level}. Please refresh and try again.`  // ✅ FIXED: Use skillLevel
+//       });
+//     }
 
-    const razorpay = getRazorpayInstance(paymentMode);
+//     const razorpay = getRazorpayInstance(paymentMode);
 
-    // Create a Razorpay order
-    const timestamp = Date.now().toString().slice(-8);
-    const shortUserId = user_id.slice(-8);
-    const receipt = `s_${timestamp}_${shortUserId}`;
+//     // Create a Razorpay order
+//     const timestamp = Date.now().toString().slice(-8);
+//     const shortUserId = user_id.slice(-8);
+//     const receipt = `s_${timestamp}_${shortUserId}`;
     
-    console.log("Generated receipt:", receipt, "Length:", receipt.length);
+//     console.log("Generated receipt:", receipt, "Length:", receipt.length);
     
-    const order = await razorpay.orders.create({
-      amount: amount * 100,
-      currency: "INR",
-      receipt: receipt,
-      notes: {
-        teacher_id: teacher_id.toString(),
-        user_id: user_id.toString(),
-        topic_id: topic_id.toString(),
-        slot,
-        skillLevel: skillLevel,  // ✅ FIXED: Use skillLevel instead of tier
-        amount: amount.toString(),
-        session_id: availableSession.id 
-      },
-    });
+//     const order = await razorpay.orders.create({
+//       amount: amount * 100,
+//       currency: "INR",
+//       receipt: receipt,
+//       notes: {
+//         teacher_id: teacher_id.toString(),
+//         user_id: user_id.toString(),
+//         topic_id: topic_id.toString(),
+//         slot,
+//         skillLevel: skillLevel,  // ✅ FIXED: Use skillLevel instead of tier
+//         amount: amount.toString(),
+//         session_id: availableSession.id 
+//       },
+//     });
 
-    console.log("Razorpay order created:", order.id, "Amount:", amount);
+//     console.log("Razorpay order created:", order.id, "Amount:", amount);
 
-    // ✅ Create Payment record with "created" status
-    const paymentRecord = await Payment.create({
-      user_id,
-      entity_type: "session",
-      entity_id: availableSession.id,
-      order_id: order.id,
-      amount: amount * 100, // Store in paise
-      currency: "INR",
-      status: "created",
-      payment_mode: paymentMode,
-    });
+//     // ✅ Create Payment record with "created" status
+//     const paymentRecord = await Payment.create({
+//       user_id,
+//       entity_type: "session",
+//       entity_id: availableSession.id,
+//       order_id: order.id,
+//       amount: amount * 100, // Store in paise
+//       currency: "INR",
+//       status: "created",
+//       payment_mode: paymentMode,
+//     });
 
-    console.log("Payment record created:", paymentRecord.payment_id);
+//     console.log("Payment record created:", paymentRecord.payment_id);
 
-    // ✅ Update session to pending (same as before)
-    await availableSession.update({
-      student_id: user_id,
-      status: "pending",
-      updatedAt: new Date()
-    });
+//     // ✅ Update session to pending (same as before)
+//     await availableSession.update({
+//       student_id: user_id,
+//       status: "pending",
+//       updatedAt: new Date()
+//     });
 
-    console.log("Session updated to pending:", availableSession.toJSON());
+//     console.log("Session updated to pending:", availableSession.toJSON());
 
-    return res.json({
-      success: true,
-      order_id: order.id,
-      amount,
-      currency: "INR",
-      key: process.env.RAZORPAY_KEY_ID,
-      session_id: availableSession.id,
-      payment_id: paymentRecord.payment_id, // ✅ Return payment record ID
-      message: "Order created successfully",
-      payment_mode: paymentMode,
-    });
+//     return res.json({
+//       success: true,
+//       order_id: order.id,
+//       amount,
+//       currency: "INR",
+//       key: process.env.RAZORPAY_KEY_ID,
+//       session_id: availableSession.id,
+//       payment_id: paymentRecord.payment_id, // ✅ Return payment record ID
+//       message: "Order created successfully",
+//       payment_mode: paymentMode,
+//     });
 
-  } catch (error) {
-    console.error("Booking error:", error);
+//   } catch (error) {
+//     console.error("Booking error:", error);
     
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({
-        success: false,
-        message: error.error?.description || "Payment gateway error",
-      });
-    }
+//     if (error.statusCode) {
+//       return res.status(error.statusCode).json({
+//         success: false,
+//         message: error.error?.description || "Payment gateway error",
+//       });
+//     }
 
-    res.status(500).json({
-      success: false,
-      message: "Internal server error during booking process",
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error during booking process",
       
-    });
-  }
-};
+//     });
+//   }
+// };
+
+
 
 // ✅ UPDATED: confirmBooking function - now updates Payment record
 export const confirmBooking = async (req, res) => {
+  const transaction = await sequelize1.transaction();
+
   try {
-    const user_id = req.user?.id || req.user?.user_id || req.user?.userId;
-    const { payment_id, order_id, signature } = req.body;
+    const user_id = req.user?.id;
 
-    console.log("=== PAYMENT CONFIRMATION DEBUG ===");
-    console.log("User ID:", user_id);
-    console.log("Payment ID:", payment_id);
-    console.log("Order ID:", order_id);
-    console.log("Signature provided:", !!signature);
-    console.log("==================================");
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      slot,
+      teacher_id,
+      topic_id,
+      level,
+    } = req.body;
 
-    if (!payment_id || !order_id) {
+    const payment = await Payment.findOne({
+      where: { order_id: razorpay_order_id },
+      transaction,
+    });
+
+    if (!payment) {
+      await transaction.rollback();
+      return res.status(404).json({
+        success: false,
+        message: "Payment record not found",
+      });
+    }
+
+    /* VERIFY SIGNATURE */
+
+    const generatedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+      await payment.update(
+        { status: "failed", failure_reason: "Invalid signature" },
+        { transaction }
+      );
+
+      await transaction.rollback();
+
       return res.status(400).json({
         success: false,
-        message: "Payment ID and Order ID are required"
+        message: "Payment verification failed",
       });
     }
 
-    if (!user_id) {
-      console.error('Auth middleware failed to set req.user:', req.user);
-      return res.status(401).json({
-        success: false,
-        message: "Authentication failed - user not found in request"
-      });
-    }
+    const SESSION_DURATION = 90;
 
-    // ✅ Find the Payment record first
-    const paymentRecord = await Payment.findOne({
+    const start = new Date(slot);
+    const end = new Date(start.getTime() + SESSION_DURATION * 60000);
+
+    /*
+    🔐 LOCK TEACHER AVAILABILITY ROW
+    This prevents two users booking same slot simultaneously
+    */
+
+    const availability = await TeacherAvailability.findOne({
       where: {
-        order_id,
-        user_id,
-        status: "created"
-      }
+        teacher_id,
+        start_at: { [Op.lte]: start },
+        end_at: { [Op.gte]: end },
+        is_active: true,
+      },
+      lock: transaction.LOCK.UPDATE,
+      transaction,
     });
 
-    if (!paymentRecord) {
-      console.error("Payment record not found:", {
-        order_id,
-        user_id,
-        status: "created"
-      });
-      
-      return res.status(404).json({
+    if (!availability) {
+      await transaction.rollback();
+      return res.status(400).json({
         success: false,
-        message: "Payment record not found or already processed"
+        message: "Slot already booked",
       });
     }
 
-    // Verify payment signature if provided
-    if (signature) {
-      const generated_signature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-        .update(order_id + "|" + payment_id)
-        .digest('hex');
+    /*
+    CREATE SESSION
+    */
 
-      if (generated_signature !== signature) {
-        console.error('Signature mismatch:', { 
-          generated: generated_signature, 
-          received: signature,
-          order_id,
-          payment_id 
-        });
-        
-        // ✅ Update payment record as failed
-        await paymentRecord.update({
-          status: "failed",
-          failure_reason: "Invalid payment signature"
-        });
-
-        return res.status(400).json({
-          success: false,
-          message: "Invalid payment signature"
-        });
-      }
-      console.log('Payment signature verified successfully');
-    }
-
-    // Find the pending session using entity_id from payment record
-    const session = await Session.findOne({
-      where: {
-        id: paymentRecord.entity_id,
-        student_id: user_id, 
-        status: "pending"
-      }
-    });
-
-    if (!session) {
-      console.error("Session not found for confirmation:", {
-        session_id: paymentRecord.entity_id,
+    const session = await Session.create(
+      {
+        topic_id,
+        teacher_id,
         student_id: user_id,
-        status: "pending"
-      });
-      
-      // ✅ Update payment record as failed
-      await paymentRecord.update({
-        status: "failed",
-        failure_reason: "Associated session not found"
-      });
-      
-      return res.status(404).json({
-        success: false,
-        message: "Session not found or already processed"
-      });
+        scheduled_at: start,
+        completed_at: end,
+        duration_minutes: SESSION_DURATION,
+        session_tier: "paid",
+        session_level: level,
+        status: "upcoming",
+      },
+      { transaction }
+    );
+
+    /*
+    UPDATE PAYMENT
+    */
+
+    await payment.update(
+      {
+        razorpay_payment_id,
+        razorpay_signature,
+        status: "success",
+        entity_id: session.session_id,
+      },
+      { transaction }
+    );
+
+    /*
+    SPLIT AVAILABILITY SLOT
+    */
+
+    if (start > availability.start_at) {
+      await TeacherAvailability.create(
+        {
+          teacher_id,
+          start_at: availability.start_at,
+          end_at: start,
+          is_active: true,
+        },
+        { transaction }
+      );
     }
 
-    // ✅ Get topic name for BookedSession record
-    let topicName = "Unknown";
-    try {
-      const topicNode = await CatalogueNode.findOne({
-        where: { node_id: session.topic_id },
-        attributes: ['name']
-      });
-      topicName = topicNode?.name || "Unknown";
-    } catch (err) {
-      console.warn("Could not fetch topic name:", err.message);
+    if (end < availability.end_at) {
+      await TeacherAvailability.create(
+        {
+          teacher_id,
+          start_at: end,
+          end_at: availability.end_at,
+          is_active: true,
+        },
+        { transaction }
+      );
     }
 
-    // ✅ Update Payment record as successful
-    await paymentRecord.update({
-      razorpay_payment_id: payment_id,
-      razorpay_signature: signature,
-      status: "success"
-    });
+    await availability.update(
+      { is_active: false },
+      { transaction }
+    );
 
-    console.log("✅ Payment record updated to success");
+    await transaction.commit();
 
-    // ✅ Create BookedSession record (matching your model structure)
-    try {
-      await Session.create({
-        student_id: user_id,
-        teacher_id: session.teacher_id,
-        topic_id: session.topic_id,
-        topic: topicName,
-        session_id: session.id
-      });
-      console.log("✅ BookedSession record created successfully");
-    } catch (bookedSessionError) {
-      console.error("❌ Failed to create BookedSession record:", bookedSessionError);
-      // Don't fail the entire request - log the error but continue
-    }
-
-    // Update session status to upcoming
-    await session.update({
-      status: "upcoming",
-      completed_at: null, 
-      updatedAt: new Date()
-    });
-
-    console.log("Booking confirmed successfully for session:", session.id);
-
-    res.json({
+    return res.json({
       success: true,
-      message: "Booking confirmed successfully",
-      session_id: session.id,
-      payment_id: paymentRecord.payment_id,
-      scheduled_at: session.scheduled_at
+      message: "Session booked successfully",
+      session_id: session.session_id,
     });
 
   } catch (error) {
-    console.error("Confirmation error:", error);
-    
-    // ✅ Try to update payment record as failed if we can identify it
-    if (req.body?.order_id) {
-      try {
-        await Payment.update(
-          { 
-            status: "failed", 
-            failure_reason: error.message || "Internal server error" 
-          },
-          { 
-            where: { 
-              order_id: req.body.order_id,
-              status: "created" 
-            } 
-          }
-        );
-      } catch (updateError) {
-        console.error("Failed to update payment status to failed:", updateError);
-      }
-    }
-    
+    await transaction.rollback();
+
+    console.error("Confirm booking error:", error);
+
     res.status(500).json({
       success: false,
-      message: "Failed to confirm booking",
-      
+      message: "Booking confirmation failed",
     });
   }
 };
@@ -990,3 +968,183 @@ export const getPaidTeachersWithAvailability = async (req, res) => {
   }
 };
 
+export const createPaidBookingOrder = async (req, res) => {
+  try {
+    const user_id = req.user?.id;
+    const { slot, teacher_id, topic_id, level } = req.body;
+
+    if (!user_id || !slot || !teacher_id || !topic_id || !level) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing parameters"
+      });
+    }
+
+    const teacherStats = await Teachertopicstats.findOne({
+      where: { teacherId: teacher_id, node_id: topic_id }
+    });
+
+    if (!teacherStats) {
+      return res.status(404).json({
+        success: false,
+        message: "Teacher not qualified"
+      });
+    }
+
+    const topicNode = await CatalogueNode.findByPk(topic_id);
+
+    const prices = topicNode.prices || {};
+    const priceKey = teacherStats.level.toLowerCase() + "s";
+    const amount = Number(prices[priceKey] || 0);
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid price"
+      });
+    }
+
+    const razorpay = getRazorpayInstance("LIVE");
+
+    const order = await razorpay.orders.create({
+      amount: amount * 100,
+      currency: "INR",
+      receipt: `slot_${Date.now()}`,
+      notes: {
+        user_id,
+        teacher_id,
+        topic_id,
+        slot,
+        level
+      }
+    });
+
+    const payment = await Payment.create({
+      user_id,
+      entity_type: "session",
+      entity_id: topic_id,
+      order_id: order.id,
+      amount: amount * 100,
+      currency: "INR",
+      status: "created"
+    });
+
+    return res.json({
+      success: true,
+      order_id: order.id,
+      payment_id: payment.payment_id,
+      amount,
+      key: process.env.RAZORPAY_KEY_ID
+    });
+
+  } catch (err) {
+    console.error("Order creation error:", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Order creation failed"
+    });
+  }
+};
+
+export const verifyPaymentAndCreateSession = async (req, res) => {
+  const transaction = await sequelize1.transaction();
+
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      slot,
+      teacher_id,
+      topic_id,
+      level,
+    } = req.body;
+
+    const payment = await Payment.findOne({
+      where: { order_id: razorpay_order_id },
+      transaction,
+    });
+
+    if (!payment) {
+      await transaction.rollback();
+      return res.status(404).json({ message: "Payment not found" });
+    }
+
+    /* VERIFY SIGNATURE */
+
+    const generatedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_SECRET)
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+      await payment.update(
+        { status: "failed", failure_reason: "Signature mismatch" },
+        { transaction }
+      );
+
+      await transaction.rollback();
+
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
+    }
+
+    /* UPDATE PAYMENT */
+
+    await payment.update(
+      {
+        razorpay_payment_id,
+        razorpay_signature,
+        status: "success",
+      },
+      { transaction }
+    );
+
+    /* CREATE SESSION */
+
+    const start = new Date(slot);
+    const end = new Date(start.getTime() + 90 * 60000);
+
+    const session = await Session.create(
+      {
+        topic_id,
+        teacher_id,
+        student_id: payment.user_id,
+        scheduled_at: start,
+        completed_at: end,
+        duration_minutes: 90,
+        session_tier: "paid",
+        session_level: level,
+        status: "upcoming",
+      },
+      { transaction }
+    );
+
+    /* UPDATE ENTITY ID TO SESSION */
+
+    await payment.update(
+      { entity_id: session.session_id },
+      { transaction }
+    );
+
+    await transaction.commit();
+
+    return res.json({
+      success: true,
+      session_id: session.session_id,
+      message: "Session booked successfully",
+    });
+  } catch (err) {
+    await transaction.rollback();
+
+    console.error("Payment verify error", err);
+
+    res.status(500).json({
+      success: false,
+      message: "Payment verification failed",
+    });
+  }
+};

@@ -75,7 +75,7 @@ export const Session = sequelize1.define(
     },
 
     status: {
-      type: DataTypes.ENUM("available", "booked", "upcoming", "completed", "cancelled"),
+      type: DataTypes.ENUM("available", "pending", "booked", "upcoming", "completed", "cancelled"),
       allowNull: false,
       defaultValue: "available",
       comment: "Lifecycle status of the session",
